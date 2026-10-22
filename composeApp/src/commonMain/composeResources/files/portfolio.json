@@ -72,6 +72,63 @@
       ]
     },
     {
+      "id": "calm-escape",
+      "title": "Calm Escape Premier",
+      "summary": "A multi-tenant booking platform for spas: each spa gets its own booking website and staff dashboard, and customers book from iOS and Android apps that share one schedule.",
+      "period": "Oct 2026",
+      "highlights": [
+        "184 pgTAP database tests across 7 suites: tenant isolation, booking rules, availability, promotions, VIP vouchers and the catalog",
+        "Row Level Security on all 19 tables, enforced by 51 policies, so each spa sees only its own data",
+        "Two Postgres exclusion constraints stop a therapist or room being double-booked, even when two requests race"
+      ],
+      "stack": ["Kotlin Multiplatform", "Compose Multiplatform", "Ktor", "Supabase", "PostgreSQL", "pgTAP", "Next.js", "TypeScript", "Tailwind CSS"],
+      "screenshots": [
+        { "file": "calm-escape-app-home.webp", "caption": "A spa's home in the Android app: pick a day, the first free time today, vouchers and live bundles", "width": 720, "height": 1600 },
+        { "file": "calm-escape-vouchers.webp", "caption": "A VIP customer's vouchers, each with its expiry date and how many are left", "width": 720, "height": 1600 },
+        { "file": "calm-escape-booking-times.webp", "caption": "Booking on the spa's website: member prices and each therapist's free times for the day", "width": 1600, "height": 900 },
+        { "file": "calm-escape-sales.webp", "caption": "The staff dashboard's sales for the month: treatments done, bookings still to come, and sales by day", "width": 1600, "height": 900 }
+      ]
+    },
+    {
+      "id": "bubuprotect",
+      "title": "BubuProtect",
+      "summary": "An offline password vault for Android that keeps logins, cards, IDs and Wi-Fi keys encrypted on the device, shows two-factor codes, and checks passwords against known leaks without sending them anywhere.",
+      "period": "Jan – Aug 2026",
+      "highlights": [
+        "One 256-bit vault key wrapped three ways (a paper recovery code, PBKDF2-SHA512 at 210,000 iterations and the hardware Keystore), then split with HKDF into a SQLCipher key and an AES-256-GCM field key",
+        "209 unit tests across 22 files cover the crypto, TOTP, CSV import, autofill matching and DNS/packet parsing",
+        "Breach check sends only the first 5 characters of each password's SHA-1 hash to Have I Been Pwned, so no password, username or website leaves the phone"
+      ],
+      "stack": ["Kotlin", "Jetpack Compose", "Coroutines", "Room", "SQLCipher", "Koin", "Navigation Compose", "AndroidX Biometric", "Android Keystore", "Shizuku"],
+      "links": [
+        { "label": "Source on GitHub", "url": "https://github.com/Yowkylito/BubuProtect" }
+      ],
+      "screenshots": [
+        { "file": "bubuprotect-vault.webp", "caption": "The vault: logins, cards, IDs, notes and Wi-Fi keys, each marked secure or breached", "width": 720, "height": 1600 },
+        { "file": "bubuprotect-totp.webp", "caption": "A login with its live two-factor code and the seconds left before it changes", "width": 720, "height": 1600 },
+        { "file": "bubuprotect-security-check.webp", "caption": "The security check finds a reused password that has appeared 2.3M times in public leaks", "width": 720, "height": 1600 },
+        { "file": "bubuprotect-device-check.webp", "caption": "The device check lists phone settings, such as USB debugging, that could expose the vault", "width": 720, "height": 1600 }
+      ]
+    },
+    {
+      "id": "seventhj",
+      "title": "Seventh J",
+      "summary": "An inventory and dealer-floor app for a Makati art gallery that puts pending sales, reprices and consignments in front of the owner for approval, beside the month's figures.",
+      "period": "Aug 2026",
+      "highlights": [
+        "One Compose Multiplatform codebase for Android, iOS and the web: all 77 composable functions live in shared code, and platform code is four small expect/actual files",
+        "A 900-stroke painted splash that settles into the logo in 3.3 seconds, trimmed to 260 strokes on the web and skipped when the system asks for reduced motion",
+        "Each screen's state is a sealed interface covering loading, error and ready, with 18 @Preview functions"
+      ],
+      "stack": ["Kotlin Multiplatform", "Compose Multiplatform", "Kotlin/Wasm", "Navigation 3", "Coroutines", "kotlinx.serialization"],
+      "screenshots": [
+        { "file": "seventhj-home.webp", "caption": "Home: the approvals waiting on the owner, with price and discount for each", "width": 720, "height": 1600 },
+        { "file": "seventhj-approval.webp", "caption": "A sale approval: asking against sold price, who requested it and who bought", "width": 720, "height": 1600 },
+        { "file": "seventhj-figures.webp", "caption": "The month's gross, works sold and commission, an eight-month sales chart and items to follow up", "width": 720, "height": 1600 },
+        { "file": "seventhj-splash.webp", "caption": "The launch screen, where painted strokes gather into the Seventh J mark", "width": 720, "height": 1600 }
+      ]
+    },
+    {
       "id": "eagles-watch",
       "title": "The Eagle's Watch",
       "summary": "A civic transparency app that lists Philippine public infrastructure projects with their contracts, schedules, reported progress and source documents, so citizens can check what public money is building.",
