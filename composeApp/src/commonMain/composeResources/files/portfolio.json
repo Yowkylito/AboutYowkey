@@ -63,7 +63,13 @@
         "OpenRouter model routing with live discovery, role-based pinning, cooldowns and availability tracking",
         "Falls back to on-device processing when LLM services fail"
       ],
-      "stack": ["Kotlin", "Jetpack Compose", "Clean Architecture", "Room", "Koin", "WorkManager", "CameraX", "MapLibre", "OpenRouter"]
+      "stack": ["Kotlin", "Jetpack Compose", "Clean Architecture", "Room", "Koin", "WorkManager", "CameraX", "MapLibre", "OpenRouter"],
+      "screenshots": [
+        { "file": "vistago-memory-map.webp", "caption": "The memory map: photo-hunt pins across Kansai, each with walking directions from where you are", "width": 739, "height": 1600 },
+        { "file": "vistago-ask.webp", "caption": "Ask Vistago: photo spots near you, sign translation and travel questions", "width": 739, "height": 1600 },
+        { "file": "vistago-trip.webp", "caption": "A planned trip with its countdown, nights, travelers and budget", "width": 739, "height": 1600 },
+        { "file": "vistago-smart-budget.webp", "caption": "Smart Budget splits the total by travel style, offline", "width": 739, "height": 1600 }
+      ]
     },
     {
       "id": "eagles-watch",
