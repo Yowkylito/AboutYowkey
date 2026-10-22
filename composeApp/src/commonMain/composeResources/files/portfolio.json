@@ -1,36 +1,74 @@
 {
   "siteUrl": "https://yowkylito.github.io/AboutYowkey/",
   "profile": {
-    "name": "Yowkey",
-    "headline": "Android engineer building with Jetpack Compose and Kotlin Multiplatform",
-    "summary": "I design and ship mobile apps end to end: architecture, UI that feels fast, and the release pipeline behind it. This site is itself a Compose Multiplatform app compiled to WebAssembly.",
-    "location": "Philippines · Remote",
-    "availability": "Open to freelance and full-time roles"
+    "name": "Rodelito Tangonan",
+    "headline": "Android Developer building native apps with Kotlin, Jetpack Compose and Clean Architecture",
+    "summary": "At DigiPlus I co-built ArenaPlus V2 from day one and wrote 53% of its code, from the Gradle architecture to wallet and payment flows. Outside work I ship apps end to end across Android, Compose Multiplatform and AI tooling. This site is one of them: a Compose Multiplatform app compiled to WebAssembly.",
+    "location": "Quezon City, Philippines",
+    "email": "yukstangonan@gmail.com",
+    "availability": "Open to relocation to Singapore"
   },
   "services": [
     {
-      "title": "Android app development",
-      "description": "Native Android apps in Kotlin and Jetpack Compose, from first screen to Play Store release."
+      "title": "Native Android development",
+      "description": "Kotlin and Jetpack Compose apps from first commit to Play Store, on Clean Architecture and multi-module Gradle builds."
     },
     {
-      "title": "Kotlin Multiplatform",
-      "description": "One Kotlin codebase for Android, iOS, desktop and web, with Compose Multiplatform UI where it fits."
+      "title": "Hybrid to native migration",
+      "description": "Moving a WebView app to native Android module by module, without stopping releases."
     },
     {
-      "title": "Performance and UI polish",
-      "description": "Finding jank, slow startup and wasted recomposition, and fixing it with traces to prove it."
+      "title": "Payments, wallets and integrations",
+      "description": "Deposit, withdrawal and bank-linking flows, eKYC, payment gateways and Adjust attribution, built to handle money carefully."
     },
     {
-      "title": "Architecture and code review",
-      "description": "Clean layering, dependency injection with Koin, coroutines and Flow done right, and tests that catch regressions."
+      "title": "Performance and Play compliance",
+      "description": "Memory and layout tuning under heavy real-time traffic, APK size, skeleton loading, and 16 KB page-size readiness."
+    },
+    {
+      "title": "AI features in mobile apps",
+      "description": "LLM features with model routing, cooldowns and on-device fallback, so the app keeps working when a service fails."
+    },
+    {
+      "title": "IoT and embedded prototyping",
+      "description": "Microcontroller prototypes (Arduino, ESP8266) connected to the apps that drive them."
     }
   ],
   "projects": [
     {
+      "id": "pawffice",
+      "title": "Pawffice",
+      "summary": "A local-first, multi-agent AI workspace for the desktop, presented as a 3D town where a crew of cats takes your prompts.",
+      "period": "Aug 2026 – Present",
+      "highlights": [
+        "Classifies each prompt into ordered AI stages and feeds every stage the previous one's output",
+        "Pricing gates before anything runs, repository-path isolation and rate-limit handling",
+        "13 P0 build-blocking tests guard the cost and security rules"
+      ],
+      "stack": ["Rust", "Tauri 2", "SQLite", "TypeScript", "JavaScript", "SVG"],
+      "screenshots": [
+        { "file": "pawffice-town.webp", "caption": "The town: walk your cat around while the crew thread on the right takes prompts", "width": 1600, "height": 900 },
+        { "file": "pawffice-crew-answer.webp", "caption": "Crew members answer in the thread, each in their own role", "width": 1600, "height": 900 },
+        { "file": "pawffice-hiring.webp", "caption": "Onboarding: the CEO cat \"hires\" you with four questions", "width": 1600, "height": 900 },
+        { "file": "pawffice-wardrobe.webp", "caption": "The wardrobe: breed, coat and outfit for your cat", "width": 1600, "height": 900 }
+      ]
+    },
+    {
+      "id": "vistago",
+      "title": "Vistago",
+      "summary": "An offline-first AI travel companion for Android: plan trips, translate through the camera, and keep travel memories, with or without a connection.",
+      "period": "Aug – Sep 2026",
+      "highlights": [
+        "12 feature areas, 16 screens, about 450 composables in 366 Kotlin files",
+        "OpenRouter model routing with live discovery, role-based pinning, cooldowns and availability tracking",
+        "Falls back to on-device processing when LLM services fail"
+      ],
+      "stack": ["Kotlin", "Jetpack Compose", "Clean Architecture", "Room", "Koin", "WorkManager", "CameraX", "MapLibre", "OpenRouter"]
+    },
+    {
       "id": "eagles-watch",
       "title": "The Eagle's Watch",
       "summary": "A civic transparency app that lists Philippine public infrastructure projects with their contracts, schedules, reported progress and source documents, so citizens can check what public money is building.",
-      "role": "Design and development",
       "highlights": [
         "Search and filter by status, place, agency, contractor and contract size, with live counts",
         "Every figure labelled with how it was established; every record has a report path",
@@ -39,28 +77,43 @@
       "stack": ["Kotlin Multiplatform", "Compose Multiplatform", "Kotlin/Wasm", "GitHub Actions"],
       "links": [
         { "label": "Source on GitHub", "url": "https://github.com/Yowkylito/The-Eagle-s-Watch" }
+      ],
+      "screenshots": [
+        { "file": "eagles-explore.webp", "caption": "Explore: contract value, status filters and every project at a glance", "width": 720, "height": 1560 },
+        { "file": "eagles-project.webp", "caption": "A project page: money, work done and time used, each with its source", "width": 720, "height": 1560 },
+        { "file": "eagles-filters.webp", "caption": "Filters by type, level of government and province, with live counts", "width": 720, "height": 1560 },
+        { "file": "eagles-report.webp", "caption": "Reporting a problem, in six mostly-tap steps", "width": 720, "height": 1560 }
       ]
     },
     {
-      "id": "bubuprotect",
-      "title": "BubuProtect",
-      "summary": "A personal security vault for Android: passwords and TOTP codes behind biometrics and face recognition, plus a scan of the device for risks.",
-      "role": "Design and development",
+      "id": "workbuddy",
+      "title": "WorkBuddy",
+      "summary": "An Android client for a self-hosted developer dashboard: follow builds live, control remote jobs, and retry failures with AI help.",
+      "period": "Jul 2026",
       "highlights": [
-        "Biometric unlock with a face-recognition second factor",
-        "TOTP codes for vault entries",
-        "Device risk scan to flag an unsafe environment"
+        "15 modules where Gradle dependency rules enforce Clean Architecture boundaries at compile time",
+        "MVVM/MVI state, live build streaming over SSE, remote job control and cancellation",
+        "AI-assisted retries and on-device Gemini prompt refinement"
       ],
-      "stack": ["Kotlin", "Jetpack Compose", "CameraX", "Biometric API"],
-      "links": [
-        { "label": "Source on GitHub", "url": "https://github.com/Yowkylito/BubuProtect" }
-      ]
+      "stack": ["Kotlin", "Jetpack Compose", "Ktor", "Koin", "DataStore", "SSE", "Firebase AI"]
+    },
+    {
+      "id": "myai",
+      "title": "MyAI",
+      "summary": "A self-hosted control platform that runs development work on a local PC from chat: tickets in, Claude Code runs, reviewed Git changes out.",
+      "period": "Jul 2026",
+      "highlights": [
+        "Control plane and execution plane split: runner agents, job queues, streamed logs and audit trails",
+        "Lark WebSocket bot and Meegle MCP poller for ticket operations",
+        "Confirm-first Git workflow: nothing is pushed without a human yes"
+      ],
+      "stack": ["Node.js", "Express", "SQLite", "SSE", "Lark SDK", "MCP", "Claude Code"]
     },
     {
       "id": "about-yowkey",
       "title": "This portfolio",
       "summary": "A Compose Multiplatform app running in your browser through Kotlin/WebAssembly, with a crawlable HTML version generated from the same content at build time.",
-      "role": "Design and development",
+      "period": "Oct 2026",
       "highlights": [
         "Adaptive layout from phone to wide desktop using window size classes",
         "Content lives in one JSON file shared by the app and the generated HTML",
@@ -69,40 +122,90 @@
       "stack": ["Compose Multiplatform", "Kotlin/Wasm", "Koin", "GitHub Pages"],
       "links": [
         { "label": "Source on GitHub", "url": "https://github.com/Yowkylito/AboutYowkey" }
+      ],
+      "screenshots": [
+        { "file": "portfolio-hero.webp", "caption": "The page you are on, rendered by Compose from WebAssembly", "width": 800, "height": 600 },
+        { "file": "portfolio-projects.webp", "caption": "Project cards with screenshot grids that open a full-screen viewer", "width": 800, "height": 600 }
       ]
     }
   ],
   "experience": [
     {
-      "role": "Android Engineer",
-      "company": "Company name",
-      "period": "20XX – Present",
-      "location": "Remote",
+      "role": "Android Developer",
+      "company": "AB Leisure Exponent, Inc. (DigiPlus)",
+      "period": "2024 – Present",
+      "location": "Taguig, Philippines",
       "highlights": [
-        "Replace these lines with what you owned and shipped in this role",
-        "Lead with outcomes: what got faster, more reliable or more used"
+        "Co-built ArenaPlus V2 from day one and wrote 53% of its code (+270K lines across 413 commits), including the Gradle architecture, UI foundations and navigation",
+        "Led the move from a hybrid WebView app to native: ported V2 into the V1 shell as decoupled :v2 modules until the app ran native-only",
+        "Built the core wallet flows end to end: deposits, withdrawals, automated bank-linking and a custom Pay & Go withdrawal module",
+        "Shipped Arena Social solo in 30 days, turning a web interface into a native app with custom navigators and sticky video playback",
+        "Integrated Adjust SDK 5.8 with automated channel attribution, campaign triggers and first-deposit bonus delivery",
+        "Optimised the Altenar and Saba sports-betting APIs, built a shake-to-open API debugging tool, and added skeleton loading and bet-validated NBA livestream gating",
+        "Integrated third-party eKYC, reduced memory pressure under heavy real-time traffic, and prepared the app for Google Play's 16 KB page sizes"
       ]
+    },
+    {
+      "role": "Technical Support Engineer Intern",
+      "company": "Infocom Technologies, Inc.",
+      "period": "2024 · 720 hours",
+      "location": "Quezon City, Philippines",
+      "highlights": [
+        "Troubleshot hardware, software and networking issues",
+        "Assisted senior engineers with system maintenance, hardware upgrades and enterprise infrastructure migrations"
+      ]
+    }
+  ],
+  "recognition": [
+    {
+      "title": "Rank #2, Top 9 Awardee",
+      "detail": "Hand-picked by executive leadership for exceptional engineering contributions.",
+      "date": "Sep 2026"
+    },
+    {
+      "title": "#1 story-point owner",
+      "detail": "Ranked first of about 40 engineers in August and October 2026: 72.8 story points over three months, 2.4x the team average.",
+      "date": "Aug – Oct 2026"
+    },
+    {
+      "title": "Rockstar of the Month",
+      "detail": "Awarded by the ArenaPlus team for cross-functional project execution.",
+      "date": "Feb 2026"
+    },
+    {
+      "title": "Cum Laude, Technological University of the Philippines",
+      "detail": "Bachelor of Engineering Technology, major in Computer Engineering Technology. Thesis: an IoT-based medicine scheduling system.",
+      "date": "2020 – 2024"
     }
   ],
   "skills": [
     {
       "name": "Android",
-      "items": ["Kotlin", "Jetpack Compose", "Coroutines and Flow", "Room", "WorkManager", "CameraX"]
+      "items": ["Kotlin", "Android SDK", "Jetpack Compose", "Java", "Material 3", "Android Studio"]
     },
     {
-      "name": "Multiplatform",
-      "items": ["Kotlin Multiplatform", "Compose Multiplatform", "Kotlin/Wasm"]
+      "name": "Architecture",
+      "items": ["Clean Architecture", "MVVM", "MVI", "Multi-module", "Repository pattern", "Hilt", "Koin"]
     },
     {
-      "name": "Architecture and quality",
-      "items": ["MVVM and unidirectional data flow", "Koin", "Unit and UI testing", "Performance profiling"]
+      "name": "Networking and data",
+      "items": ["Retrofit", "OkHttp", "Ktor", "WebSockets", "REST", "Server-Sent Events", "Room"]
     },
     {
-      "name": "Delivery",
-      "items": ["Gradle", "GitHub Actions", "Play Store releases"]
+      "name": "Security and integrations",
+      "items": ["eKYC SDKs", "Payment gateways", "Wallets and bank-linking", "Adjust SDK", "Vulnerability scanning"]
+    },
+    {
+      "name": "Performance",
+      "items": ["Memory optimisation", "16 KB page sizes", "Lazy layout tuning", "APK size reduction", "Profiling"]
+    },
+    {
+      "name": "Embedded and IoT",
+      "items": ["Arduino", "ESP8266", "Embedded systems", "Serial communication", "Digital electronics"]
     }
   ],
   "links": [
+    { "label": "LinkedIn", "url": "https://www.linkedin.com/in/rodelito-tangonan" },
     { "label": "GitHub", "url": "https://github.com/Yowkylito" }
   ]
 }

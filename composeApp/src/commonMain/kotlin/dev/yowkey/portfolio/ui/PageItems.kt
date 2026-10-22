@@ -1,6 +1,7 @@
 package dev.yowkey.portfolio.ui
 
 import androidx.compose.runtime.Immutable
+import dev.yowkey.portfolio.model.Award
 import dev.yowkey.portfolio.model.Experience
 import dev.yowkey.portfolio.model.Link
 import dev.yowkey.portfolio.model.Portfolio
@@ -14,6 +15,7 @@ enum class Section(val title: String) {
     Services("Services"),
     Projects("Projects"),
     Experience("Experience"),
+    Recognition("Recognition"),
     Skills("Skills"),
     Contact("Contact"),
 }
@@ -48,6 +50,12 @@ sealed interface PageItem {
         override val showsHeader get() = index == 0
     }
 
+    data class Recognition(val awards: List<Award>) : PageItem {
+        override val key = "recognition"
+        override val section = Section.Recognition
+        override val showsHeader = true
+    }
+
     data class Skills(val groups: List<SkillGroup>) : PageItem {
         override val key = "skills"
         override val section = Section.Skills
@@ -78,6 +86,7 @@ fun buildPageItems(portfolio: Portfolio, serviceColumns: Int, projectColumns: In
     portfolio.experience.forEachIndexed { index, job ->
         add(PageItem.Job(job, index, isLast = index == portfolio.experience.lastIndex))
     }
+    if (portfolio.recognition.isNotEmpty()) add(PageItem.Recognition(portfolio.recognition))
     if (portfolio.skills.isNotEmpty()) add(PageItem.Skills(portfolio.skills))
     add(PageItem.Contact(portfolio.profile.email, portfolio.links))
     add(PageItem.Footer)

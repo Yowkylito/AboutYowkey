@@ -7,6 +7,7 @@ import dev.yowkey.portfolio.model.Link
 import dev.yowkey.portfolio.model.Portfolio
 import dev.yowkey.portfolio.model.Profile
 import dev.yowkey.portfolio.model.Project
+import dev.yowkey.portfolio.model.Screenshot
 import dev.yowkey.portfolio.model.Service
 import dev.yowkey.portfolio.model.SkillGroup
 import dev.yowkey.portfolio.ui.sections.ProjectCard
@@ -31,6 +32,11 @@ private val previewPortfolio = Portfolio(
             highlights = listOf("A highlight that also runs quite long and wraps across lines"),
             stack = List(9) { "Library $it" },
             links = listOf(Link("Source", "https://github.com")),
+            // No loader in previews, so these show as their sized placeholders.
+            screenshots = listOf(
+                Screenshot("phone.webp", "A phone screen", 1080, 2400),
+                Screenshot("desktop.webp", "A desktop screen", 1920, 1080),
+            ),
         ),
     ),
     experience = listOf(Experience("Engineer", "Company", "2020 – Present", highlights = listOf("Did things"))),
@@ -79,5 +85,5 @@ private fun ErrorPreview() = PortfolioTheme {
 @Preview
 @Composable
 private fun LongProjectCardPreview() = PortfolioTheme {
-    ProjectCard(previewPortfolio.projects.last())
+    ProjectCard(previewPortfolio.projects.last(), onOpenScreenshot = {})
 }

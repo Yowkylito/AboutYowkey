@@ -36,6 +36,19 @@ class PortfolioParserTest {
     }
 
     @Test
+    fun screenshotFilesMustBePlainWebpNames() {
+        fun withShot(file: String) = validJson.replace(
+            "\"id\": \"two\", \"title\": \"Second\", \"summary\": \"S\"",
+            "\"id\": \"two\", \"title\": \"Second\", \"summary\": \"S\", " +
+                "\"screenshots\": [{ \"file\": \"$file\", \"caption\": \"c\", \"width\": 10, \"height\": 20 }]",
+        )
+        assertEquals("ok-shot.webp", PortfolioParser.parse(withShot("ok-shot.webp")).projects[1].screenshots[0].file)
+        listOf("../escape.webp", "dir/x.webp", "x.png", "x.thumb.webp").forEach { bad ->
+            assertFailsWith<IllegalArgumentException>(bad) { PortfolioParser.parse(withShot(bad)) }
+        }
+    }
+
+    @Test
     fun rejectsNonHttpsLinks() {
         assertFailsWith<IllegalArgumentException> {
             PortfolioParser.parse(validJson.replace("https://github.com/a/b", "javascript:alert(1)"))

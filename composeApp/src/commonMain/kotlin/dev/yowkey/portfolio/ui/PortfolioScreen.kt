@@ -46,9 +46,15 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.window.core.layout.WindowSizeClass
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import dev.yowkey.portfolio.model.Portfolio
+import dev.yowkey.portfolio.model.Project
 import dev.yowkey.portfolio.ui.components.SectionHeader
 import dev.yowkey.portfolio.ui.components.rememberRevealProgress
+import dev.yowkey.portfolio.ui.image.ScreenshotViewer
+import dev.yowkey.portfolio.ui.image.ViewerRequest
+import dev.yowkey.portfolio.ui.sections.AwardList
 import dev.yowkey.portfolio.ui.sections.CardRow
 import dev.yowkey.portfolio.ui.sections.ContactBlock
 import dev.yowkey.portfolio.ui.sections.Footer
@@ -154,13 +160,20 @@ fun PortfolioPage(portfolio: Portfolio, platformLabel: String, modifier: Modifie
     }
     val seen = remember { mutableSetOf<Any>() }
     val reducedMotion = LocalReducedMotion.current
+    var viewer by remember { mutableStateOf<ViewerRequest?>(null) }
+    val openScreenshot: (Project, Int) -> Unit = remember {
+        { project, index -> viewer = ViewerRequest(project.title, project.screenshots, index) }
+    }
+
+    viewer?.let { ScreenshotViewer(it, onDismiss = { viewer = null }) }
 
     Column(modifier.fillMaxSize()) {
         TopBar(
             name = portfolio.profile.name,
             sections = numbered,
             active = activeSection,
-            compact = layout.compact,
+            // Six links need the expanded width; below it they move into the menu.
+            compact = !layout.wideSections,
             gutter = layout.gutter,
             maxWidth = PageLayout.MaxWidth,
             scrolled = { listState.canScrollBackward },
@@ -185,7 +198,7 @@ fun PortfolioPage(portfolio: Portfolio, platformLabel: String, modifier: Modifie
                             .padding(horizontal = layout.gutter)
                             .padding(top = item.topSpacing(layout)),
                     ) {
-                        PageRow(item, layout, platformLabel, numbered.indexOf(item.section) + 1, navigate)
+                        PageRow(item, layout, platformLabel, numbered.indexOf(item.section) + 1, navigate, openScreenshot)
                     }
                 }
             }
@@ -202,7 +215,14 @@ private fun PageItem.topSpacing(layout: PageLayout): Dp = when {
 }
 
 @Composable
-private fun PageRow(item: PageItem, layout: PageLayout, platformLabel: String, number: Int, onNavigate: (Section) -> Unit) {
+private fun PageRow(
+    item: PageItem,
+    layout: PageLayout,
+    platformLabel: String,
+    number: Int,
+    onNavigate: (Section) -> Unit,
+    onOpenScreenshot: (Project, Int) -> Unit,
+) {
     when (item) {
         is PageItem.Hero -> SelectionContainer {
             Hero(
@@ -217,7 +237,13 @@ private fun PageRow(item: PageItem, layout: PageLayout, platformLabel: String, n
             CardRow(item.columns, item.services.size) { i, m -> ServiceCard(item.services[i], m) }
         }
         is PageItem.Projects -> SectionFrame(item, number, layout) {
-            CardRow(item.columns, item.projects.size) { i, m -> ProjectCard(item.projects[i], m) }
+            CardRow(item.columns, item.projects.size) { i, m ->
+                val project = item.projects[i]
+                ProjectCard(project, onOpenScreenshot = { onOpenScreenshot(project, it) }, modifier = m)
+            }
+        }
+        is PageItem.Recognition -> SectionFrame(item, number, layout) {
+            AwardList(item.awards, wide = !layout.compact)
         }
         is PageItem.Job -> SectionFrame(item, number, layout) {
             JobEntry(item.experience, item.isLast, wide = !layout.compact)

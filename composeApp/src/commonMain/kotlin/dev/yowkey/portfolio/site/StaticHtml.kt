@@ -2,6 +2,7 @@ package dev.yowkey.portfolio.site
 
 import dev.yowkey.portfolio.model.Link
 import dev.yowkey.portfolio.model.Portfolio
+import dev.yowkey.portfolio.model.Screenshot
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -61,7 +62,9 @@ object StaticHtml {
             appendLine("<section id=\"projects\"><h2>Projects</h2>")
             portfolio.projects.forEach { project ->
                 appendLine("<article><h3>${escape(project.title)}</h3>")
-                project.role?.let { appendLine("<p class=\"muted\">${escape(it)}</p>") }
+                val meta = listOfNotNull(project.role, project.period)
+                if (meta.isNotEmpty()) appendLine("<p class=\"muted\">${meta.joinToString(" · ") { escape(it) }}</p>")
+                screenshots(project.screenshots)
                 appendLine("<p>${escape(project.summary)}</p>")
                 list(project.highlights)
                 if (project.stack.isNotEmpty()) {
@@ -85,6 +88,16 @@ object StaticHtml {
             appendLine("</section>")
         }
 
+        if (portfolio.recognition.isNotEmpty()) {
+            appendLine("<section id=\"recognition\"><h2>Recognition</h2>")
+            portfolio.recognition.forEach { award ->
+                appendLine("<article><h3>${escape(award.title)}</h3>")
+                award.date?.let { appendLine("<p class=\"muted\">${escape(it)}</p>") }
+                appendLine("<p>${escape(award.detail)}</p></article>")
+            }
+            appendLine("</section>")
+        }
+
         if (portfolio.skills.isNotEmpty()) {
             appendLine("<section id=\"skills\"><h2>Skills</h2>")
             portfolio.skills.forEach { group ->
@@ -98,6 +111,25 @@ object StaticHtml {
         links(listOfNotNull(p.email?.let { Link("Email", "mailto:$it") }) + portfolio.links)
         appendLine("</section>")
     }
+
+    /** Thumbnails linking to the full image; width/height let the browser reserve the space (no layout shift). */
+    private fun StringBuilder.screenshots(shots: List<Screenshot>) {
+        if (shots.isEmpty()) return
+        appendLine("<div class=\"shots\">")
+        shots.forEach { shot ->
+            appendLine(
+                "<a href=\"${resourceUrl(shot.fullPath)}\"><img src=\"${resourceUrl(shot.thumbPath)}\" " +
+                    "alt=\"${escape(shot.caption)}\" width=\"${shot.width}\" height=\"${shot.height}\" " +
+                    "loading=\"lazy\" decoding=\"async\"></a>",
+            )
+        }
+        appendLine("</div>")
+    }
+
+    /** Where Compose resources land in the Wasm distribution, relative to index.html. */
+    fun resourceUrl(path: String) = "$RESOURCES_ROOT/$path"
+
+    private const val RESOURCES_ROOT = "composeResources/dev.yowkey.portfolio.resources"
 
     private fun StringBuilder.list(items: List<String>) {
         if (items.isEmpty()) return

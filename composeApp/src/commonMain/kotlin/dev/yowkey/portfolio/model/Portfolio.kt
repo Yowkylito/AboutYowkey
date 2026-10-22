@@ -12,6 +12,7 @@ data class Portfolio(
     val services: List<Service> = emptyList(),
     val projects: List<Project> = emptyList(),
     val experience: List<Experience> = emptyList(),
+    val recognition: List<Award> = emptyList(),
     val skills: List<SkillGroup> = emptyList(),
     val links: List<Link> = emptyList(),
 )
@@ -45,6 +46,39 @@ data class Project(
     val highlights: List<String> = emptyList(),
     val stack: List<String> = emptyList(),
     val links: List<Link> = emptyList(),
+    val period: String? = null,
+    val screenshots: List<Screenshot> = emptyList(),
+)
+
+/**
+ * An image in `composeResources/files/screens/`: [file] is the full-size WebP shown in the viewer, and a
+ * `.thumb.webp` twin beside it is what the card shows. [width] and [height] are the full image's pixels; they
+ * reserve the space before it loads, so nothing jumps.
+ */
+@Immutable
+@Serializable
+data class Screenshot(
+    val file: String,
+    val caption: String,
+    val width: Int,
+    val height: Int,
+) {
+    val aspectRatio: Float get() = width.toFloat() / height
+    val fullPath: String get() = "$SCREENS_DIR/$file"
+    val thumbPath: String get() = "$SCREENS_DIR/${file.removeSuffix(".webp")}.thumb.webp"
+
+    companion object {
+        /** Relative to composeResources; `Res.readBytes` takes it as is. */
+        const val SCREENS_DIR = "files/screens"
+    }
+}
+
+@Immutable
+@Serializable
+data class Award(
+    val title: String,
+    val detail: String,
+    val date: String? = null,
 )
 
 @Immutable

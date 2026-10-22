@@ -28,6 +28,8 @@ apply; what does is below. `[x]` done, `[ ]` open, `N/A` with the reason.
 | Render | Empty section | Section and its nav link are not shown |
 | Render | Long titles, long text, many tags | Titles ellipsize at 2 lines; tags wrap (`FlowRow`); see `LongProjectCardPreview` |
 | Navigate | Double-tap Retry | Second tap ignored while a load is in flight (tested) |
+| Screenshots | Image slow or missing | Slot is sized from the JSON's width/height before loading, so nothing jumps; a failed image keeps its placeholder. Tests fail the build if a listed file is missing |
+| Screenshots | Page weight | Cards load thumbnails only (budget 62 KB each); full images (254 KB) load when the viewer opens. Decoded bitmaps are cached LRU: 40 thumbnails, 3 full-size |
 | Resize | Window or rotation changes size class | Layout re-derives columns from `WindowSizeClass` live |
 
 ## 4. Database

@@ -25,12 +25,22 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import dev.yowkey.portfolio.model.Award
 import dev.yowkey.portfolio.model.Experience
 import dev.yowkey.portfolio.model.Link
 import dev.yowkey.portfolio.model.Profile
 import dev.yowkey.portfolio.model.Project
+import dev.yowkey.portfolio.model.Screenshot
 import dev.yowkey.portfolio.model.Service
 import dev.yowkey.portfolio.model.SkillGroup
+import dev.yowkey.portfolio.ui.image.LocalScreenshotImages
+import dev.yowkey.portfolio.ui.image.ScreenshotImage
 import dev.yowkey.portfolio.ui.components.Bullet
 import dev.yowkey.portfolio.ui.components.LinkButton
 import dev.yowkey.portfolio.ui.components.OutlinedCard
@@ -102,11 +112,51 @@ fun ServiceCard(service: Service, modifier: Modifier = Modifier) {
     }
 }
 
+/**
+ * An even grid of thumbnails across the card's width: four per row for phone screens, two for desktop ones.
+ * A grid rather than a sideways scroller, because a mouse wheel cannot reach a hidden horizontal row. Each slot
+ * takes its height from the image's aspect ratio, so the layout is final before any image loads.
+ *
+ * Plain weighted Rows, not FlowRow: FlowRow decides line breaks before applying weights, and an unbounded
+ * aspectRatio claims the whole line, so every image wrapped onto its own row. Rows also answer the intrinsic
+ * size queries CardRow makes for equal-height cards, which BoxWithConstraints cannot.
+ */
+@Composable
+fun ScreenshotStrip(screenshots: List<Screenshot>, onOpen: (index: Int) -> Unit, modifier: Modifier = Modifier) {
+    val loader = LocalScreenshotImages.current?.thumbnails
+    val outline = MaterialTheme.colorScheme.outlineVariant
+    val perRow = if (screenshots.all { it.aspectRatio < 1f }) 4 else 2
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        screenshots.chunked(perRow).forEachIndexed { row, chunk ->
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                chunk.forEachIndexed { column, shot ->
+                    val index = row * perRow + column
+                    ScreenshotImage(
+                        path = shot.thumbPath,
+                        contentDescription = shot.caption,
+                        loader = loader,
+                        modifier = Modifier
+                            .weight(1f)
+                            .aspectRatio(shot.aspectRatio)
+                            .clip(RoundedCornerShape(10.dp))
+                            .border(1.dp, outline, RoundedCornerShape(10.dp))
+                            .clickable(onClickLabel = "View larger", role = Role.Button) { onOpen(index) },
+                    )
+                }
+                repeat(perRow - chunk.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun ProjectCard(project: Project, modifier: Modifier = Modifier) {
+fun ProjectCard(project: Project, onOpenScreenshot: (index: Int) -> Unit, modifier: Modifier = Modifier) {
     OutlinedCard(modifier) {
         Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            if (project.screenshots.isNotEmpty()) {
+                ScreenshotStrip(project.screenshots, onOpenScreenshot, Modifier.padding(bottom = 6.dp))
+            }
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
                     project.title,
@@ -115,8 +165,9 @@ fun ProjectCard(project: Project, modifier: Modifier = Modifier) {
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
-                project.role?.let {
-                    Text(it.uppercase(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                val meta = listOfNotNull(project.role, project.period).joinToString(" · ")
+                if (meta.isNotEmpty()) {
+                    Text(meta.uppercase(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                 }
             }
             Text(project.summary, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
@@ -173,6 +224,31 @@ fun JobEntry(experience: Experience, isLast: Boolean, wide: Boolean, modifier: M
             if (experience.highlights.isNotEmpty()) {
                 Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     experience.highlights.forEach { Bullet(it) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun AwardList(awards: List<Award>, wide: Boolean, modifier: Modifier = Modifier) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(28.dp)) {
+        awards.forEach { award ->
+            Row {
+                if (wide) {
+                    Text(
+                        award.date.orEmpty(),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.width(150.dp).padding(top = 2.dp, end = 16.dp),
+                    )
+                }
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(award.title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
+                    if (!wide && award.date != null) {
+                        Text(award.date, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Text(award.detail, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }

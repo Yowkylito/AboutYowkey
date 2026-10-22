@@ -18,6 +18,17 @@ Rules the build enforces (it fails rather than ship a broken page):
 - project `id`s are unique (they key the list rows)
 - links are `https://` or `mailto:`
 
+### Adding screenshots to a project
+
+```bash
+python scripts/prepare_screenshots.py path/to/raw.png vistago-planner path/to/other.png vistago-translate
+```
+
+This writes `<name>.webp` (full size, for the viewer) and `<name>.thumb.webp` (for the card) into
+`composeResources/files/screens/` within size budgets, and prints the `file`, `width` and `height` to put in the
+project's `screenshots` list with a `caption` (the caption is also the image's alt text). Tests fail if a listed
+image is missing or over budget, or if a file in `screens/` is not listed.
+
 ## How the page loads
 
 A Compose app on the web draws into a `<canvas>`, which search engines, link previews and screen readers can't read,

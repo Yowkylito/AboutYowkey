@@ -33,7 +33,13 @@
       :root { --bg: #0E1014; --surface: #161A20; --ink: #ECEDEF; --muted: #9AA1AD; --line: #262B33; --accent: #FB923C; }
     }
     * { box-sizing: border-box; }
-    html, body { margin: 0; background: var(--bg); color: var(--ink); }
+    /*
+      The page itself never scrolls: #static-scroll does. A body scrollbar would make the viewport narrower while
+      the static page shows, Compose would size its canvas to that, and the canvas would stay stretched after the
+      scrollbar left at hand-off.
+    */
+    html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--ink); }
+    #static-scroll { position: fixed; inset: 0; overflow-y: auto; }
     body {
       font: 17px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
       -webkit-font-smoothing: antialiased;
@@ -50,6 +56,8 @@
     .cards li, article { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 24px; }
     article + article { margin-top: 16px; }
     a { color: var(--accent); font-weight: 600; }
+    .shots { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0; }
+    .shots img { display: block; height: 200px; width: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--line); }
     .links a { display: inline-block; margin: 0 16px 8px 0; padding: 12px 0; }
     #app { position: fixed; inset: 0; opacity: 0; pointer-events: none; transition: opacity .25s ease; }
     .loading-bar {
@@ -58,17 +66,18 @@
     }
     @keyframes loading { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
     @media (prefers-reduced-motion: reduce) { .loading-bar { animation: none; width: 100%; opacity: .5; } }
-    body.app-ready { overflow: hidden; }
     body.app-ready #app { opacity: 1; pointer-events: auto; }
-    body.app-ready #static-content, body.app-ready .loading-bar,
+    body.app-ready #static-scroll, body.app-ready .loading-bar,
     body.static-only #app, body.static-only .loading-bar { display: none; }
   </style>
 </head>
 <body>
   <div class="loading-bar" aria-hidden="true"></div>
-  <main id="static-content">
+  <div id="static-scroll">
+    <main id="static-content">
 {{content}}
-  </main>
+    </main>
+  </div>
   <div id="app" aria-hidden="true"></div>
   <script>
     (function () {
