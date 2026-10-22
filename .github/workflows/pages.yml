@@ -1,0 +1,70 @@
+name: Build and deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Test and build the site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # gitleaks scans the history, not just the tip
+
+      - name: Scan for committed secrets
+        uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      # generateStaticSite runs inside wasmJsBrowserDistribution and fails the build on malformed portfolio.json.
+      - name: Test and build
+        run: ./gradlew :composeApp:jvmTest :composeApp:wasmJsBrowserDistribution --stacktrace
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: composeApp/build/dist/wasmJs/productionExecutable
+
+  deploy:
+    name: Deploy to GitHub Pages
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5
+
+  lighthouse:
+    name: Lighthouse on the live site
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: treosh/lighthouse-ci-action@v12
+        with:
+          urls: https://yowkylito.github.io/AboutYowkey/
+          configPath: ./.github/lighthouserc.json
+          uploadArtifacts: true

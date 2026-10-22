@@ -1,0 +1,50 @@
+# AboutYowkey
+
+My portfolio, built as a **Compose Multiplatform** app and served from GitHub Pages as Kotlin/WebAssembly.
+
+**Live:** https://yowkylito.github.io/AboutYowkey/
+
+The same Kotlin UI also runs as a desktop app on the JVM. Compose Multiplatform's web target is **Beta**.
+
+## Editing the content
+
+Everything on the page comes from one file:
+[`composeApp/src/commonMain/composeResources/files/portfolio.json`](composeApp/src/commonMain/composeResources/files/portfolio.json).
+Change it, push to `main`, and the site redeploys. A section with no entries disappears, nav link included.
+
+Rules the build enforces (it fails rather than ship a broken page):
+
+- `profile.name` is not blank; `siteUrl` is `https://`
+- project `id`s are unique (they key the list rows)
+- links are `https://` or `mailto:`
+
+## How the page loads
+
+A Compose app on the web draws into a `<canvas>`, which search engines, link previews and screen readers can't read,
+and its runtime is several megabytes. So the build also renders `portfolio.json` into plain HTML inside
+`index.html` (see `composeApp/web/index.template.html`):
+
+1. The browser shows that HTML straight away. It is a complete, styled version of the page.
+2. If the browser supports WasmGC, the Compose app loads behind it, invisible.
+3. Once Compose has drawn real content, the page swaps to it.
+
+Browsers without WasmGC, or a failed download, just keep the HTML version.
+
+## Run it
+
+JDK 17+ (Android Studio's bundled JBR works).
+
+```bash
+./gradlew :composeApp:wasmJsBrowserDevelopmentRun   # web, with live reload
+./gradlew :composeApp:run                           # desktop window
+./gradlew :composeApp:jvmTest                       # tests
+./gradlew :composeApp:wasmJsBrowserDistribution     # the bundle that ships, in composeApp/build/dist/wasmJs/productionExecutable
+```
+
+## Deploy
+
+`.github/workflows/pages.yml` scans for secrets, runs the tests, builds the bundle and deploys it on every push to
+`main`, then runs Lighthouse against the live URL. Pull requests get the same build and tests without the deploy.
+One-time setup: **Settings → Pages → Source: GitHub Actions**.
+
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and [`docs/READINESS.md`](docs/READINESS.md).

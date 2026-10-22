@@ -1,0 +1,108 @@
+{
+  "siteUrl": "https://yowkylito.github.io/AboutYowkey/",
+  "profile": {
+    "name": "Yowkey",
+    "headline": "Android engineer building with Jetpack Compose and Kotlin Multiplatform",
+    "summary": "I design and ship mobile apps end to end: architecture, UI that feels fast, and the release pipeline behind it. This site is itself a Compose Multiplatform app compiled to WebAssembly.",
+    "location": "Philippines · Remote",
+    "availability": "Open to freelance and full-time roles"
+  },
+  "services": [
+    {
+      "title": "Android app development",
+      "description": "Native Android apps in Kotlin and Jetpack Compose, from first screen to Play Store release."
+    },
+    {
+      "title": "Kotlin Multiplatform",
+      "description": "One Kotlin codebase for Android, iOS, desktop and web, with Compose Multiplatform UI where it fits."
+    },
+    {
+      "title": "Performance and UI polish",
+      "description": "Finding jank, slow startup and wasted recomposition, and fixing it with traces to prove it."
+    },
+    {
+      "title": "Architecture and code review",
+      "description": "Clean layering, dependency injection with Koin, coroutines and Flow done right, and tests that catch regressions."
+    }
+  ],
+  "projects": [
+    {
+      "id": "eagles-watch",
+      "title": "The Eagle's Watch",
+      "summary": "A civic transparency app that lists Philippine public infrastructure projects with their contracts, schedules, reported progress and source documents, so citizens can check what public money is building.",
+      "role": "Design and development",
+      "highlights": [
+        "Search and filter by status, place, agency, contractor and contract size, with live counts",
+        "Every figure labelled with how it was established; every record has a report path",
+        "One Compose Multiplatform codebase for Android, iOS and the web"
+      ],
+      "stack": ["Kotlin Multiplatform", "Compose Multiplatform", "Kotlin/Wasm", "GitHub Actions"],
+      "links": [
+        { "label": "Source on GitHub", "url": "https://github.com/Yowkylito/The-Eagle-s-Watch" }
+      ]
+    },
+    {
+      "id": "bubuprotect",
+      "title": "BubuProtect",
+      "summary": "A personal security vault for Android: passwords and TOTP codes behind biometrics and face recognition, plus a scan of the device for risks.",
+      "role": "Design and development",
+      "highlights": [
+        "Biometric unlock with a face-recognition second factor",
+        "TOTP codes for vault entries",
+        "Device risk scan to flag an unsafe environment"
+      ],
+      "stack": ["Kotlin", "Jetpack Compose", "CameraX", "Biometric API"],
+      "links": [
+        { "label": "Source on GitHub", "url": "https://github.com/Yowkylito/BubuProtect" }
+      ]
+    },
+    {
+      "id": "about-yowkey",
+      "title": "This portfolio",
+      "summary": "A Compose Multiplatform app running in your browser through Kotlin/WebAssembly, with a crawlable HTML version generated from the same content at build time.",
+      "role": "Design and development",
+      "highlights": [
+        "Adaptive layout from phone to wide desktop using window size classes",
+        "Content lives in one JSON file shared by the app and the generated HTML",
+        "Built, tested and deployed to GitHub Pages by GitHub Actions"
+      ],
+      "stack": ["Compose Multiplatform", "Kotlin/Wasm", "Koin", "GitHub Pages"],
+      "links": [
+        { "label": "Source on GitHub", "url": "https://github.com/Yowkylito/AboutYowkey" }
+      ]
+    }
+  ],
+  "experience": [
+    {
+      "role": "Android Engineer",
+      "company": "Company name",
+      "period": "20XX – Present",
+      "location": "Remote",
+      "highlights": [
+        "Replace these lines with what you owned and shipped in this role",
+        "Lead with outcomes: what got faster, more reliable or more used"
+      ]
+    }
+  ],
+  "skills": [
+    {
+      "name": "Android",
+      "items": ["Kotlin", "Jetpack Compose", "Coroutines and Flow", "Room", "WorkManager", "CameraX"]
+    },
+    {
+      "name": "Multiplatform",
+      "items": ["Kotlin Multiplatform", "Compose Multiplatform", "Kotlin/Wasm"]
+    },
+    {
+      "name": "Architecture and quality",
+      "items": ["MVVM and unidirectional data flow", "Koin", "Unit and UI testing", "Performance profiling"]
+    },
+    {
+      "name": "Delivery",
+      "items": ["Gradle", "GitHub Actions", "Play Store releases"]
+    }
+  ],
+  "links": [
+    { "label": "GitHub", "url": "https://github.com/Yowkylito" }
+  ]
+}
