@@ -5,7 +5,8 @@
 
   Boot: the static <main> is a full, crawlable version of the page and shows first. If the browser supports
   WasmGC, composeApp.js loads the Compose app into #app (invisible), and once it has drawn real content Kotlin
-  adds body.app-ready, which swaps the two. Without WasmGC, or if the script fails, the static page simply stays.
+  adds body.app-ready, which fades the app in over it. Without WasmGC, or if the script fails, the static page
+  simply stays.
 -->
 <html lang="en">
 <head>
@@ -67,8 +68,13 @@
     @keyframes loading { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
     @media (prefers-reduced-motion: reduce) { .loading-bar { animation: none; width: 100%; opacity: .5; } }
     body.app-ready #app { opacity: 1; pointer-events: auto; }
-    body.app-ready #static-scroll, body.app-ready .loading-bar,
-    body.static-only #app, body.static-only .loading-bar { display: none; }
+    /*
+      After hand-off the static page stays rendered, covered by the opaque canvas, rather than display:none: its
+      text is the page's LCP, a <canvas> can never be one, and with the page hidden CI's Lighthouse reported NO_LCP.
+      markAppReady() makes it inert and aria-hidden so only the app is reachable.
+    */
+    body.app-ready #static-scroll { pointer-events: none; }
+    body.app-ready .loading-bar, body.static-only #app, body.static-only .loading-bar { display: none; }
   </style>
 </head>
 <body>
@@ -86,10 +92,29 @@
         WebAssembly.validate(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 95, 1, 120, 0]));
       function staticOnly() { document.body.classList.add("static-only"); }
       if (!gc) return staticOnly();
-      var script = document.createElement("script");
-      script.src = "composeApp.js";
-      script.onerror = staticOnly;
-      document.body.appendChild(script);
+      var started = false;
+      function start() {
+        if (started) return;
+        started = true;
+        var script = document.createElement("script");
+        script.src = "composeApp.js";
+        script.onerror = staticOnly;
+        document.body.appendChild(script);
+      }
+      // Start the multi-megabyte app only after the static page's first contentful paint, so it never competes
+      // with that paint for bandwidth; Lighthouse's simulated LCP otherwise waited on the whole Wasm download.
+      // The timeout covers browsers that never report the paint (e.g. a tab opened in the background).
+      try {
+        new PerformanceObserver(function (list, observer) {
+          if (list.getEntriesByName("first-contentful-paint").length) {
+            observer.disconnect();
+            setTimeout(start, 0);
+          }
+        }).observe({ type: "paint", buffered: true });
+      } catch (e) {
+        start();
+      }
+      setTimeout(start, 3000);
     })();
   </script>
 </body>
