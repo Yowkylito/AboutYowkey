@@ -22,10 +22,13 @@ jobs:
         with:
           fetch-depth: 0 # gitleaks scans the history, not just the tip
 
+      # The CLI, not gitleaks-action: on a branch's first push the action scans `<first commit>^..<last>`, and a
+      # root commit has no parent, so git errors and the step fails having scanned nothing. This scans all history.
       - name: Scan for committed secrets
-        uses: gitleaks/gitleaks-action@v3
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.24.3/gitleaks_8.24.3_linux_x64.tar.gz \
+            | tar xz -C "$RUNNER_TEMP" gitleaks
+          "$RUNNER_TEMP/gitleaks" git --redact --verbose .
 
       - uses: actions/setup-java@v6
         with:
