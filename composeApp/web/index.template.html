@@ -28,9 +28,13 @@
   <style>
     :root {
       --bg: #F7F5F0; --surface: #FFFFFF; --ink: #16181D; --muted: #545A66; --line: #E4E0D7; --accent: #C2410C;
+      --pill: #FFE4D5; --on-pill: #5A1D04;
     }
     @media (prefers-color-scheme: dark) {
-      :root { --bg: #0E1014; --surface: #161A20; --ink: #ECEDEF; --muted: #9AA1AD; --line: #262B33; --accent: #FB923C; }
+      :root {
+        --bg: #0E1014; --surface: #161A20; --ink: #ECEDEF; --muted: #9AA1AD; --line: #262B33; --accent: #FB923C;
+        --pill: #4A2410; --on-pill: #FFDCC8;
+      }
     }
     * { box-sizing: border-box; }
     /*
@@ -41,17 +45,26 @@
     html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--ink); }
     #static-scroll { position: fixed; inset: 0; overflow-y: auto; }
     body {
-      font: 17px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
       -webkit-font-smoothing: antialiased;
     }
     #static-content { max-width: 1120px; margin: 0 auto; padding: 96px 20px 120px; }
-    .hero h1 { font-size: clamp(44px, 9vw, 72px); line-height: 1.05; letter-spacing: -0.03em; margin: 8px 0 16px; }
-    .headline { font-size: clamp(20px, 3vw, 24px); margin: 0 0 12px; max-width: 720px; }
-    .eyebrow { color: var(--accent); font-size: 12px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; margin: 0; }
+    /* Same type scale and emphasis as the Compose theme (ui/theme/Theme.kt): display > headline > title > body. */
+    .hero h1 { font-size: clamp(46px, 9vw, 72px); line-height: 1.05; letter-spacing: -0.033em; margin: 16px 0 16px; }
+    .headline { font-size: clamp(20px, 3vw, 24px); font-weight: 500; line-height: 1.375; margin: 0 0 12px; max-width: 720px; }
+    .lead { font-size: 18px; line-height: 1.55; color: var(--muted); }
+    .eyebrow {
+      display: inline-block; color: var(--on-pill); background: var(--pill); border-radius: 999px;
+      font-size: 14px; font-weight: 600; padding: 6px 14px; margin: 0;
+    }
     .muted { color: var(--muted); }
+    p, li { max-width: 68ch; }
+    article li { color: var(--muted); }
+    strong { color: var(--ink); font-weight: 600; }
+    strong.win { color: var(--accent); font-weight: 700; }
     section { margin-top: 96px; }
-    h2 { font-size: 28px; letter-spacing: -0.01em; margin: 0 0 24px; }
-    h3 { font-size: 19px; margin: 0 0 4px; }
+    h2 { font-size: 30px; line-height: 1.2; letter-spacing: -0.02em; margin: 0 0 24px; }
+    h3 { font-size: 22px; line-height: 1.27; letter-spacing: -0.01em; margin: 0 0 4px; }
     .cards { list-style: none; padding: 0; display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
     .cards li, article { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 24px; }
     article + article { margin-top: 16px; }

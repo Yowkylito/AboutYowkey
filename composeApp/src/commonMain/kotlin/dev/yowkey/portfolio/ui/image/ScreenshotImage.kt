@@ -34,6 +34,9 @@ val LocalScreenshotImages = staticCompositionLocalOf<ScreenshotImages?> { null }
  * Draws the image at [path] from [loader], or a placeholder of the same size until it arrives (or if it fails).
  * The caller sizes this, so the layout is final before any bytes load. The fade reads its progress in
  * `graphicsLayer`, so it costs no recomposition.
+ *
+ * [previewPath] (usually the cached thumbnail) is drawn underneath while [path] loads, so a full-size image
+ * sharpens in place instead of popping in over an empty box.
  */
 @Composable
 fun ScreenshotImage(
@@ -42,21 +45,19 @@ fun ScreenshotImage(
     loader: LruLoader<String, ImageBitmap>?,
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Crop,
+    previewPath: String? = null,
+    previewLoader: LruLoader<String, ImageBitmap>? = null,
 ) {
-    val bitmap by produceState<ImageBitmap?>(null, path, loader) {
-        value = try {
-            loader?.get(path)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            null // a missing image keeps its placeholder; the tests guard that every listed file ships
-        }
-    }
+    val bitmap by rememberBitmap(path, loader)
+    val preview by rememberBitmap(previewPath, previewLoader)
     Box(
         modifier
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .semantics { this.contentDescription = contentDescription },
     ) {
+        preview?.let { image ->
+            Image(image, contentDescription = null, contentScale = contentScale, modifier = Modifier.fillMaxSize())
+        }
         bitmap?.let { image ->
             val alpha = remember(image) { Animatable(0f) }
             LaunchedEffect(image) { alpha.animateTo(1f, tween(220)) }
@@ -69,3 +70,16 @@ fun ScreenshotImage(
         }
     }
 }
+
+@Composable
+private fun rememberBitmap(path: String?, loader: LruLoader<String, ImageBitmap>?) =
+    produceState<ImageBitmap?>(null, path, loader) {
+        if (path == null) return@produceState
+        value = try {
+            loader?.get(path)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null // a missing image keeps its placeholder; the tests guard that every listed file ships
+        }
+    }

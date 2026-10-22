@@ -25,10 +25,11 @@ val appModule = module {
     single {
         val decode: suspend (String) -> ImageBitmap = { path -> Res.readBytes(path).decodeToImageBitmap() }
         ScreenshotImages(
-            // Thumbnails are ~200dp tall and small; every one on the page fits.
+            // Thumbnails are small; every one on the page fits. Carousels show them for slides away from the centre.
             thumbnails = LruLoader(capacity = 40, dispatcher = get(), load = decode),
-            // Full-size images are several MB decoded; keep the viewer's page and its neighbours.
-            fullSize = LruLoader(capacity = 3, dispatcher = get(), load = decode),
+            // Full-size images are several MB decoded. A carousel holds its settled slide and both neighbours, and a
+            // desktop row shows two carousels: six covers that row, and the viewer's three reuse its entries.
+            fullSize = LruLoader(capacity = 6, dispatcher = get(), load = decode),
         )
     }
     viewModelOf(::PortfolioViewModel)

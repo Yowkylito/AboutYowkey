@@ -1,7 +1,9 @@
 package dev.yowkey.portfolio.ui
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.tooling.preview.Preview
+import dev.yowkey.portfolio.model.Award
 import dev.yowkey.portfolio.model.Experience
 import dev.yowkey.portfolio.model.Link
 import dev.yowkey.portfolio.model.Portfolio
@@ -10,7 +12,11 @@ import dev.yowkey.portfolio.model.Project
 import dev.yowkey.portfolio.model.Screenshot
 import dev.yowkey.portfolio.model.Service
 import dev.yowkey.portfolio.model.SkillGroup
+import dev.yowkey.portfolio.ui.image.ScreenshotCarousel
+import dev.yowkey.portfolio.ui.sections.AwardTile
 import dev.yowkey.portfolio.ui.sections.ProjectCard
+import dev.yowkey.portfolio.ui.theme.LocalMotion
+import dev.yowkey.portfolio.ui.theme.MotionScheme
 import dev.yowkey.portfolio.ui.theme.PortfolioTheme
 
 private val previewPortfolio = Portfolio(
@@ -85,5 +91,28 @@ private fun ErrorPreview() = PortfolioTheme {
 @Preview
 @Composable
 private fun LongProjectCardPreview() = PortfolioTheme {
-    ProjectCard(previewPortfolio.projects.last(), onOpenScreenshot = {})
+    ProjectCard(previewPortfolio.projects.last(), onOpenScreenshot = { _, _ -> })
+}
+
+/** Reduced motion: no entrance offsets, no carousel tilt or autoplay; the layout is identical. */
+@Preview
+@Composable
+private fun ReducedMotionPreview() = PortfolioTheme {
+    CompositionLocalProvider(LocalMotion provides MotionScheme.Reduced) {
+        PortfolioScreen(PortfolioUiState.Ready(previewPortfolio), "Preview", onRetry = {}, onContentShown = {})
+    }
+}
+
+/** A win tile: the rank and the multiplier take the accent, the plain count is set in ink. */
+@Preview
+@Composable
+private fun AwardTilePreview() = PortfolioTheme(darkTheme = true) {
+    AwardTile(Award("#1 story-point owner", "72.8 story points over three months, 2.4x the team average.", "Aug – Oct 2026"))
+}
+
+/** One screenshot: a single framed slide, no pager chrome. */
+@Preview
+@Composable
+private fun SingleScreenshotCarouselPreview() = PortfolioTheme {
+    ScreenshotCarousel(listOf(Screenshot("one.webp", "The only screen", 1920, 1080)), onOpen = { _, _ -> })
 }

@@ -3,6 +3,7 @@ package dev.yowkey.portfolio.site
 import dev.yowkey.portfolio.data.PortfolioParser
 import dev.yowkey.portfolio.validJson
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -28,6 +29,14 @@ class StaticHtmlTest {
     @Test
     fun pageRejectsUnknownPlaceholders() {
         assertFailsWith<IllegalArgumentException> { StaticHtml.page(portfolio, "{{nope}}") }
+    }
+
+    @Test
+    fun factsAreStrongAndStillEscaped() {
+        assertEquals(
+            "<strong class=\"win\">53%</strong> of <strong>413</strong> &lt;commits&gt; in 2026",
+            StaticHtml.emphasize("53% of 413 <commits> in 2026"),
+        )
     }
 
     @Test

@@ -3,6 +3,8 @@ package dev.yowkey.portfolio.site
 import dev.yowkey.portfolio.model.Link
 import dev.yowkey.portfolio.model.Portfolio
 import dev.yowkey.portfolio.model.Screenshot
+import dev.yowkey.portfolio.text.Emphasis
+import dev.yowkey.portfolio.text.EmphasisKind
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -46,7 +48,7 @@ object StaticHtml {
         p.availability?.let { appendLine("<p class=\"eyebrow\">${escape(it)}</p>") }
         appendLine("<h1>${escape(p.name)}</h1>")
         appendLine("<p class=\"headline\">${escape(p.headline)}</p>")
-        appendLine("<p>${escape(p.summary)}</p>")
+        appendLine("<p class=\"lead\">${emphasize(p.summary)}</p>")
         p.location?.let { appendLine("<p class=\"muted\">${escape(it)}</p>") }
         appendLine("</header>")
 
@@ -65,7 +67,7 @@ object StaticHtml {
                 val meta = listOfNotNull(project.role, project.period)
                 if (meta.isNotEmpty()) appendLine("<p class=\"muted\">${meta.joinToString(" · ") { escape(it) }}</p>")
                 screenshots(project.screenshots)
-                appendLine("<p>${escape(project.summary)}</p>")
+                appendLine("<p>${emphasize(project.summary)}</p>")
                 list(project.highlights)
                 if (project.stack.isNotEmpty()) {
                     appendLine("<p class=\"muted\">${project.stack.joinToString(" · ") { escape(it) }}</p>")
@@ -93,7 +95,7 @@ object StaticHtml {
             portfolio.recognition.forEach { award ->
                 appendLine("<article><h3>${escape(award.title)}</h3>")
                 award.date?.let { appendLine("<p class=\"muted\">${escape(it)}</p>") }
-                appendLine("<p>${escape(award.detail)}</p></article>")
+                appendLine("<p>${emphasize(award.detail)}</p></article>")
             }
             appendLine("</section>")
         }
@@ -133,7 +135,7 @@ object StaticHtml {
 
     private fun StringBuilder.list(items: List<String>) {
         if (items.isEmpty()) return
-        appendLine("<ul>${items.joinToString("") { "<li>${escape(it)}</li>" }}</ul>")
+        appendLine("<ul>${items.joinToString("") { "<li>${emphasize(it)}</li>" }}</ul>")
     }
 
     private fun StringBuilder.links(links: List<Link>) {
@@ -159,6 +161,18 @@ object StaticHtml {
         }
         // "</" would end the <script> element early.
         return person.toString().replace("</", "<\\/")
+    }
+
+    /**
+     * [text] escaped, with its numeric facts in `<strong>`, as the app marks them: wins (53%, 2.4x, #1) also get
+     * `class="win"` for the accent colour.
+     */
+    fun emphasize(text: String): String = Emphasis.segments(text).joinToString("") { (run, kind) ->
+        when (kind) {
+            null -> escape(run)
+            EmphasisKind.Strong -> "<strong class=\"win\">${escape(run)}</strong>"
+            EmphasisKind.Figure -> "<strong>${escape(run)}</strong>"
+        }
     }
 
     fun escape(text: String): String = buildString(text.length) {

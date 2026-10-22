@@ -14,10 +14,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -25,27 +23,35 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.semantics.Role
+import androidx.compose.runtime.remember
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import dev.yowkey.portfolio.model.Award
 import dev.yowkey.portfolio.model.Experience
 import dev.yowkey.portfolio.model.Link
 import dev.yowkey.portfolio.model.Profile
 import dev.yowkey.portfolio.model.Project
-import dev.yowkey.portfolio.model.Screenshot
 import dev.yowkey.portfolio.model.Service
 import dev.yowkey.portfolio.model.SkillGroup
-import dev.yowkey.portfolio.ui.image.LocalScreenshotImages
-import dev.yowkey.portfolio.ui.image.ScreenshotImage
+import dev.yowkey.portfolio.ui.image.ScreenshotCarousel
+import dev.yowkey.portfolio.ui.components.ActionButton
 import dev.yowkey.portfolio.ui.components.Bullet
+import dev.yowkey.portfolio.ui.components.EmphasizedText
 import dev.yowkey.portfolio.ui.components.LinkButton
 import dev.yowkey.portfolio.ui.components.OutlinedCard
+import dev.yowkey.portfolio.ui.components.StatusPill
 import dev.yowkey.portfolio.ui.components.Tag
+import dev.yowkey.portfolio.ui.theme.Measure
 
+/**
+ * The ten-second read: availability first (the pill), then name, role, and a summary whose numbers stand out.
+ * Everything else on the hero is quiet so those four land.
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun Hero(
@@ -57,13 +63,12 @@ fun Hero(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(20.dp)) {
-        profile.availability?.let {
-            Text(it.uppercase(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-        }
+        profile.availability?.let { StatusPill(it) }
         Text(
             text = profile.name,
             style = if (compact) MaterialTheme.typography.displayMedium else MaterialTheme.typography.displayLarge,
             color = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.semantics { heading() },
         )
         Text(
             text = profile.headline,
@@ -71,15 +76,19 @@ fun Hero(
             color = MaterialTheme.colorScheme.onBackground,
             modifier = Modifier.widthIn(max = 720.dp),
         )
-        Text(
+        EmphasizedText(
             text = profile.summary,
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.widthIn(max = 640.dp),
+            modifier = Modifier.widthIn(max = Measure.Lead),
         )
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Button(onClick = onSeeProjects) { Text("See projects") }
-            OutlinedButton(onClick = onContact) { Text("Get in touch") }
+        FlowRow(
+            Modifier.padding(top = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            ActionButton("See projects", onSeeProjects, primary = true)
+            ActionButton("Get in touch", onContact)
         }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             profile.location?.let { Tag(it) }
@@ -88,16 +97,17 @@ fun Hero(
     }
 }
 
-/** Lays out one row of an equal-height card grid; short rows keep their column width. */
+/** Lays out one row of an equal-height card grid; short rows keep their column width. [entrance] staggers cards. */
 @Composable
 fun CardRow(
     columns: Int,
     count: Int,
     modifier: Modifier = Modifier,
+    entrance: (index: Int) -> Modifier = { Modifier },
     card: @Composable (index: Int, modifier: Modifier) -> Unit,
 ) {
     Row(modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        repeat(count) { card(it, Modifier.weight(1f).fillMaxHeight()) }
+        repeat(count) { card(it, entrance(it).weight(1f).fillMaxHeight()) }
         repeat(columns - count) { Spacer(Modifier.weight(1f)) }
     }
 }
@@ -113,50 +123,19 @@ fun ServiceCard(service: Service, modifier: Modifier = Modifier) {
 }
 
 /**
- * An even grid of thumbnails across the card's width: four per row for phone screens, two for desktop ones.
- * A grid rather than a sideways scroller, because a mouse wheel cannot reach a hidden horizontal row. Each slot
- * takes its height from the image's aspect ratio, so the layout is final before any image loads.
- *
- * Plain weighted Rows, not FlowRow: FlowRow decides line breaks before applying weights, and an unbounded
- * aspectRatio claims the whole line, so every image wrapped onto its own row. Rows also answer the intrinsic
- * size queries CardRow makes for equal-height cards, which BoxWithConstraints cannot.
+ * Title > summary > screenshots > highlights > stack. Title and summary are full contrast, highlights muted with
+ * their numbers lifted out, and the stack chips quietest of all, pushed to the bottom.
  */
-@Composable
-fun ScreenshotStrip(screenshots: List<Screenshot>, onOpen: (index: Int) -> Unit, modifier: Modifier = Modifier) {
-    val loader = LocalScreenshotImages.current?.thumbnails
-    val outline = MaterialTheme.colorScheme.outlineVariant
-    val perRow = if (screenshots.all { it.aspectRatio < 1f }) 4 else 2
-    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        screenshots.chunked(perRow).forEachIndexed { row, chunk ->
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                chunk.forEachIndexed { column, shot ->
-                    val index = row * perRow + column
-                    ScreenshotImage(
-                        path = shot.thumbPath,
-                        contentDescription = shot.caption,
-                        loader = loader,
-                        modifier = Modifier
-                            .weight(1f)
-                            .aspectRatio(shot.aspectRatio)
-                            .clip(RoundedCornerShape(10.dp))
-                            .border(1.dp, outline, RoundedCornerShape(10.dp))
-                            .clickable(onClickLabel = "View larger", role = Role.Button) { onOpen(index) },
-                    )
-                }
-                repeat(perRow - chunk.size) { Spacer(Modifier.weight(1f)) }
-            }
-        }
-    }
-}
-
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun ProjectCard(project: Project, onOpenScreenshot: (index: Int) -> Unit, modifier: Modifier = Modifier) {
+fun ProjectCard(
+    project: Project,
+    onOpenScreenshot: (index: Int, origin: Rect?) -> Unit,
+    modifier: Modifier = Modifier,
+    canAutoplay: () -> Boolean = { true },
+) {
     OutlinedCard(modifier) {
         Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            if (project.screenshots.isNotEmpty()) {
-                ScreenshotStrip(project.screenshots, onOpenScreenshot, Modifier.padding(bottom = 6.dp))
-            }
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
                     project.title,
@@ -164,19 +143,23 @@ fun ProjectCard(project: Project, onOpenScreenshot: (index: Int) -> Unit, modifi
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.semantics { heading() },
                 )
                 val meta = listOfNotNull(project.role, project.period).joinToString(" · ")
                 if (meta.isNotEmpty()) {
-                    Text(meta.uppercase(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                    Text(meta, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            Text(project.summary, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+            EmphasizedText(project.summary, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+            if (project.screenshots.isNotEmpty()) {
+                ScreenshotCarousel(project.screenshots, onOpenScreenshot, canAutoplay = canAutoplay)
+            }
             if (project.highlights.isNotEmpty()) {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { project.highlights.forEach { Bullet(it) } }
             }
             Spacer(Modifier.weight(1f))
             if (project.stack.isNotEmpty()) {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     project.stack.forEach { Tag(it) }
                 }
             }
@@ -191,7 +174,7 @@ fun ProjectCard(project: Project, onOpenScreenshot: (index: Int) -> Unit, modifi
 @Composable
 fun JobEntry(experience: Experience, isLast: Boolean, wide: Boolean, modifier: Modifier = Modifier) {
     val rail = MaterialTheme.colorScheme.outline
-    val dot = MaterialTheme.colorScheme.primary
+    val dot = MaterialTheme.colorScheme.onSurfaceVariant
     Row(modifier.fillMaxWidth()) {
         if (wide) {
             Text(
@@ -212,10 +195,17 @@ fun JobEntry(experience: Experience, isLast: Boolean, wide: Boolean, modifier: M
                 .padding(start = 28.dp, bottom = if (isLast) 0.dp else 36.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
+            val muted = MaterialTheme.colorScheme.onSurfaceVariant
             Text(
-                "${experience.role} · ${experience.company}",
+                remember(experience, muted) {
+                    buildAnnotatedString {
+                        append(experience.role)
+                        withStyle(SpanStyle(color = muted, fontWeight = FontWeight.Normal)) { append(" · ${experience.company}") }
+                    }
+                },
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onBackground,
+                modifier = Modifier.semantics { heading() },
             )
             val meta = listOfNotNull(experience.period.takeUnless { wide }, experience.location).joinToString(" · ")
             if (meta.isNotEmpty()) {
@@ -230,27 +220,30 @@ fun JobEntry(experience: Experience, isLast: Boolean, wide: Boolean, modifier: M
     }
 }
 
+/** Wins as tiles: the title is the headline (its rank or number in the accent), date and detail support it. */
 @Composable
-fun AwardList(awards: List<Award>, wide: Boolean, modifier: Modifier = Modifier) {
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(28.dp)) {
-        awards.forEach { award ->
-            Row {
-                if (wide) {
-                    Text(
-                        award.date.orEmpty(),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.width(150.dp).padding(top = 2.dp, end = 16.dp),
-                    )
-                }
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(award.title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
-                    if (!wide && award.date != null) {
-                        Text(award.date, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    Text(award.detail, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
+fun AwardList(awards: List<Award>, columns: Int, modifier: Modifier = Modifier) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        awards.chunked(columns).forEach { row ->
+            CardRow(columns, row.size) { i, m -> AwardTile(row[i], m) }
+        }
+    }
+}
+
+@Composable
+fun AwardTile(award: Award, modifier: Modifier = Modifier) {
+    OutlinedCard(modifier) {
+        Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            award.date?.let {
+                Text(it.uppercase(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            EmphasizedText(
+                award.title,
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.semantics { heading() },
+            )
+            EmphasizedText(award.detail, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -285,7 +278,7 @@ fun ContactBlock(email: String?, links: List<Link>, modifier: Modifier = Modifie
             color = MaterialTheme.colorScheme.onBackground,
         )
         email?.let {
-            Text(it, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(it, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             email?.let { LinkButton(Link("Email me", "mailto:$it"), primary = true) }

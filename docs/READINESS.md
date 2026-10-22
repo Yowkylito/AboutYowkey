@@ -29,7 +29,7 @@ apply; what does is below. `[x]` done, `[ ]` open, `N/A` with the reason.
 | Render | Long titles, long text, many tags | Titles ellipsize at 2 lines; tags wrap (`FlowRow`); see `LongProjectCardPreview` |
 | Navigate | Double-tap Retry | Second tap ignored while a load is in flight (tested) |
 | Screenshots | Image slow or missing | Slot is sized from the JSON's width/height before loading, so nothing jumps; a failed image keeps its placeholder. Tests fail the build if a listed file is missing |
-| Screenshots | Page weight | Cards load thumbnails only (budget 62 KB each); full images (254 KB) load when the viewer opens. Decoded bitmaps are cached LRU: 40 thumbnails, 3 full-size |
+| Screenshots | Page weight | Carousels draw thumbnails first (budget 62 KB each); full images (254 KB) load only for the settled slide and its neighbours, and in the viewer. Decoded bitmaps are cached LRU: 40 thumbnails, 6 full-size |
 | Resize | Window or rotation changes size class | Layout re-derives columns from `WindowSizeClass` live |
 
 ## 4. Database
@@ -44,7 +44,7 @@ apply; what does is below. `[x]` done, `[ ]` open, `N/A` with the reason.
 | 768 px tablet | [x] two-column cards, inline nav, stacked headers |
 | 1024 px+ desktop, dark | [x] header rail beside two-column cards |
 | Live resize between size classes | [x] |
-| Reduced motion | [x] reveals and skeleton pulse disabled |
+| Reduced motion | [x] no entrance slide, hover lift, press scale, carousel tilt or autoplay; viewer fades only; skeleton pulse off |
 | Safari / Firefox | [ ] not yet run. Trigger: before sharing the link |
 | Throttled 3G | [ ] static HTML covers first paint; measure time-to-app. Trigger: before sharing the link |
 | Screen reader on the Compose canvas | [ ] Compose web accessibility is limited; the static HTML is the accessible version. Trigger: before sharing the link |

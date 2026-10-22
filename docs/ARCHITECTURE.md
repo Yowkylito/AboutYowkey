@@ -29,8 +29,16 @@ Arrows point one way: UI → ViewModel → repository → parser → model. Noth
 
 - Grids are chunked into rows before they reach `LazyColumn`, so each row is one keyed item with a stable
   `contentType`; nothing measures off-screen cards.
-- Scroll-driven visuals read state in the draw/layer phase: the top bar's divider (`drawBehind { scrolled() }`) and
-  the reveal (`graphicsLayer { alpha = progress.value }`). Scrolling recomposes nothing; only a change of active
-  section does, through `derivedStateOf`.
+- Scroll-driven visuals read state in the draw/layer phase: the top bar's elevation (a `snapshotFlow` that emits only
+  when "scrolled" flips, animated in `drawBehind`) and the row entrances (`Modifier.entrance`, a `graphicsLayer`).
+  Scrolling recomposes nothing; only a change of active section does, through `derivedStateOf`.
+- Motion lives in `ui/theme/Motion.kt` (durations, easings, distances) and reaches the UI as `LocalMotion`; reduced
+  motion (`prefers-reduced-motion`, read in `wasmJsMain`) swaps in a scheme with no translation, scale or autoplay.
+  Entrances play once per lazy-row key (`RevealTracker`, hoisted to the page) with a stagger capped at 180 ms.
+- Hover lift and press scale (`Modifier.lift`) are a `Modifier.Node` that animates inside `placeWithLayer`: hovering
+  never recomposes or re-measures.
+- Project carousels (`ScreenshotCarousel`) compute the coverflow transforms, glow and indicator from the pager offset
+  in `graphicsLayer`/`drawBehind`/`Canvas`; only the caption recomposes, once per page. Full images load for the
+  settled page and its neighbours, decoded after the swipe ends; other slides show thumbnails.
 - The model classes are `@Immutable`, so rows skip recomposition when their data is unchanged.
 - JSON is decoded on `Dispatchers.Default` (injected); Kotlin/Wasm has no IO dispatcher.

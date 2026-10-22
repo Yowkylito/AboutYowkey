@@ -39,7 +39,9 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -51,6 +53,8 @@ import androidx.compose.runtime.setValue
 import dev.yowkey.portfolio.model.Portfolio
 import dev.yowkey.portfolio.model.Project
 import dev.yowkey.portfolio.ui.components.SectionHeader
+import dev.yowkey.portfolio.ui.components.RevealTracker
+import dev.yowkey.portfolio.ui.components.entrance
 import dev.yowkey.portfolio.ui.components.rememberRevealProgress
 import dev.yowkey.portfolio.ui.image.ScreenshotViewer
 import dev.yowkey.portfolio.ui.image.ViewerRequest
@@ -63,7 +67,7 @@ import dev.yowkey.portfolio.ui.sections.JobEntry
 import dev.yowkey.portfolio.ui.sections.ProjectCard
 import dev.yowkey.portfolio.ui.sections.ServiceCard
 import dev.yowkey.portfolio.ui.sections.SkillGroups
-import dev.yowkey.portfolio.ui.theme.LocalReducedMotion
+import dev.yowkey.portfolio.ui.theme.LocalMotion
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -155,15 +159,22 @@ fun PortfolioPage(portfolio: Portfolio, platformLabel: String, modifier: Modifie
             else items.getOrNull(listState.firstVisibleItemIndex)?.section ?: Section.Home
         }
     }
-    val navigate: (Section) -> Unit = remember(starts) {
-        { section -> starts[section]?.let { scope.launch { listState.animateScrollToItem(it) } } }
+    val motion = LocalMotion.current
+    val navigate: (Section) -> Unit = remember(starts, motion) {
+        { section ->
+            starts[section]?.let {
+                scope.launch { if (motion.reduced) listState.scrollToItem(it) else listState.animateScrollToItem(it) }
+            }
+        }
     }
-    val seen = remember { mutableSetOf<Any>() }
-    val reducedMotion = LocalReducedMotion.current
+    // Hoisted and keyed by item key, so an entrance plays once per row however often it scrolls in and out.
+    val reveals = remember { RevealTracker() }
     var viewer by remember { mutableStateOf<ViewerRequest?>(null) }
-    val openScreenshot: (Project, Int) -> Unit = remember {
-        { project, index -> viewer = ViewerRequest(project.title, project.screenshots, index) }
+    val openScreenshot: (Project, Int, Rect?) -> Unit = remember {
+        { project, index, origin -> viewer = ViewerRequest(project.title, project.screenshots, index, origin) }
     }
+    // Read only inside the carousels' autoplay flows, so opening the viewer recomposes nothing below.
+    val canAutoplay: () -> Boolean = remember { { viewer == null } }
 
     viewer?.let { ScreenshotViewer(it, onDismiss = { viewer = null }) }
 
@@ -178,17 +189,18 @@ fun PortfolioPage(portfolio: Portfolio, platformLabel: String, modifier: Modifie
             maxWidth = PageLayout.MaxWidth,
             scrolled = { listState.canScrollBackward },
             onNavigate = navigate,
+            modifier = Modifier.zIndex(1f), // its shadow falls over the list
         )
         LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
             items(items, key = { it.key }, contentType = { it::class.simpleName }) { item ->
-                val progress = rememberRevealProgress(item.key, seen, reducedMotion)
+                val progress = rememberRevealProgress(item.key, reveals, motion)
+                val reveal = remember(progress) { { progress.value } }
+                // Card grids stagger their cards (and header) themselves; every other row enters as one piece.
+                val staggersCards = item is PageItem.Services || item is PageItem.Projects
                 Box(
                     Modifier
                         .fillMaxWidth()
-                        .graphicsLayer {
-                            alpha = progress.value
-                            translationY = (1f - progress.value) * 28.dp.toPx()
-                        },
+                        .then(if (staggersCards) Modifier else Modifier.entrance(reveal, motion)),
                     contentAlignment = Alignment.TopCenter,
                 ) {
                     Box(
@@ -198,7 +210,16 @@ fun PortfolioPage(portfolio: Portfolio, platformLabel: String, modifier: Modifie
                             .padding(horizontal = layout.gutter)
                             .padding(top = item.topSpacing(layout)),
                     ) {
-                        PageRow(item, layout, platformLabel, numbered.indexOf(item.section) + 1, navigate, openScreenshot)
+                        PageRow(
+                            item = item,
+                            layout = layout,
+                            platformLabel = platformLabel,
+                            number = numbered.indexOf(item.section) + 1,
+                            reveal = if (staggersCards) reveal else null,
+                            onNavigate = navigate,
+                            onOpenScreenshot = openScreenshot,
+                            canAutoplay = canAutoplay,
+                        )
                     }
                 }
             }
@@ -214,15 +235,21 @@ private fun PageItem.topSpacing(layout: PageLayout): Dp = when {
     else -> 16.dp
 }
 
+/** [reveal] is set for card-grid rows: their header and each card enter on it, cards slightly after one another. */
 @Composable
 private fun PageRow(
     item: PageItem,
     layout: PageLayout,
     platformLabel: String,
     number: Int,
+    reveal: (() -> Float)?,
     onNavigate: (Section) -> Unit,
-    onOpenScreenshot: (Project, Int) -> Unit,
+    onOpenScreenshot: (Project, Int, Rect?) -> Unit,
+    canAutoplay: () -> Boolean,
 ) {
+    val motion = LocalMotion.current
+    val cardEntrance: (Int) -> Modifier = { i -> reveal?.let { Modifier.entrance(it, motion, lag = i * CardLag) } ?: Modifier }
+    val headerEntrance = reveal?.let { Modifier.entrance(it, motion) } ?: Modifier
     when (item) {
         is PageItem.Hero -> SelectionContainer {
             Hero(
@@ -233,17 +260,22 @@ private fun PageRow(
                 onContact = { onNavigate(Section.Contact) },
             )
         }
-        is PageItem.Services -> SectionFrame(item, number, layout) {
-            CardRow(item.columns, item.services.size) { i, m -> ServiceCard(item.services[i], m) }
+        is PageItem.Services -> SectionFrame(item, number, layout, headerEntrance) {
+            CardRow(item.columns, item.services.size, entrance = cardEntrance) { i, m -> ServiceCard(item.services[i], m) }
         }
-        is PageItem.Projects -> SectionFrame(item, number, layout) {
-            CardRow(item.columns, item.projects.size) { i, m ->
+        is PageItem.Projects -> SectionFrame(item, number, layout, headerEntrance) {
+            CardRow(item.columns, item.projects.size, entrance = cardEntrance) { i, m ->
                 val project = item.projects[i]
-                ProjectCard(project, onOpenScreenshot = { onOpenScreenshot(project, it) }, modifier = m)
+                ProjectCard(
+                    project,
+                    onOpenScreenshot = { index, origin -> onOpenScreenshot(project, index, origin) },
+                    modifier = m,
+                    canAutoplay = canAutoplay,
+                )
             }
         }
         is PageItem.Recognition -> SectionFrame(item, number, layout) {
-            AwardList(item.awards, wide = !layout.compact)
+            AwardList(item.awards, columns = if (layout.compact) 1 else 2)
         }
         is PageItem.Job -> SectionFrame(item, number, layout) {
             JobEntry(item.experience, item.isLast, wide = !layout.compact)
@@ -258,20 +290,29 @@ private fun PageRow(
     }
 }
 
+/** How far each card in a row trails the one before it, as a fraction of the shared entrance. */
+private const val CardLag = 0.15f
+
 /** Wide windows put the section header in a left rail beside its rows; narrower ones stack it on top. */
 @Composable
-private fun SectionFrame(item: PageItem, number: Int, layout: PageLayout, content: @Composable () -> Unit) {
+private fun SectionFrame(
+    item: PageItem,
+    number: Int,
+    layout: PageLayout,
+    headerModifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
     if (layout.wideSections) {
         Row(Modifier.fillMaxWidth()) {
             Box(Modifier.width(240.dp)) {
-                if (item.showsHeader) SectionHeader(number, item.section.title)
+                if (item.showsHeader) SectionHeader(number, item.section.title, headerModifier)
             }
             Box(Modifier.weight(1f)) { content() }
         }
     } else {
         Column(Modifier.fillMaxWidth()) {
             if (item.showsHeader) {
-                SectionHeader(number, item.section.title)
+                SectionHeader(number, item.section.title, headerModifier)
                 Spacer(Modifier.height(28.dp))
             }
             content()
@@ -281,7 +322,7 @@ private fun SectionFrame(item: PageItem, number: Int, layout: PageLayout, conten
 
 @Composable
 fun LoadingPage(modifier: Modifier = Modifier) {
-    val reducedMotion = LocalReducedMotion.current
+    val reducedMotion = LocalMotion.current.reduced
     val pulse = rememberInfiniteTransition(label = "skeleton")
     val alpha by pulse.animateFloat(
         initialValue = 0.45f,

@@ -4,7 +4,7 @@
 
 For each source this writes, into composeApp/src/commonMain/composeResources/files/screens/:
   <name>.webp        full size for the viewer, long edge at most 1600 px, at most 254 KB
-  <name>.thumb.webp  card thumbnail at 2x its on-card height, at most 62 KB
+  <name>.thumb.webp  carousel placeholder and side-slide image, at most 62 KB
 
 and prints the JSON fields (file, width, height) to paste into portfolio.json. The budgets match
 SiteContentTest, which fails the build if a file outgrows them.
@@ -19,7 +19,10 @@ OUT = Path(__file__).resolve().parent.parent / "composeApp/src/commonMain/compos
 FULL_LONG_EDGE = 1600
 FULL_BUDGET = 254 * 1024
 THUMB_BUDGET = 62 * 1024
-# The card shows portrait thumbnails 200dp tall and landscape ones 124dp tall (ScreenshotStrip); 2x for dense screens.
+# Thumbnails are what a project carousel (ScreenshotCarousel) draws first and keeps for slides away from the centre,
+# which sit at 0.85 scale and half opacity: portrait slides are at most 360dp tall there, landscape ones about 175dp
+# on a desktop card. The settled slide and its neighbours swap to the full image, so thumbnails stay ~1x-1.4x of
+# their side-slide size to keep the first visit light.
 THUMB_HEIGHT_PORTRAIT = 400
 THUMB_HEIGHT_LANDSCAPE = 248
 
