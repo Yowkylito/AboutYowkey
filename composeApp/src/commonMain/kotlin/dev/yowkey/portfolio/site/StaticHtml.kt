@@ -22,8 +22,14 @@ import kotlinx.serialization.json.put
  */
 object StaticHtml {
 
-    /** Fills the `{{placeholders}}` of web/index.template.html. */
-    fun page(portfolio: Portfolio, template: String): String {
+    /**
+     * Fills the `{{placeholders}}` of web/index.template.html. [build] is the id of this build (the git commit, from the
+     * Gradle task): the template puts it in the app script's URL, `composeApp.js?v=<build>`, so a freshly deployed
+     * index.html never loads the previous deploy's script out of the Pages cache. It sits in a URL query inside a
+     * script string, so only letters, digits, `.`, `_` and `-` are accepted; anything else fails the build.
+     */
+    fun page(portfolio: Portfolio, template: String, build: String): String {
+        require(BUILD_ID.matches(build)) { "the build id must be letters, digits, '.', '_' or '-', not \"$build\"" }
         val profile = portfolio.profile
         val values = mapOf(
             "title" to escape("${profile.name} — ${profile.headline}"),
@@ -32,6 +38,7 @@ object StaticHtml {
             "name" to escape(profile.name),
             "jsonLd" to jsonLd(portfolio),
             "content" to content(portfolio),
+            "build" to build,
         )
         val unknown = Regex("\\{\\{(\\w+)}}").findAll(template).map { it.groupValues[1] }.toSet() - values.keys
         require(unknown.isEmpty()) { "index.template.html uses unknown placeholders: $unknown" }
@@ -334,6 +341,9 @@ object StaticHtml {
     fun resourceUrl(path: String) = "$RESOURCES_ROOT/$path"
 
     private const val RESOURCES_ROOT = "composeResources/dev.yowkey.portfolio.resources"
+
+    /** What a build id may contain: a git hash, a timestamp or a version, nothing that ends a query or a string. */
+    private val BUILD_ID = Regex("[A-Za-z0-9._-]+")
 
     private fun StringBuilder.list(items: List<String>) {
         if (items.isEmpty()) return

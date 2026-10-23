@@ -25,7 +25,8 @@ class SiteContentTest {
 
     private val resources = File("src/commonMain/composeResources")
     private val portfolio = PortfolioParser.parse(File(resources, "files/portfolio.json").readText())
-    private val page = StaticHtml.page(portfolio, File("web/index.template.html").readText())
+    private val build = "949ee26"
+    private val page = StaticHtml.page(portfolio, File("web/index.template.html").readText(), build)
     private val gallery = portfolio.projects.flatMap { it.gallery }
     private val stills = gallery.filterNot { it.isClip }
     private val clips = gallery.filter { it.isClip }
@@ -101,6 +102,16 @@ class SiteContentTest {
         assertFalse("{{" in page)
         listOf("<title>", "name=\"description\"", "property=\"og:title\"", "rel=\"canonical\"", "application/ld+json")
             .forEach { assertTrue(it in page, "index.html lacks $it") }
+    }
+
+    /**
+     * GitHub Pages caches every file for ten minutes, so the app script's URL carries the build id: a freshly deployed
+     * index.html then never loads the previous deploy's composeApp.js, which points at wasm files that are gone.
+     */
+    @Test
+    fun appScriptIsLoadedPerBuild() {
+        assertTrue("script.src = \"composeApp.js?v=$build\";" in page, "the app script's URL does not carry the build id")
+        assertFalse("\"composeApp.js\"" in page, "an unversioned composeApp.js reference")
     }
 
     /** Budgets keep the first visit fast: a card shows thumbnails only; full images load when opened. */

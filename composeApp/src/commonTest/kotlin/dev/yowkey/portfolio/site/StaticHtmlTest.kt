@@ -31,20 +31,34 @@ class StaticHtmlTest {
 
     @Test
     fun pageFillsEveryPlaceholder() {
-        val page = StaticHtml.page(portfolio, "<title>{{title}}</title><script>{{jsonLd}}</script><main>{{content}}</main>")
+        val template = "<title>{{title}}</title><script>{{jsonLd}}</script><main>{{content}}</main>" +
+            "<script>script.src = \"composeApp.js?v={{build}}\";</script>"
+        val page = StaticHtml.page(portfolio, template, "949ee26")
         assertFalse("{{" in page)
         assertTrue("\"@type\":\"Person\"" in page)
+        assertTrue("script.src = \"composeApp.js?v=949ee26\";" in page)
     }
 
     @Test
     fun pageRejectsUnknownPlaceholders() {
-        assertFailsWith<IllegalArgumentException> { StaticHtml.page(portfolio, "{{nope}}") }
+        assertFailsWith<IllegalArgumentException> { StaticHtml.page(portfolio, "{{nope}}", "949ee26") }
+    }
+
+    /** The build id lands in a URL query inside a script string, so only what can break neither is accepted. */
+    @Test
+    fun pageRejectsABuildIdThatCouldBreakTheScriptUrl() {
+        listOf("", "a b", "x\" + alert(1) + \"", "a&b=c", "1#2", "v/1", "a?b").forEach { build ->
+            assertFailsWith<IllegalArgumentException>("accepted \"$build\"") { StaticHtml.page(portfolio, "{{build}}", build) }
+        }
+        listOf("949ee26", "20261023T170200Z", "v1.2.3-rc.1_x").forEach { build ->
+            assertEquals(build, StaticHtml.page(portfolio, "{{build}}", build))
+        }
     }
 
     @Test
     fun jsonLdCannotCloseTheScriptTag() {
         val hostile = portfolio.copy(profile = portfolio.profile.copy(summary = "</script><b>"))
-        val page = StaticHtml.page(hostile, "<script>{{jsonLd}}</script>")
+        val page = StaticHtml.page(hostile, "<script>{{jsonLd}}</script>", "949ee26")
         assertFalse("</script><b>" in page)
     }
 

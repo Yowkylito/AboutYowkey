@@ -137,15 +137,15 @@ fun CheckGlyph(color: Color, modifier: Modifier = Modifier, glyphSize: Dp = 18.d
     )
 }
 
-/** The theme switch's glyph: a sun on the dark page (press for light), a crescent moon on the light one. */
+/** The theme switch's glyphs: a sun for the light theme, a crescent moon for the dark one. */
 @Composable
-fun ThemeGlyph(dark: Boolean, color: Color, modifier: Modifier = Modifier, glyphSize: Dp = 20.dp) {
+fun ThemeGlyph(sun: Boolean, color: Color, modifier: Modifier = Modifier, glyphSize: Dp = 16.dp) {
     Spacer(
         modifier.size(glyphSize).drawWithCache {
-            val stroke = Stroke(width = 1.8.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+            val stroke = Stroke(width = 1.6.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
             val w = size.width
             val c = Offset(w / 2, size.height / 2)
-            if (dark) {
+            if (sun) {
                 val rays = (0 until 8).map { i ->
                     val angle = (i * PI / 4).toFloat()
                     Offset(cos(angle), sin(angle))
