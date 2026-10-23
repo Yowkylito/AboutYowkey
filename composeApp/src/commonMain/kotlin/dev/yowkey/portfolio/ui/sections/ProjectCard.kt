@@ -89,13 +89,18 @@ fun ProjectCard(
     }
 }
 
-/** Title, then company · role · period and the repository badge. Shared by the cards and the detail screen. */
+/**
+ * Title, then company · role · period and the repository badge. Shared by the cards and the detail screen.
+ *
+ * @param showCompany false on a work card, whose group header already names the company
+ */
 @Composable
 fun ProjectHeading(
     project: Project,
     titleStyle: TextStyle,
     modifier: Modifier = Modifier,
     maxTitleLines: Int = Int.MAX_VALUE,
+    showCompany: Boolean = true,
 ) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(
@@ -105,7 +110,7 @@ fun ProjectHeading(
             maxLines = maxTitleLines,
             overflow = TextOverflow.Ellipsis,
         )
-        val meta = project.meta
+        val meta = if (showCompany) project.meta else project.roleAndPeriod
         if (meta.isNotEmpty() || project.visibility != null) {
             WrapRow(horizontalSpacing = 10.dp, verticalSpacing = 6.dp) {
                 if (meta.isNotEmpty()) {

@@ -157,8 +157,11 @@ data class Project(
 
     val isWork: Boolean get() = company != null
 
-    /** Company, role and period, the line under the title on the card, the detail screen and the static page. */
+    /** Company, role and period: the line under the title on the detail screen and the static page. */
     val meta: String get() = listOfNotNull(company, role, period).joinToString(" · ")
+
+    /** [meta] without the company, for a card whose group header already names it. */
+    val roleAndPeriod: String get() = listOfNotNull(role, period).joinToString(" · ")
 
     /** What the detail screen calls [highlights]: on work, my part in a product others built too. */
     val highlightsTitle: String get() = if (isWork) "My contributions" else "Highlights"

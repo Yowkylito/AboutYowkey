@@ -145,8 +145,7 @@
       "summary": "GameZone is DigiPlus's online home for Filipino card games such as Tongits and Pusoy. I worked on its Android app, mainly on optimizations and on fixing bugs alongside the team.",
       "highlights": ["Helped find and fix bugs in the Android app, working alongside the team"],
       "optimizations": ["Optimization work on the Android app"],
-      "engineering": { "platforms": ["Android"] },
-      "stack": ["Kotlin", "Android"]
+      "engineering": { "platforms": ["Android"] }
     },
     {
       "id": "workflow-automation",

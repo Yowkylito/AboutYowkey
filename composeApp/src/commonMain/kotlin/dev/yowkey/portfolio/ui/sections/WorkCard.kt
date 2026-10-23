@@ -36,7 +36,7 @@ import dev.yowkey.portfolio.ui.theme.PortfolioTheme
 fun WorkCard(project: Project, onOpen: () -> Unit, modifier: Modifier = Modifier) {
     OutlinedCard(modifier, onClick = onOpen, onClickLabel = "View ${project.title}") {
         Column(Modifier.fillMaxHeight().padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            ProjectHeading(project, MaterialTheme.typography.titleLarge, maxTitleLines = 2)
+            ProjectHeading(project, MaterialTheme.typography.titleLarge, maxTitleLines = 2, showCompany = false)
             Text(
                 project.cardLine,
                 style = MaterialTheme.typography.bodyMedium,
@@ -90,8 +90,11 @@ fun FigureList(figures: List<ProofPoint>, large: Boolean, modifier: Modifier = M
     }
 }
 
-/** Wide enough for the parser's longest figure ([Project.MAX_FIGURE_VALUE] characters, "30 days") at each size. */
-private val FigureWidth = 104.dp
+/**
+ * The parser's longest figure ([Project.MAX_FIGURE_VALUE] characters, "30 days", about 80dp at titleLarge) plus a
+ * gap, at each size. No wider: on a phone every dp here is taken from the label.
+ */
+private val FigureWidth = 92.dp
 private val FigureWidthLarge = 136.dp
 
 private val previewWork = Project(
