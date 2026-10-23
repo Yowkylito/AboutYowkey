@@ -1,30 +1,38 @@
 package dev.yowkey.portfolio.ui.components
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.center
@@ -36,10 +44,13 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.yowkey.portfolio.model.Link
+import dev.yowkey.portfolio.ui.theme.LocalReducedMotion
 import dev.yowkey.portfolio.ui.theme.LocalThemeSwitch
 
 private val EaseOutCubic = CubicBezierEasing(0.33f, 1f, 0.68f, 1f)
@@ -245,14 +256,56 @@ fun MenuGlyph(modifier: Modifier = Modifier) {
 }
 
 /**
- * The light/dark switch in the page's bars. The glyph shows what a press gives, a moon on the light page and a sun
- * on the dark one; the label says it in words for the accessibility tree.
+ * The light/dark switch in the page's bars: a pill with the sun on the left and the moon on the right, and a knob
+ * in the accent colour over whichever is on, showing it. A press slides the knob across (it snaps under reduced
+ * motion); the theme changes at once. To the accessibility tree it is a switch named "Dark theme", on or off.
  */
 @Composable
 fun ThemeToggle(modifier: Modifier = Modifier) {
     val theme = LocalThemeSwitch.current
-    val label = if (theme.dark) "Switch to the light theme" else "Switch to the dark theme"
-    IconButton(onClick = theme.toggle, modifier = modifier.semantics { contentDescription = label }) {
-        ThemeGlyph(dark = theme.dark, color = MaterialTheme.colorScheme.onBackground)
+    val scheme = MaterialTheme.colorScheme
+    val reducedMotion = LocalReducedMotion.current
+    val knobX by animateDpAsState(
+        targetValue = if (theme.dark) SwitchWidth - SwitchPadding - SwitchKnob else SwitchPadding,
+        animationSpec = if (reducedMotion) snap() else tween(220, easing = EaseOutCubic),
+        label = "theme knob",
+    )
+    Box(
+        modifier
+            .minimumInteractiveComponentSize()
+            .semantics { contentDescription = "Dark theme" }
+            .size(SwitchWidth, SwitchHeight)
+            .clip(CircleShape)
+            .toggleable(value = theme.dark, role = Role.Switch, onValueChange = { theme.toggle() })
+            .background(scheme.surfaceVariant)
+            .border(1.dp, scheme.outline, CircleShape),
+    ) {
+        SwitchSlot(Alignment.CenterStart) { ThemeGlyph(sun = true, color = scheme.onSurfaceVariant) }
+        SwitchSlot(Alignment.CenterEnd) { ThemeGlyph(sun = false, color = scheme.onSurfaceVariant) }
+        Box(
+            Modifier
+                .align(Alignment.CenterStart)
+                .offset { IntOffset(knobX.roundToPx(), 0) }
+                .size(SwitchKnob)
+                .background(scheme.primary, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            ThemeGlyph(sun = !theme.dark, color = scheme.onPrimary)
+        }
     }
 }
+
+/** One end of the switch's track, the size of the knob, with its glyph centred. */
+@Composable
+private fun BoxScope.SwitchSlot(alignment: Alignment, content: @Composable () -> Unit) {
+    Box(
+        Modifier.align(alignment).padding(horizontal = SwitchPadding).size(SwitchKnob),
+        contentAlignment = Alignment.Center,
+        content = { content() },
+    )
+}
+
+private val SwitchWidth = 60.dp
+private val SwitchHeight = 32.dp
+private val SwitchPadding = 3.dp
+private val SwitchKnob = SwitchHeight - SwitchPadding * 2
