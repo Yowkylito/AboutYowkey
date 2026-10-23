@@ -1,58 +1,60 @@
 package dev.yowkey.portfolio.ui.theme
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-// Warm paper and ink, one signal-orange accent. Every text pair below clears WCAG AA (4.5:1).
+// Neutral zinc ink on near-white, one blue accent. Every text pair below clears WCAG AA (4.5:1): the accent on
+// the page is 5.0:1, the muted text 7.3:1. The static page's CSS in web/index.template.html carries the same values.
 private val LightColors = lightColorScheme(
-    primary = Color(0xFFC2410C),
+    primary = Color(0xFF2563EB),
     onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFFFFE4D5),
-    onPrimaryContainer = Color(0xFF5A1D04),
-    background = Color(0xFFF7F5F0),
-    onBackground = Color(0xFF16181D),
+    primaryContainer = Color(0xFFDBEAFE),
+    onPrimaryContainer = Color(0xFF1E3A8A),
+    background = Color(0xFFFAFAFA),
+    onBackground = Color(0xFF09090B),
     surface = Color(0xFFFFFFFF),
-    onSurface = Color(0xFF16181D),
-    surfaceVariant = Color(0xFFEDEAE3),
-    onSurfaceVariant = Color(0xFF545A66),
-    outline = Color(0xFFCFCAC0),
-    outlineVariant = Color(0xFFE4E0D7),
-    error = Color(0xFFB3261E),
+    onSurface = Color(0xFF09090B),
+    surfaceVariant = Color(0xFFE8ECF0),
+    onSurfaceVariant = Color(0xFF475569),
+    outline = Color(0xFFD4D4D8),
+    outlineVariant = Color(0xFFE4E4E7),
+    error = Color(0xFFB91C1C),
     // Menus and other containers default to Material's lavender unless the container roles are set.
     surfaceContainerLowest = Color(0xFFFFFFFF),
-    surfaceContainerLow = Color(0xFFFBFAF6),
+    surfaceContainerLow = Color(0xFFFCFCFC),
     surfaceContainer = Color(0xFFFFFFFF),
-    surfaceContainerHigh = Color(0xFFF2EFE8),
-    surfaceContainerHighest = Color(0xFFEDEAE3),
+    surfaceContainerHigh = Color(0xFFF1F3F5),
+    surfaceContainerHighest = Color(0xFFE8ECF0),
 )
 
+// The same scale inverted, for visitors who ask for it: the accent lightens so it keeps its contrast on the dark page.
 private val DarkColors = darkColorScheme(
-    primary = Color(0xFFFB923C),
-    onPrimary = Color(0xFF1A0E05),
-    primaryContainer = Color(0xFF4A2410),
-    onPrimaryContainer = Color(0xFFFFDCC8),
-    background = Color(0xFF0E1014),
-    onBackground = Color(0xFFECEDEF),
-    surface = Color(0xFF161A20),
-    onSurface = Color(0xFFECEDEF),
-    surfaceVariant = Color(0xFF1E232B),
-    onSurfaceVariant = Color(0xFF9AA1AD),
-    outline = Color(0xFF3A414C),
-    outlineVariant = Color(0xFF262B33),
+    primary = Color(0xFF60A5FA),
+    onPrimary = Color(0xFF0B1D3F),
+    primaryContainer = Color(0xFF1E3A8A),
+    onPrimaryContainer = Color(0xFFBFDBFE),
+    background = Color(0xFF0C0E13),
+    onBackground = Color(0xFFF4F4F5),
+    surface = Color(0xFF15181F),
+    onSurface = Color(0xFFF4F4F5),
+    surfaceVariant = Color(0xFF1E2229),
+    onSurfaceVariant = Color(0xFFA1A1AA),
+    outline = Color(0xFF3F3F46),
+    outlineVariant = Color(0xFF27272A),
     error = Color(0xFFF2B8B5),
-    surfaceContainerLowest = Color(0xFF0B0D10),
-    surfaceContainerLow = Color(0xFF12151A),
-    surfaceContainer = Color(0xFF1A1E25),
-    surfaceContainerHigh = Color(0xFF20252D),
-    surfaceContainerHighest = Color(0xFF262B33),
+    surfaceContainerLowest = Color(0xFF070809),
+    surfaceContainerLow = Color(0xFF101318),
+    surfaceContainer = Color(0xFF181C23),
+    surfaceContainerHigh = Color(0xFF1F242B),
+    surfaceContainerHighest = Color(0xFF272B33),
 )
 
 private val BaseTypography = Typography()
@@ -77,9 +79,19 @@ private val PortfolioTypography = BaseTypography.copy(
 /** True when the user asked the OS for less motion; reveal animations are skipped. */
 val LocalReducedMotion = staticCompositionLocalOf { false }
 
+/**
+ * Which theme the page is in and how to switch it. The page is light until the visitor asks for dark; [App]
+ * owns the choice and keeps it for the next visit through [savedDarkTheme] and [saveDarkTheme].
+ */
+@Immutable
+class ThemeSwitch(val dark: Boolean, val toggle: () -> Unit)
+
+val LocalThemeSwitch = staticCompositionLocalOf { ThemeSwitch(dark = false, toggle = {}) }
+
+/** The page's colours and type. Light by default: the OS's preference is not consulted, the visitor's switch is. */
 @Composable
 fun PortfolioTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    darkTheme: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     MaterialTheme(

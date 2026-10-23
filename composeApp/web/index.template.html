@@ -15,9 +15,8 @@
   <title>{{title}}</title>
   <meta name="description" content="{{description}}">
   <link rel="canonical" href="{{url}}">
-  <meta name="color-scheme" content="light dark">
-  <meta name="theme-color" content="#F7F5F0" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#0E1014" media="(prefers-color-scheme: dark)">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#FAFAFA">
   <meta property="og:type" content="profile">
   <meta property="og:title" content="{{title}}">
   <meta property="og:description" content="{{description}}">
@@ -26,16 +25,29 @@
   <meta name="twitter:card" content="summary">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <script type="application/ld+json">{{jsonLd}}</script>
+  <script>
+    // The page is light unless the visitor switched to dark: the "theme" key in localStorage, "light" or "dark",
+    // which the app's switch writes too. It is applied here, before the first paint, so a saved theme never flashes
+    // the other one; the app calls applyTheme again on a switch, so the page under its canvas and the browser's own
+    // chrome follow. The colours match ui/theme/Theme.kt.
+    window.applyTheme = function (theme) {
+      var dark = theme === "dark";
+      document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+      var meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) meta.setAttribute("content", dark ? "#0C0E13" : "#FAFAFA");
+    };
+    try { window.applyTheme(localStorage.getItem("theme")); } catch (e) { window.applyTheme("light"); }
+  </script>
   <style>
     :root {
-      --bg: #F7F5F0; --surface: #FFFFFF; --ink: #16181D; --muted: #545A66; --line: #E4E0D7; --line-strong: #CFCAC0;
-      --accent: #C2410C; --on-accent: #FFFFFF;
+      color-scheme: light;
+      --bg: #FAFAFA; --surface: #FFFFFF; --ink: #09090B; --muted: #475569; --line: #E4E4E7; --line-strong: #D4D4D8;
+      --accent: #2563EB; --on-accent: #FFFFFF;
     }
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --bg: #0E1014; --surface: #161A20; --ink: #ECEDEF; --muted: #9AA1AD; --line: #262B33; --line-strong: #3A414C;
-        --accent: #FB923C; --on-accent: #1A0E05;
-      }
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #0C0E13; --surface: #15181F; --ink: #F4F4F5; --muted: #A1A1AA; --line: #27272A; --line-strong: #3F3F46;
+      --accent: #60A5FA; --on-accent: #0B1D3F;
     }
     * { box-sizing: border-box; }
     /*
