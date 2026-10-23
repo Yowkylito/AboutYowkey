@@ -1,7 +1,7 @@
 <!doctype html>
 <!--
-  Template for the generateStaticSite Gradle task. The double-brace placeholders are filled from portfolio.json; do not edit
-  the generated build/generated/site/index.html.
+  Template for the generateStaticSite Gradle task. The double-brace placeholders are filled from portfolio.json, except
+  {{build}}, the id of the build (the git commit); do not edit the generated build/generated/site/index.html.
 
   Boot: the static <main> is a full, crawlable version of the page and shows first. If the browser supports
   WasmGC, composeApp.js loads the Compose app into #app (invisible), and once it has drawn real content Kotlin
@@ -271,7 +271,10 @@
         if (started) return;
         started = true;
         var script = document.createElement("script");
-        script.src = "composeApp.js";
+        // The build id in the query gives each deploy's script its own URL. GitHub Pages caches every file for ten
+        // minutes, so an unversioned composeApp.js could be the previous deploy's, pointing at wasm files that are
+        // gone (those are content-hashed already); this one is always the script this index.html was built with.
+        script.src = "composeApp.js?v={{build}}";
         script.onerror = staticOnly;
         document.body.appendChild(script);
       }
