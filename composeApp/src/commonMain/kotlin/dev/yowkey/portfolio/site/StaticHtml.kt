@@ -97,8 +97,8 @@ object StaticHtml {
 
     /**
      * One project, with everything the app splits between its card and its detail screen. The card's answers come
-     * first, in the card's order (media, title, meta, one line, summary, figures, what it is built with and runs on),
-     * so a crawler or a skim reads the same summary; the detail follows (impact, highlights, optimizations, gallery,
+     * first, in the card's order (media, title, meta and badges, one line, summary and any disclaimer, figures, what
+     * it is built with and runs on), so a crawler or a skim reads the same summary; the detail follows (impact, highlights, optimizations, gallery,
      * engineering, stack, links). Headings sit under the group's `<h3>`: the title is `<h4>`, after the app's icon
      * when it has one, and its parts `<h5>`.
      * The id is the app's deep link target too: `#/projects/<id>` scrolls here on this page.
@@ -120,10 +120,12 @@ object StaticHtml {
         val meta = listOfNotNull(
             project.meta.takeIf { it.isNotEmpty() }?.let { escape(it) },
             project.visibility?.let { "<span class=\"badge\">${escape(it.badge)}</span>" },
+            project.disclaimer?.let { "<span class=\"badge\">${escape(Project.UNOFFICIAL_BADGE)}</span>" },
         )
         if (meta.isNotEmpty()) appendLine("<p class=\"muted\">${meta.joinToString(" ")}</p>")
         project.tagline?.let { appendLine("<p class=\"tagline\">${escape(it)}</p>") }
         appendLine("<p>${escape(project.summary)}</p>")
+        project.disclaimer?.let { appendLine("<p class=\"disclaimer\">${escape(it)}</p>") }
         if (project.figures.isNotEmpty()) {
             appendLine("<ul class=\"figures\">")
             project.figures.forEach { appendLine("<li><strong>${escape(it.value)}</strong> <span>${escape(it.label)}</span></li>") }

@@ -199,6 +199,16 @@ class PortfolioParserTest {
         }
     }
 
+    @Test
+    fun disclaimerIsOptionalAndShort() {
+        assertNull(PortfolioParser.parse(validJson).projects[1].disclaimer)
+        val max = words(Project.MAX_DISCLAIMER_WORDS)
+        assertEquals(max, PortfolioParser.parse(withSecondProject("\"disclaimer\": \"$max\"")).projects[1].disclaimer)
+        listOf("$max more", "  ").forEach { bad ->
+            assertFailsWith<IllegalArgumentException>(bad) { PortfolioParser.parse(withSecondProject("\"disclaimer\": \"$bad\"")) }
+        }
+    }
+
     private fun words(count: Int) = List(count) { "word" }.joinToString(" ")
 
     @Test

@@ -647,6 +647,7 @@
       "title": "Calm Escape Premier",
       "tagline": "Multi-tenant spa booking: KMP apps and Next.js sites on one database-enforced schedule",
       "summary": "A multi-tenant booking platform for spas: each spa gets its own booking site and staff back office, customers book from iOS and Android apps, and all of them share one schedule.",
+      "disclaimer": "A concept build: I used a real spa business to show what I can develop. It isn't their official app as of now, and their name and brand belong to them.",
       "period": "Oct 2026",
       "highlights": [
         "No double booking, even under races: Postgres exclusion constraints, covered by 184 pgTAP tests (plus 346 Vitest tests on the web)",
@@ -771,6 +772,7 @@
       "title": "Seventh J",
       "tagline": "Gallery-inventory app on one Compose Multiplatform UI codebase for Android, iOS and Web",
       "summary": "An inventory and dealer-floor app for a Makati art gallery, built once in Compose Multiplatform for Android, iOS and the web. Runs on sample data while the data layer is built.",
+      "disclaimer": "A concept build: I used a real Makati art gallery to show what I can develop. It isn't their official app as of now, and their name and brand belong to them.",
       "period": "Aug 2026",
       "highlights": [
         "Painterly splash: 900 strokes follow a flow field and converge onto the logo's own pixels (260 on the web)",

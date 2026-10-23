@@ -109,6 +109,13 @@ object PortfolioParser {
                 "project ${project.id}: tagline is ${tagline.length} characters, at most ${Project.MAX_TAGLINE} (it is the card's one line)"
             }
         }
+        project.disclaimer?.let { disclaimer ->
+            require(disclaimer.isNotBlank()) { "project ${project.id}: disclaimer is blank; leave it out for an official app" }
+            val words = wordCount(disclaimer)
+            require(words <= Project.MAX_DISCLAIMER_WORDS) {
+                "project ${project.id}: disclaimer is $words words, at most ${Project.MAX_DISCLAIMER_WORDS}"
+            }
+        }
     }
 
     /**

@@ -105,6 +105,12 @@ data class Project(
     /** Whether the source is on GitHub for anyone to read. Null when not stated: the card then shows no badge. */
     val visibility: RepoVisibility? = null,
     /**
+     * For an app built around a real business that is not theirs: the sentence saying so, at most
+     * [MAX_DISCLAIMER_WORDS] words. Setting it badges the card and the detail screen [UNOFFICIAL_BADGE], and the
+     * detail screen and the static page show the sentence under the summary.
+     */
+    val disclaimer: String? = null,
+    /**
      * The app's own launcher icon: a square WebP in `files/icons/`, shown before the title on the card, the detail
      * screen and the static page. Leave it out when the app has no icon of its own; the title then stands alone.
      */
@@ -183,6 +189,10 @@ data class Project(
         const val MAX_IMPACT = 4
         const val MAX_OPTIMIZATIONS = 6
         const val MAX_LINE_WORDS = 40
+        const val MAX_DISCLAIMER_WORDS = 40
+
+        /** The badge of a project with a [disclaimer], beside its repository badge. */
+        const val UNOFFICIAL_BADGE = "Unofficial concept"
 
         /** Relative to composeResources, like [Screenshot.SCREENS_DIR]. */
         const val ICONS_DIR = "files/icons"

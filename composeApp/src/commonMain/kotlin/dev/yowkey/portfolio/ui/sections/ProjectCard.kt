@@ -98,8 +98,8 @@ fun ProjectCard(
 }
 
 /**
- * The app's icon and title, then company · role · period and the repository badge. Shared by the cards and the
- * detail screen.
+ * The app's icon and title, then company · role · period, the repository badge and, for an unofficial concept,
+ * its badge. Shared by the cards and the detail screen.
  *
  * @param iconSize the icon's side, sized to the title beside it
  * @param showCompany false on a work card, whose group header already names the company
@@ -128,12 +128,13 @@ fun ProjectHeading(
             )
         }
         val meta = if (showCompany) project.meta else project.roleAndPeriod
-        if (meta.isNotEmpty() || project.visibility != null) {
+        if (meta.isNotEmpty() || project.visibility != null || project.disclaimer != null) {
             WrapRow(horizontalSpacing = 10.dp, verticalSpacing = 6.dp) {
                 if (meta.isNotEmpty()) {
                     Text(meta.uppercase(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                 }
                 project.visibility?.let { StatusBadge(it.badge) }
+                if (project.disclaimer != null) StatusBadge(Project.UNOFFICIAL_BADGE)
             }
         }
     }

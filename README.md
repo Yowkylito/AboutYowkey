@@ -55,6 +55,9 @@ python scripts/prepare_screenshots.py --clip path/to/60fps-demo.mp4 vistago-trip
   video pauses it (the video is drawn above the Play button).
 - **Visibility**: `"public"` or `"private"`. The card shows a "Public repo" / "Private repo" badge, and if any
   project is private a note under the Projects header says why its source is not linked. Leave it out for no badge.
+- **Disclaimer** (`disclaimer`, optional): for an app built around a real business that is not theirs, one
+  sentence of at most 40 words saying so. The card and the detail screen get an "Unofficial concept" badge, and the
+  detail screen and the static page show the sentence under the summary.
 
 - **Cover clip** (`coverClip`, optional): an animated WebP that plays as the card's cover while the card is on
   screen. Same files and budgets as a clip (make it with `--clip`); `cover` stays the still (the static page's

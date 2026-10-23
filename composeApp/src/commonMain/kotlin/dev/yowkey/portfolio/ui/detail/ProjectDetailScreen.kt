@@ -1,5 +1,6 @@
 package dev.yowkey.portfolio.ui.detail
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
@@ -216,7 +217,21 @@ private fun DetailHeader(project: Project, compact: Boolean) {
             Text(it, style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurface)
         }
         Text(project.summary, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        project.disclaimer?.let { Disclaimer(it) }
     }
+}
+
+/** An unofficial concept's note, boxed in the badge's outline so it reads as a note on the page, not part of the story. */
+@Composable
+private fun Disclaimer(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier
+            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(10.dp))
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+    )
 }
 
 /** Chips, the architecture paragraph, the module diagram, the decisions and the quality checklist, each if given. */
