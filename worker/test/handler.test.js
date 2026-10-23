@@ -1038,7 +1038,7 @@ test("the notes page by offset, with how many match and whether more follow", as
   assert.deepEqual([ids(lastFive), lastFive.more], [[4], false]);
 });
 
-test("pinned notes come first, the newest pin first, then the newest notes; the 1.1 app's before ignores pins", async () => {
+test("pinned notes come first, the newest pin first, then the newest notes; the 1.1 app's later pages leave them out", async () => {
   for (let i = 1; i <= 5; i++) await note({ rating: 5, message: `Note ${i}`, relation: i % 2 ? "friend" : "colleague" }, `198.51.100.${i}`);
   assert.equal((await noteAct(2, "pin", { now: DAY_ONE })).status, 200);
   assert.equal((await noteAct(4, "pin", { now: DAY_TWO })).status, 200);
@@ -1056,9 +1056,9 @@ test("pinned notes come first, the newest pin first, then the newest notes; the 
   assert.deepEqual(ids(await page("relation=colleague&stars=5")), [4, 2], "a sheet lists its pins first too");
 
   const legacy = await page("before=5");
-  assert.deepEqual([ids(legacy), legacy.more], [[4, 3, 2, 1], false], "by id alone, as before");
-  const legacyPage = await page("before=5&limit=2");
-  assert.deepEqual([ids(legacyPage), legacyPage.more], [[4, 3], true]);
+  assert.deepEqual([ids(legacy), legacy.more], [[3, 1], false], "by id, without the pins its first page already showed");
+  const legacyPage = await page("before=5&limit=1");
+  assert.deepEqual([ids(legacyPage), legacyPage.more], [[3], true]);
 
   assert.equal((await noteAct(4, "unpin")).status, 200);
   assert.deepEqual(ids(await publicNotes()), [2, 5, 4, 3, 1]);

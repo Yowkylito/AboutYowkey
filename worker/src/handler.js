@@ -262,7 +262,8 @@ const PINNED_FIRST = "pinned_at IS NULL, pinned_at DESC, id DESC";
  * how many of its ratings came with words the visitor kept private, so the page can say why it shows fewer notes
  * than ratings. `total` is how many notes match, so `offset` can page on; `relations` is how many of the star's
  * notes each relation has, for the star sheet's sorter. The 1.1 app pages with `before` instead: the notes older
- * than that id, newest first, pins or not, as it always has. Never a contact.
+ * than that id, newest first, leaving out the pinned ones, which its first page (pinned first) has already shown.
+ * Never a contact.
  */
 async function publicNotes(db, today, url) {
   const params = url.searchParams;
@@ -276,7 +277,7 @@ async function publicNotes(db, today, url) {
   const next = matching.values.length + 1;
   const page = before
     ? db
-        .prepare(`SELECT ${NOTE_COLUMNS} FROM feedback WHERE ${matching.where} AND id < ?${next} ORDER BY id DESC LIMIT ?${next + 1}`)
+        .prepare(`SELECT ${NOTE_COLUMNS} FROM feedback WHERE ${matching.where} AND pinned_at IS NULL AND id < ?${next} ORDER BY id DESC LIMIT ?${next + 1}`)
         .bind(...matching.values, before, limit + 1)
     : db
         .prepare(`SELECT ${NOTE_COLUMNS} FROM feedback WHERE ${matching.where} ORDER BY ${PINNED_FIRST} LIMIT ?${next} OFFSET ?${next + 1}`)
