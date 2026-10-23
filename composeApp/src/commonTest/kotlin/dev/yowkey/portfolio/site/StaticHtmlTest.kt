@@ -9,6 +9,7 @@ import dev.yowkey.portfolio.model.MessageCopy
 import dev.yowkey.portfolio.model.Module
 import dev.yowkey.portfolio.model.Project
 import dev.yowkey.portfolio.model.ProofPoint
+import dev.yowkey.portfolio.model.Relation
 import dev.yowkey.portfolio.model.RepoVisibility
 import dev.yowkey.portfolio.model.Screenshot
 import dev.yowkey.portfolio.validJson
@@ -129,16 +130,106 @@ class StaticHtmlTest {
         val notesBox = "<div class=\"visitor-notes\" data-api=\"https://api.example/&quot;x\" hidden>\n<h3>${FeedbackCopy.NOTES_TITLE}</h3>\n" +
             "<div class=\"ratings\" role=\"group\" aria-label=\"${FeedbackCopy.DASHBOARD}\" hidden>"
         assertTrue(notesBox in contact, "the notes' place, the dashboard first, empty until the script fills it")
-        (5 downTo 1).forEach {
-            assertTrue("<button type=\"button\" data-stars=\"$it\" aria-pressed=\"false\">" in contact, "a bar, and filter, for $it stars")
-        }
         assertTrue(
-            "<p class=\"list-line\" role=\"status\" aria-live=\"polite\"></p>\n<ul class=\"notes\"></ul>\n<button class=\"more\" type=\"button\" hidden>${FeedbackCopy.MORE}</button>\n</div>" in contact,
-            "what the list shows, the list, and the next page's button",
+            "<p class=\"list-line\" role=\"status\" aria-live=\"polite\"></p>\n<ul class=\"notes\"></ul>\n" +
+                "<button class=\"more\" type=\"button\" hidden>${FeedbackCopy.MORE}</button>\n<dialog class=\"star-sheet\"" in contact,
+            "what the list shows, the list, and the next page's button, then the star sheet",
         )
         assertFalse("type=\"checkbox\" name=\"consent\"" in contact, "every note is public, as the form says: no box to tick")
         assertTrue(contact.indexOf(notesBox) < contact.indexOf("<form class=\"feedback\""), "the notes come before the form")
         assertFalse("<footer" in html, "the count moved from the footer to the hero")
+    }
+
+    /**
+     * Each dashboard bar opens its star's sheet, a dialog, rather than filtering the list in place: it says so to
+     * screen readers, and nothing about it is a toggle any more.
+     */
+    @Test
+    fun theBarsOpenTheStarSheet() {
+        val html = StaticHtml.content(portfolio.copy(api = "https://api.example"))
+        val bars = html.substringAfter("<ul class=\"bars\">").substringBefore("</ul>")
+        (5 downTo 1).forEach {
+            assertTrue(
+                "<li><button type=\"button\" data-stars=\"$it\" aria-haspopup=\"dialog\" aria-label=\"${FeedbackCopy.openSheet(it)}\">" +
+                    "<span class=\"label\">$it <i>★</i></span>" in bars,
+                "the bar for $it stars",
+            )
+        }
+        assertEquals(5, Regex("aria-haspopup=\"dialog\"").findAll(html).count(), "only the five bars open the sheet")
+        assertFalse("aria-pressed" in bars, "a bar is no longer a filter")
+        assertFalse("filtering" in html)
+        assertFalse(FeedbackCopy.ALL in html, "no \"All notes\" button: the list is never filtered")
+    }
+
+    /**
+     * The sheet is on the page already, empty, for the script to fill and open: a labelled dialog with the handle,
+     * the head (stars, title, summary) and its close button, the sorter (All, then every relation, each with a
+     * count), the list, "Show more", the empty line and the private line. It sits in the notes' place, after the list.
+     */
+    @Test
+    fun theStarSheetIsOnThePageReadyToFill() {
+        val html = StaticHtml.content(portfolio.copy(api = "https://api.example"))
+        val notes = html.substringAfter("<div class=\"visitor-notes\"").substringBefore("<h3 id=\"feedback\">")
+        val sheet = notes.substringAfter("<dialog ", missingDelimiterValue = "").substringBefore("</dialog>")
+        assertTrue(sheet.startsWith("class=\"star-sheet\" aria-labelledby=\"star-sheet-title\">"), "a labelled dialog: ${sheet.take(80)}")
+        assertTrue("<h4 id=\"star-sheet-title\"></h4>" in sheet, "the title it is labelled by")
+        assertTrue(notes.indexOf("<ul class=\"notes\">") < notes.indexOf("<dialog"), "the page's list comes first")
+        assertTrue(notes.trimEnd().endsWith("</dialog>\n</div>"), "the sheet closes the notes' place")
+        val order = listOf(
+            "<span class=\"handle\" aria-hidden=\"true\"></span>",
+            "<p class=\"sheet-stars\" aria-hidden=\"true\"></p>",
+            "<h4 id=\"star-sheet-title\"></h4>",
+            "<p class=\"summary\"></p>",
+            "<button class=\"close\" type=\"button\" aria-label=\"${FeedbackCopy.CLOSE}\"><svg",
+            "<div class=\"relations\" role=\"group\" aria-label=\"",
+            "<button type=\"button\" data-relation=\"\" aria-pressed=\"true\">${FeedbackCopy.ALL_RELATIONS}<span class=\"n\"></span></button>",
+            "<ul class=\"notes\"></ul>",
+            "<p class=\"empty\" role=\"status\" hidden></p>",
+            "<button class=\"more\" type=\"button\" hidden>${FeedbackCopy.MORE}</button>",
+            "<p class=\"private-line\" hidden></p>",
+        )
+        val positions = order.map { sheet.indexOf(it) }
+        assertTrue(positions.none { it < 0 } && positions == positions.sorted(), "order ${order.zip(positions)}")
+        val chips = sheet.substringAfter("<div class=\"relations\"").substringBefore("</div>")
+        assertEquals(
+            listOf("", "colleague", "friend", "special", "other"),
+            Regex("data-relation=\"([a-z]*)\"").findAll(chips).map { it.groupValues[1] }.toList(),
+            "All, then every relation in the model's order",
+        )
+        Relation.entries.forEach {
+            assertTrue(
+                "<button type=\"button\" data-relation=\"${it.wire}\" aria-pressed=\"false\">${StaticHtml.escape(it.plural)}<span class=\"n\"></span></button>" in chips,
+                "the ${it.wire} chip, with a slot for its count",
+            )
+        }
+        assertEquals(1, Regex("aria-pressed=\"true\"").findAll(chips).count(), "one pick at a time, All first")
+    }
+
+    /** The note form asks how the visitor knows the owner, optionally, with a radio button for each relation. */
+    @Test
+    fun theNoteFormAsksHowTheyKnowMe() {
+        val html = StaticHtml.content(portfolio.copy(api = "https://api.example"))
+        val form = html.substringAfter("<form class=\"feedback\"").substringBefore("</form>")
+        val fieldset = form.substringAfter("<fieldset class=\"relations\">", missingDelimiterValue = "").substringBefore("</fieldset>")
+        assertTrue(fieldset.startsWith("<legend>${StaticHtml.escape(FeedbackCopy.RELATION)} <span class=\"muted\">(optional)</span></legend>"), fieldset)
+        assertEquals(
+            Relation.entries.joinToString("") {
+                "<label class=\"relation\"><input type=\"radio\" name=\"relation\" value=\"${it.wire}\"><span>${StaticHtml.escape(it.label)}</span></label>"
+            },
+            fieldset.substringAfter("</legend>"),
+            "colleague, friend, special and other, none picked",
+        )
+        assertEquals(listOf("colleague", "friend", "special", "other"), Relation.entries.map { it.wire })
+        assertFalse("checked" in fieldset || "required" in fieldset, "not saying is fine")
+        assertTrue(form.indexOf("name=\"contact\"") < form.indexOf("<fieldset") && form.indexOf("<fieldset") < form.indexOf("name=\"rating\""))
+    }
+
+    /** Without a backend there is nothing to rate, read or send: no bars, no sheet, no relation to give. */
+    @Test
+    fun theSheetAndTheRelationsNeedABackend() {
+        val html = StaticHtml.content(portfolio)
+        listOf("<dialog", "star-sheet", "aria-haspopup", "data-relation", "name=\"relation\"", "class=\"relations\"", FeedbackCopy.RELATION)
+            .forEach { assertFalse(it in html, "$it without a backend") }
     }
 
     /**
