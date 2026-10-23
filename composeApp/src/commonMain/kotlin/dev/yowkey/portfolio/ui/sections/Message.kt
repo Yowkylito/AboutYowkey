@@ -54,7 +54,8 @@ fun MessageForm(
 ) {
     Column(modifier.widthIn(max = 640.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         FormTitle(MessageCopy.TITLE, MessageCopy.PRIVATE)
-        Text(MessageCopy.INTRO, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        val intro = MaterialTheme.typography.bodyMedium
+        Text(MessageCopy.INTRO, style = intro, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.readingMeasure(intro))
         if (state is MessageUiState.Sent) SentMessage(onReset) else MessageDraftForm(state, onSend, wide)
     }
 }

@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import dev.yowkey.portfolio.model.Module
 import dev.yowkey.portfolio.model.ModuleGraph
 import dev.yowkey.portfolio.ui.components.WrapRow
+import dev.yowkey.portfolio.ui.sections.readingMeasure
 import dev.yowkey.portfolio.ui.theme.PortfolioTheme
 
 /**
@@ -75,6 +76,7 @@ fun ModuleDiagram(modules: List<Module>, modifier: Modifier = Modifier) {
             "Read down: a module uses only modules in the bands below it, and its card names the ones it uses directly.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.readingMeasure(MaterialTheme.typography.bodySmall),
         )
     }
 }
