@@ -14,10 +14,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import dev.yowkey.portfolio.model.oneDecimal
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
@@ -41,6 +43,31 @@ fun StarRow(rating: Int, modifier: Modifier = Modifier, glyphSize: Dp = 16.dp) {
     val dim = MaterialTheme.colorScheme.outline
     Row(modifier.semantics { contentDescription = "$rating of 5 stars" }, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
         for (star in 1..5) StarGlyph(filled = star <= rating, color = if (star <= rating) lit else dim, glyphSize = glyphSize)
+    }
+}
+
+/**
+ * [value] out of five, to the fraction: 4.8 is four full stars and one lit to four fifths, from the left, over its
+ * outline. Read as one node: "Average 4.8 of 5".
+ */
+@Composable
+fun StarMeter(value: Double, modifier: Modifier = Modifier, glyphSize: Dp = 20.dp, label: String = "Average ${oneDecimal(value)} of 5") {
+    val lit = MaterialTheme.colorScheme.primary
+    val dim = MaterialTheme.colorScheme.outline
+    Row(modifier.semantics { contentDescription = label }, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+        for (star in 1..5) {
+            val fill = (value - (star - 1)).coerceIn(0.0, 1.0).toFloat()
+            Spacer(
+                Modifier.size(glyphSize).drawWithCache {
+                    val path = starPath(size)
+                    val outline = Stroke(width = (glyphSize.value / 15).dp.toPx(), join = StrokeJoin.Round)
+                    onDrawBehind {
+                        if (fill < 1f) drawPath(path, dim, style = outline)
+                        if (fill > 0f) clipRect(right = size.width * fill) { drawPath(path, lit) }
+                    }
+                },
+            )
+        }
     }
 }
 

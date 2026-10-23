@@ -116,7 +116,7 @@ class StaticHtmlTest {
             "<select name=\"rating\"><option value=\"\">No rating</option><option value=\"5\">5 · Excellent</option>",
             "<option value=\"1\">1 · Poor</option></select>",
             "<textarea name=\"message\" required maxlength=\"2000\" rows=\"5\"></textarea>",
-            "<label class=\"consent\"><input type=\"checkbox\" name=\"consent\" value=\"1\"><span>${FeedbackCopy.CONSENT}</span></label>",
+            "<input type=\"hidden\" name=\"consent\" value=\"1\">",
             "<label class=\"trap\" aria-hidden=\"true\"><span>Website</span><input name=\"website\" tabindex=\"-1\" autocomplete=\"off\"></label>",
             "<button type=\"submit\">${FeedbackCopy.SEND}</button>",
             "<p class=\"status\" role=\"status\" aria-live=\"polite\"></p>",
@@ -126,8 +126,17 @@ class StaticHtmlTest {
             "<p class=\"headline\">Engineer</p>\n<p class=\"live-stats muted\" data-api=\"https://api.example/&quot;x\" hidden></p>" in hero,
             "the live line sits right under the headline, hidden until the backend answers",
         )
-        val notesBox = "<div class=\"visitor-notes\" data-api=\"https://api.example/&quot;x\" hidden>\n<h3>${FeedbackCopy.NOTES_TITLE}</h3>\n<ul class=\"notes\"></ul>\n</div>"
-        assertTrue(notesBox in contact, "the notes' place")
+        val notesBox = "<div class=\"visitor-notes\" data-api=\"https://api.example/&quot;x\" hidden>\n<h3>${FeedbackCopy.NOTES_TITLE}</h3>\n" +
+            "<div class=\"ratings\" role=\"group\" aria-label=\"${FeedbackCopy.DASHBOARD}\" hidden>"
+        assertTrue(notesBox in contact, "the notes' place, the dashboard first, empty until the script fills it")
+        (5 downTo 1).forEach {
+            assertTrue("<button type=\"button\" data-stars=\"$it\" aria-pressed=\"false\">" in contact, "a bar, and filter, for $it stars")
+        }
+        assertTrue(
+            "<p class=\"list-line\" role=\"status\" aria-live=\"polite\"></p>\n<ul class=\"notes\"></ul>\n<button class=\"more\" type=\"button\" hidden>${FeedbackCopy.MORE}</button>\n</div>" in contact,
+            "what the list shows, the list, and the next page's button",
+        )
+        assertFalse("type=\"checkbox\" name=\"consent\"" in contact, "every note is public, as the form says: no box to tick")
         assertTrue(contact.indexOf(notesBox) < contact.indexOf("<form class=\"feedback\""), "the notes come before the form")
         assertFalse("<footer" in html, "the count moved from the footer to the hero")
     }

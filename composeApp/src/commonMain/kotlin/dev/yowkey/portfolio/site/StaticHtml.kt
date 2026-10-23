@@ -151,16 +151,35 @@ object StaticHtml {
         appendLine("</form>")
     }
 
-    /** Where the page's script lists the notes the owner has published, from the backend; hidden until it has some. */
+    /**
+     * Where the page's script shows the notes, from the backend; hidden until it answers. The ratings dashboard is
+     * here already, empty, for the script to fill: the average and its stars, and a bar per number of stars, each a
+     * button that shows only those notes. Then the line saying what the list shows, the list, and "Show more".
+     */
     private fun StringBuilder.visitorNotes(api: String) {
         appendLine("<div class=\"visitor-notes\" data-api=\"${escape(api)}\" hidden>")
         appendLine("<h3>${escape(FeedbackCopy.NOTES_TITLE)}</h3>")
+        appendLine("<div class=\"ratings\" role=\"group\" aria-label=\"${escape(FeedbackCopy.DASHBOARD)}\" hidden>")
+        appendLine("<div class=\"average\"><p class=\"score\"><strong></strong><span>/ 5</span></p><p class=\"meter\" role=\"img\"></p><p class=\"count\"></p></div>")
+        append("<ul class=\"bars\">")
+        (5 downTo 1).forEach {
+            append(
+                "<li><button type=\"button\" data-stars=\"$it\" aria-pressed=\"false\"><span class=\"label\">$it <i>★</i></span>" +
+                    "<span class=\"track\"><span class=\"fill\"></span></span><span class=\"n\"></span><span class=\"pct\"></span></button></li>",
+            )
+        }
+        appendLine("</ul>")
+        appendLine("</div>")
+        appendLine("<p class=\"kept-private\" hidden></p>")
+        appendLine("<p class=\"list-line\" role=\"status\" aria-live=\"polite\"></p>")
         appendLine("<ul class=\"notes\"></ul>")
+        appendLine("<button class=\"more\" type=\"button\" hidden>${escape(FeedbackCopy.MORE)}</button>")
         appendLine("</div>")
     }
 
     /**
-     * The note form, as the app's: name and email (optional), the impression, the message, the consent box. It posts to the backend
+     * The note form, as the app's: name and email (optional), the impression, the message; public, as it says, so it
+     * sends the consent itself (a hidden field, for the plain form too). It posts to the backend
      * at [api] the way the app does, through the page's script; without the script the browser posts the plain
      * form and the backend answers with a page. The `website` field is a trap for bots that fill every field:
      * people never see it, and a filled one is quietly dropped.
@@ -187,7 +206,7 @@ object StaticHtml {
             "<label><span>${escape(FeedbackCopy.MESSAGE)}</span>" +
                 "<textarea name=\"message\" required maxlength=\"${FeedbackDraft.MAX_MESSAGE}\" rows=\"5\"></textarea></label>",
         )
-        appendLine("<label class=\"consent\"><input type=\"checkbox\" name=\"consent\" value=\"1\"><span>${escape(FeedbackCopy.CONSENT)}</span></label>")
+        appendLine("<input type=\"hidden\" name=\"consent\" value=\"1\">")
         appendLine("<label class=\"trap\" aria-hidden=\"true\"><span>Website</span><input name=\"website\" tabindex=\"-1\" autocomplete=\"off\"></label>")
         appendLine("<button type=\"submit\">${escape(FeedbackCopy.SEND)}</button>")
         appendLine("<p class=\"status\" role=\"status\" aria-live=\"polite\"></p>")

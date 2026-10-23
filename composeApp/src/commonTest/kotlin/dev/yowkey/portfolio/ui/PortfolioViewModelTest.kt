@@ -54,6 +54,8 @@ class PortfolioViewModelTest {
         var sendResult: () -> Unit = {}
         val visitCalls = mutableListOf<String>()
         val notesCalls = mutableListOf<String>()
+        /** Each `loadNotes`'s star, `before` and `fresh`. */
+        val notesQueries = mutableListOf<Triple<Int?, Long?, Boolean>>()
         val sent = mutableListOf<Pair<String, FeedbackDraft>>()
         var gate: CompletableDeferred<Unit>? = null
 
@@ -62,8 +64,9 @@ class PortfolioViewModelTest {
             return visitResult()
         }
 
-        override suspend fun loadNotes(api: String): SiteNotes {
+        override suspend fun loadNotes(api: String, stars: Int?, before: Long?, fresh: Boolean): SiteNotes {
             notesCalls += api
+            notesQueries += Triple(stars, before, fresh)
             return notesResult()
         }
 
@@ -164,6 +167,40 @@ class PortfolioViewModelTest {
         assertIs<PortfolioUiState.Ready>(offline.state.value)
         assertNull(offline.notes.value)
         assertEquals(VisitCount(7, 1, "2026-10-24"), offline.visits.value, "the count does not depend on the notes")
+    }
+
+    @Test
+    fun aStarPicksItsNotesMoreAddsTheNextPageAndANewNoteBringsAllBackFresh() = runTest(dispatcher) {
+        val siteApi = FakeSiteApi()
+        fun page(ids: List<Long>, more: Boolean) =
+            SiteNotes(VisitCount(7), RatingSummary(3, 4.7), ids.map { PublicNote(it, null, 5, "M$it") }, total = 3, more = more)
+        siteApi.notesResult = { page(listOf(3, 2), more = true) }
+        val viewModel = PortfolioViewModel(FakeRepository { withApi }, siteApi)
+        advanceUntilIdle()
+        assertEquals(Triple(null, null, false), siteApi.notesQueries.single(), "the first page: all of them")
+
+        viewModel.showNotes(5)
+        assertEquals(NotesBrowse(5, loading = true), viewModel.notesBrowse.value)
+        advanceUntilIdle()
+        assertEquals(NotesBrowse(5), viewModel.notesBrowse.value)
+        assertEquals(Triple(5, null, false), siteApi.notesQueries.last())
+        viewModel.showNotes(5)
+        advanceUntilIdle()
+        assertEquals(2, siteApi.notesQueries.size, "the pick already showing is not asked for again")
+
+        siteApi.notesResult = { page(listOf(1), more = false) }
+        viewModel.showMoreNotes()
+        advanceUntilIdle()
+        assertEquals(Triple(5, 2L, false), siteApi.notesQueries.last(), "the page after the last note shown, same star")
+        assertEquals(listOf(3L, 2L, 1L), viewModel.notes.value?.notes?.map { it.id })
+        viewModel.showMoreNotes()
+        advanceUntilIdle()
+        assertEquals(3, siteApi.notesQueries.size, "nothing is left to load")
+
+        viewModel.sendFeedback(FeedbackDraft(message = "Hi"))
+        advanceUntilIdle()
+        assertEquals(Triple(null, null, true), siteApi.notesQueries.last(), "a new note: all of them again, past the browser's copy")
+        assertEquals(NotesBrowse(), viewModel.notesBrowse.value)
     }
 
     @Test

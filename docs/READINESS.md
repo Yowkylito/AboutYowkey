@@ -17,11 +17,14 @@ apply; what does is below. `[x]` done, `[ ]` open, `N/A` with the reason.
   routes (`GET /feedback`, `/inbox`) take `ADMIN_TOKEN` only, compared in constant time, and stay closed while the
   token is unset; a visitor may leave 5 notes a day (by a daily hash; the address is never stored); every field has
   a type and length limit and the body a size limit; a browser's origin is checked against an allow-list; a hidden
-  form field catches bots; the inbox escapes everything it shows; the inbox's buttons (publish, hide, delete) act
+  form field catches bots; the inbox escapes everything it shows; the inbox's buttons (hide, unhide, delete) act
   only on a post from the worker's own origin, since the browser would send the saved Basic credentials with a
   form from any site. All of it tested in Node against SQLite
-- [x] A note is shown on the site only with the visitor's tick and the owner's click, with the name, the stars and
-  the words; the contact never leaves the inbox. `GET /notes` is the only public read, cached for a minute
+- [x] A note is public as it arrives, as the form says, with the name, the stars and the words; the contact never
+  leaves the inbox. Notes sent before that without the visitor's tick keep their words private (only their stars
+  count, and the dashboard says how many). The owner takes a note down by hiding it, from the inbox or the app, and
+  hears of every new note at once (or within 15 minutes before push is set up). `GET /notes` is the only public
+  read, a page at a time, cached for 15 seconds
 - [x] Link clicks and countries keep nothing about a person: a click is counted once per visitor per day per link
   by the same daily hash as a visit (the hashes deleted with the next day's first click), only for the links in
   `TRACKED_LINKS`, never for a bot; a country is Cloudflare's guess from the address, stored only as a count per
@@ -96,8 +99,8 @@ performance warn).
 - [x] Deploy on every push to `main`: a content fix is live in minutes
 - [x] Lighthouse report kept as a workflow artifact on each deploy
 - [x] Visit counts (once per visitor per day, no addresses kept) and a feedback inbox, on the site's own worker. The
-  page shows them once `portfolio.json` names the worker (README, "Visits and feedback"); the notes the owner
-  publishes, and their rating, show on the page too
+  page shows them once `portfolio.json` names the worker (README, "Visits and feedback"); the notes, their rating
+  dashboard and a star filter show on the page too
 - [x] The owner hears about a new note or message as it arrives, and gets the day's numbers at 23:59 Manila time:
   each is kept as a record the Android app polls every 15 minutes, and pushed through FCM once the
   `FCM_SERVICE_ACCOUNT` secret is set (README, "Visits and feedback"). A failed push never fails the visitor's
@@ -112,4 +115,6 @@ performance warn).
 - Android / iOS targets. Trigger: when an app-store demo is wanted
 - Custom font. The default font is used; bundling Inter (as in The Eagle's Watch) is a small follow-up
 - `og:image` for link previews. Trigger: when there is artwork for it
-- Editing a published note's words (a typo the visitor made, say): today it is publish as is or not at all. Trigger: the first such note
+- Editing a note's words (a typo the visitor made, say): today it is shown as is, or hidden. Trigger: the first such note
+- Holding back notes with links or abuse until the owner has looked: today every note is up at once and the owner
+  hides what should not be. Trigger: the first spam note that gets through the daily limit and the bot trap

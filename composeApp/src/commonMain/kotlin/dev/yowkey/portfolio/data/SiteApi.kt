@@ -10,6 +10,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import kotlin.random.Random
 
 /**
  * The site's own backend (`worker/`, a Cloudflare Worker over a D1 database): the visit count, the clicks on the
@@ -24,10 +25,12 @@ interface SiteApi {
     suspend fun recordVisit(api: String): VisitCount
 
     /**
-     * The published notes and the rating they add up to, for the page.
+     * The rating, star by star, and a page of the public notes, newest first: all of them, or only [stars]'s; the
+     * notes older than [before] (an id) for the next page. [fresh] skips the browser's copy (the backend lets it keep
+     * one for 15 seconds), for the list a visitor has just added a note to.
      * @throws SiteApiException when the server cannot be reached or answers with an error
      */
-    suspend fun loadNotes(api: String): SiteNotes
+    suspend fun loadNotes(api: String, stars: Int? = null, before: Long? = null, fresh: Boolean = false): SiteNotes
 
     /**
      * Puts [draft] in the owner's inbox.
@@ -100,8 +103,14 @@ class HttpSiteApi(
         }
     }
 
-    override suspend fun loadNotes(api: String): SiteNotes {
-        val reply = transport.send("GET", "$api/notes", null)
+    override suspend fun loadNotes(api: String, stars: Int?, before: Long?, fresh: Boolean): SiteNotes {
+        val query = listOfNotNull(
+            stars?.let { "stars=$it" },
+            before?.let { "before=$it" },
+            // A new value each time, so no copy of an earlier answer, from this page load or the last, can match.
+            if (fresh) "fresh=${Random.nextInt(1, Int.MAX_VALUE)}" else null,
+        )
+        val reply = transport.send("GET", "$api/notes" + query.joinToString("&", prefix = "?").takeIf { query.isNotEmpty() }.orEmpty(), null)
         if (!reply.isSuccess) throw SiteApiException("notes: HTTP ${reply.status}")
         return try {
             json.decodeFromString(SiteNotes.serializer(), reply.body)

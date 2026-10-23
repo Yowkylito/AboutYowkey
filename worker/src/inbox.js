@@ -17,7 +17,7 @@ export function linkLabel(link) {
 }
 
 export function renderInbox({ visits, items, days, today, timeZone, messages = [], clicks = {} }) {
-  const waiting = items.filter((item) => item.consent && !item.published_at && !item.hidden_at).length;
+  const shown = items.filter((item) => item.consent && !item.hidden_at).length;
   const unread = messages.filter((item) => !item.read_at && !item.archived_at).length;
   const rows = items
     .map(
@@ -51,8 +51,8 @@ export function renderInbox({ visits, items, days, today, timeZone, messages = [
   return page(
     "Inbox",
     `<h1>Inbox</h1>
-<p class="muted">${Number(visits.total)} visits${since} · ${Number(visits.today)} today (${escape(today)}, ${escape(timeZone)}) · ${items.length} notes, ${waiting} waiting · ${messages.length} messages, ${unread} unread</p>
-<p class="muted">A note with the visitor's tick can be published; it then shows on the site with the name, the stars and the words, never the contact. Hide takes it down without deleting it. Messages are private: they are never on the site.</p>
+<p class="muted">${Number(visits.total)} visits${since} · ${Number(visits.today)} today (${escape(today)}, ${escape(timeZone)}) · ${items.length} notes, ${shown} on the site · ${messages.length} messages, ${unread} unread</p>
+<p class="muted">A note is on the site as soon as it arrives, with the name, the stars and the words, never the contact. Hide takes it down without deleting it (its stars stop counting too). Notes marked Private came before notes were public, without the visitor's tick: only their stars count. Messages are private: they are never on the site.</p>
 ${days.length ? `<h2>Visitors by day</h2>\n<ul class="days">${series}</ul>` : ""}
 ${clickSeries ? `<h2>Link clicks today</h2>\n<ul class="days">${clickSeries}</ul>` : ""}
 <h2>Messages</h2>
@@ -87,20 +87,16 @@ export function renderNotice(title, sentence, backUrl) {
   return page(title, `<h1>${escape(title)}</h1>\n<p>${escape(sentence)}</p>${back}`);
 }
 
-/** Published, hidden, waiting for the owner, or private (the visitor did not tick the box). */
+/** Hidden by the owner, on the site, or private (sent before notes were public, without the visitor's tick). */
 function status(item) {
   if (item.hidden_at) return `Hidden<br><span class="dim">${escape(when(item.hidden_at))}</span>`;
-  if (item.published_at) return `Published<br><span class="dim">${escape(when(item.published_at))}</span>`;
-  return item.consent ? "<strong>Waiting</strong>" : '<span class="dim">Private</span>';
+  return item.consent ? "<strong>On the site</strong>" : '<span class="dim">Private</span>';
 }
 
 function buttons(item) {
   const button = (action, label, extra = "") => `<button name="action" value="${action}"${extra}>${label}</button>`;
   const remove = button("delete", "Delete", ' class="danger" onclick="return confirm(\'Delete this note for good?\')"');
-  if (item.hidden_at) return button("unhide", "Unhide") + remove;
-  if (item.published_at) return button("unpublish", "Unpublish") + button("hide", "Hide") + remove;
-  const publish = item.consent ? button("publish", "Publish", ' class="primary"') : button("publish", "Publish", ' disabled title="No consent from the visitor"');
-  return publish + button("hide", "Hide") + remove;
+  return (item.hidden_at ? button("unhide", "Unhide") : button("hide", "Hide")) + remove;
 }
 
 /** Archived, read, or unread (waiting for the owner). */

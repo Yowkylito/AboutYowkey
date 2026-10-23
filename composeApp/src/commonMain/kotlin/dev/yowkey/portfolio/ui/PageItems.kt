@@ -95,9 +95,24 @@ sealed interface PageItem {
         override val section = Section.Contact
     }
 
-    /** One row of the published notes, between the message form and the note form; the first row carries the title. */
+    /**
+     * The notes' title and ratings dashboard, between the message form and the notes; once the backend has answered
+     * (its numbers come with the notes).
+     */
+    data object Ratings : PageItem {
+        override val key = "ratings"
+        override val section = Section.Contact
+    }
+
+    /** One row of the public notes, under the dashboard. */
     data class Notes(val notes: List<PublicNote>, val columns: Int, val row: Int) : PageItem {
         override val key = "notes-$row"
+        override val section = Section.Contact
+    }
+
+    /** "Show more notes", under the last row while the backend has more. */
+    data object MoreNotes : PageItem {
+        override val key = "more-notes"
         override val section = Section.Contact
     }
 
@@ -115,14 +130,17 @@ sealed interface PageItem {
 
 /**
  * Flattens the portfolio into rows for the current column counts, in [Section] order. Empty sections produce no rows
- * at all. With the site's backend, the Contact section continues with the private message form, then [notes], the
- * published notes, chunked like the project cards, then the note form; without a backend there is none of them.
+ * at all. With the site's backend, the Contact section continues with the private message form, then (once the
+ * backend has answered, [notesLoaded]) the ratings dashboard and [notes], the public notes shown so far, chunked
+ * like the project cards, with "Show more" when [moreNotes]; then the note form. Without a backend there is none.
  */
 fun buildPageItems(
     portfolio: Portfolio,
     serviceColumns: Int,
     projectColumns: Int,
     notes: List<PublicNote> = emptyList(),
+    notesLoaded: Boolean = notes.isNotEmpty(),
+    moreNotes: Boolean = false,
 ): List<PageItem> = buildList {
     add(PageItem.Hero(portfolio.profile))
     portfolio.experience.forEachIndexed { index, job ->
@@ -142,7 +160,9 @@ fun buildPageItems(
     add(PageItem.Contact(portfolio.profile.email, portfolio.links))
     if (portfolio.api != null) {
         add(PageItem.Message)
+        if (notesLoaded) add(PageItem.Ratings)
         notes.chunked(projectColumns).forEachIndexed { row, chunk -> add(PageItem.Notes(chunk, projectColumns, row)) }
+        if (moreNotes) add(PageItem.MoreNotes)
         add(PageItem.Feedback)
     }
     add(PageItem.Footer)

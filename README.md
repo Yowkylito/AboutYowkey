@@ -175,7 +175,7 @@ links, and carry a private **Message me** form. A click leaves as a beacon (`nav
 delivers even as the link takes the tab away; the page sends it at most once per link per page load and never makes
 the link wait for it. The worker counts it once per visitor per day per link, telling visitors apart by the same
 salted daily hash as visits, and nothing is stored on the device. The desktop window is the owner's, so it counts
-nothing. The message form sits above the published notes and the public **Leave a note** form, and each is badged
+nothing. The message form sits above the notes and the public **Leave a note** form, and each is badged
 Private or Public: a message asks for a way to reply (an email, or anything else) and an optional topic (a job, a
 freelance project, a collaboration, something else), only the owner reads it, and it is never shown on the site.
 Without the page's script, both forms post as plain HTML forms and the worker answers with a page.
@@ -202,8 +202,8 @@ One-time setup: **Settings → Pages → Source: GitHub Actions**.
 `androidApp/` builds **Yowkey**, an APK for my own phone. It opens on the portfolio exactly as the site shows it,
 running natively. Long-press its icon and pick **Owner** to sign in (the password is the worker's `ADMIN_TOKEN`, see
 below): a dashboard of today's visits, LinkedIn and GitHub clicks, unread messages and who wants to hire me, the 30
-days of visits and their countries; the private messages (reply by email, archive, delete), the notes to publish or
-hide, and the history of every alert and daily report. A new message, a new note and the 23:59 summary arrive as
+days of visits and their countries; the private messages (reply by email, archive, delete), the notes to hide or
+delete, and the history of every alert and daily report. A new message, a new note and the 23:59 summary arrive as
 notifications. Once signed in, the app opens there, with **Portfolio** to go back to the site.
 
 The SDK needs platform 37 (Compose 1.12 compiles against it; the app targets 36 and runs on Android 8.0+).
@@ -251,8 +251,8 @@ app's requests there instead (the emulator reaches the computer at 10.0.2.2), an
 
 ## Visits and feedback
 
-The live line under the hero's headline (the published notes' rating, the visit count), the "Notes from visitors"
-cards and the "Leave a note" form under Contact are real data, kept by a small backend of the site's own: a
+The live line under the hero's headline (the notes' rating, the visit count), the "Notes from visitors" dashboard
+and cards and the "Leave a note" form under Contact are real data, kept by a small backend of the site's own: a
 Cloudflare Worker with a D1 (SQLite) database, in [`worker/`](worker/). GitHub Pages serves files only, so this is
 the one piece that runs on a server. Cloudflare's free plan covers it many times over (100,000 requests a day), and
 it never sleeps.
@@ -262,12 +262,15 @@ What it keeps, and nothing more:
 - **Visits**: one count per day. A visitor is counted once a day, told apart by a hash of the day, their address,
   their browser and a secret salt; the address itself is never stored, and the hashes are deleted the next day.
   Crawlers, link previews and CI's Lighthouse run read the count but are not counted.
-- **Notes**: what the form says (name and email are optional), the rating, the time, whether the visitor ticked
-  "You may show this note on the site", and the day's hash for a limit of 5 notes per visitor per day. A hidden
-  field catches bots that fill every field.
-- **What the page shows**: only notes the visitor agreed to show *and* you published from the inbox, with the
-  name (or "A visitor"), the stars and the words, never the email. The hero's rating is the mean of those notes'
-  stars. Hiding a note takes it down again; deleting it removes it for good.
+- **Notes**: what the form says (name and email are optional), the rating, the time, and the day's hash for a limit
+  of 5 notes per visitor per day. A hidden field catches bots that fill every field. The form says a note is public,
+  and it is: it shows on the page as soon as it is sent.
+- **What the page shows**: every note, newest first, a page at a time, with the name (or "A visitor"), the stars and
+  the words, never the email. Above them, a dashboard: the average to one decimal and how many rated, and a bar per
+  number of stars with its count and share; a bar picks that star's notes. The ratings count every note you have not
+  hidden, including the few sent before notes were public without the visitor's tick: their words stay private, and
+  the dashboard says how many. Hiding a note takes it down (and its stars out of the count); deleting it removes it
+  for good.
 
 Until `portfolio.json` names the backend, neither the count nor the form is on the page. Setting it up takes about
 ten minutes, once:
@@ -314,12 +317,12 @@ ten minutes, once:
    ```
 
    The build checks it is `https://` with no trailing slash. The next deploy of the site shows the live line under
-   the headline and the form under Contact; the notes appear as you publish them.
+   the headline and the form under Contact; a note appears as soon as it is sent.
 
-**Reading and publishing the notes**: open `https://aboutyowkey-api.<account>.workers.dev/inbox` in a browser; any
-user name, the password is `ADMIN_TOKEN`. It lists the notes newest first, with the visit totals and the last two
-weeks by day, and a button for each: **Publish** (only for a note whose visitor ticked the box; it then shows on the
-site), **Unpublish**, **Hide** (down, but kept), **Unhide** and **Delete**. The page's buttons only work from the
+**Reading the notes, and taking one down**: open `https://aboutyowkey-api.<account>.workers.dev/inbox` in a browser;
+any user name, the password is `ADMIN_TOKEN`. It lists the notes newest first, with the visit totals and the last two
+weeks by day, and a button for each: **Hide** (off the site, but kept), **Unhide** and **Delete**. The app's Notes
+screen has the same. The page's buttons only work from the
 page itself, so a form on some other site cannot act with your browser's saved password. From the terminal,
 `npm run inbox` prints the same table.
 

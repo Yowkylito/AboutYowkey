@@ -37,6 +37,12 @@ sealed interface FeedbackUiState {
     data class Failed(val message: String) : FeedbackUiState
 }
 
+/**
+ * How the visitor is browsing the notes: all of them, or only [stars]'s (the dashboard's bar they picked), and
+ * whether a page of them is on its way.
+ */
+data class NotesBrowse(val stars: Int? = null, val loading: Boolean = false)
+
 /** The private message form's state, the same steps as the note form's. */
 @Immutable
 sealed interface MessageUiState {
@@ -60,9 +66,15 @@ class PortfolioViewModel(
     private val _visits = MutableStateFlow<VisitCount?>(null)
     val visits: StateFlow<VisitCount?> = _visits.asStateFlow()
 
-    /** The published notes and their rating once the backend has answered; null without a backend, or until it does. */
+    /**
+     * The rating and the notes shown so far (every page loaded, of the picked star) once the backend has answered;
+     * null without a backend, or until it does.
+     */
     private val _notes = MutableStateFlow<SiteNotes?>(null)
     val notes: StateFlow<SiteNotes?> = _notes.asStateFlow()
+
+    private val _notesBrowse = MutableStateFlow(NotesBrowse())
+    val notesBrowse: StateFlow<NotesBrowse> = _notesBrowse.asStateFlow()
 
     private val _feedback = MutableStateFlow<FeedbackUiState>(FeedbackUiState.Idle)
     val feedback: StateFlow<FeedbackUiState> = _feedback.asStateFlow()
@@ -73,6 +85,7 @@ class PortfolioViewModel(
     private var loadJob: Job? = null
     private var visitJob: Job? = null
     private var notesJob: Job? = null
+    private var pageJob: Job? = null
     private var sendJob: Job? = null
     private var messageJob: Job? = null
 
@@ -119,17 +132,59 @@ class PortfolioViewModel(
         }
     }
 
-    /** Once per page load as well; without an answer the page simply has no notes and no rating. */
+    /**
+     * Once per page load as well; without an answer the page simply has no notes and no rating. A pick the visitor
+     * made before it answered wins over it.
+     */
     private fun loadNotes(api: String?) {
         if (api == null || notesJob != null) return
         notesJob = viewModelScope.launch {
-            _notes.value = try {
+            val first = try {
                 siteApi.loadNotes(api)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 null
             }
+            if (pageJob == null) _notes.value = first
+        }
+    }
+
+    /**
+     * Shows only the notes with [stars] stars, or all of them for null, from the newest; the rating stays the whole
+     * site's. A pick already showing is left as it is; a page still on its way for another pick is dropped.
+     */
+    fun showNotes(stars: Int?) {
+        if (stars == _notesBrowse.value.stars && pageJob?.isActive != true) return
+        loadPage(stars, before = null)
+    }
+
+    /** The next page of the notes showing, after the last one; nothing while a page is on its way or none is left. */
+    fun showMoreNotes() {
+        val shown = _notes.value ?: return
+        if (!shown.more || pageJob?.isActive == true) return
+        loadPage(_notesBrowse.value.stars, before = shown.notes.lastOrNull()?.id)
+    }
+
+    /**
+     * A page of notes: the first of [stars]'s (replacing the list), or the one after [before] (added to it). [fresh]
+     * asks past the browser's copy, for a list the visitor has just added to. A failure leaves the list as it was.
+     */
+    private fun loadPage(stars: Int?, before: Long?, fresh: Boolean = false) {
+        val api = (state.value as? PortfolioUiState.Ready)?.portfolio?.api ?: return
+        pageJob?.cancel()
+        _notesBrowse.value = NotesBrowse(stars, loading = true)
+        pageJob = viewModelScope.launch {
+            try {
+                val page = siteApi.loadNotes(api, stars, before, fresh)
+                val shown = _notes.value
+                _notes.value = if (before == null || shown == null) page else page.copy(notes = shown.notes + page.notes)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // The list stays as it was; the visitor can pick again.
+            }
+            _notesBrowse.value = NotesBrowse(stars, loading = false)
         }
     }
 
@@ -148,6 +203,8 @@ class PortfolioViewModel(
         sendJob = viewModelScope.launch {
             _feedback.value = try {
                 siteApi.sendFeedback(api, draft)
+                // The note is public at once: back to all the notes, newest first, past the browser's copy.
+                loadPage(stars = null, before = null, fresh = true)
                 FeedbackUiState.Sent
             } catch (e: CancellationException) {
                 throw e

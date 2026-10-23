@@ -87,11 +87,13 @@ data class AdminNote(
     @SerialName("published_at") val publishedAt: String? = null,
     @SerialName("hidden_at") val hiddenAt: String? = null,
 ) {
-    val isPublished: Boolean get() = publishedAt != null
     val isHidden: Boolean get() = hiddenAt != null
 
-    /** Only a note whose visitor agreed may go on the page; the worker answers 409 otherwise. */
-    val canPublish: Boolean get() = consent && !isPublished
+    /**
+     * On the site: notes are public as they arrive, unless the owner hides them. One sent before that without the
+     * visitor's tick ([consent] false) keeps its words private for good; only its stars count.
+     */
+    val isPublic: Boolean get() = consent && !isHidden
 }
 
 /** A private message to the owner (`GET /admin/messages`). */

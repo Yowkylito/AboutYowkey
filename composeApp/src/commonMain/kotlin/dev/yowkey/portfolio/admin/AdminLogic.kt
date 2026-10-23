@@ -31,9 +31,9 @@ fun AdminMessage.after(action: MessageAction, now: String): AdminMessage? = when
 
 /** The note as it is once the worker has done [action] at [now], by the inbox's rules; null once deleted. */
 fun AdminNote.after(action: NoteAction, now: String): AdminNote? = when (action) {
-    // Publishing also brings a hidden note back, as the worker does.
-    NoteAction.Publish -> copy(publishedAt = now, hiddenAt = null)
-    NoteAction.Unpublish -> copy(publishedAt = null)
+    // The 1.0 app's Publish and Unpublish are the worker's unhide and hide now, notes being public as they arrive.
+    NoteAction.Publish -> copy(publishedAt = publishedAt ?: now, hiddenAt = null)
+    NoteAction.Unpublish -> copy(hiddenAt = now)
     NoteAction.Hide -> copy(hiddenAt = now)
     NoteAction.Unhide -> copy(hiddenAt = null)
     NoteAction.Delete -> null

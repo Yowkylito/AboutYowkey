@@ -105,14 +105,66 @@
     }
     form.feedback button:disabled, form.message button:disabled { opacity: .6; cursor: default; }
     form.feedback .trap, form.message .trap { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
-    form.feedback label.consent, form.message label.topic { display: flex; align-items: center; gap: 10px; font-weight: 400; }
-    form.feedback label.consent input, form.message label.topic input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
+    form.message label.topic { display: flex; align-items: center; gap: 10px; font-weight: 400; }
+    form.message label.topic input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
     form.feedback .status, form.message .status { margin: 0; min-height: 1.6em; color: var(--muted); }
     form.message fieldset { display: flex; flex-wrap: wrap; gap: 8px 20px; border: 0; margin: 0; padding: 0; }
     form.message legend { padding: 0; margin: 0 0 6px; font-size: 15px; font-weight: 600; }
     form.message legend .muted { font-weight: 400; }
     h3 .badge { vertical-align: middle; }
-    .visitor-notes { margin: 40px 0 8px; }
+    .visitor-notes { margin: 40px 0 40px; }
+    /* The rules below give these a display, which would beat the hidden attribute's; hidden must still hide them. */
+    .visitor-notes [hidden] { display: none !important; }
+    /* The ratings dashboard: the average with its stars lit to the fraction, and a bar per number of stars, each a filter. */
+    .ratings {
+      display: grid; grid-template-columns: minmax(180px, 36fr) 64fr; gap: 24px; align-items: center; margin: 16px 0 12px; padding: 32px;
+      border: 1px solid var(--line); border-radius: 20px;
+      background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 7%, transparent), transparent 70%), var(--surface);
+    }
+    .ratings .average { text-align: center; }
+    .ratings p { margin: 0; }
+    .ratings .score strong { font-size: 52px; line-height: 1.1; font-weight: 600; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+    .ratings .score span { color: var(--muted); font-size: 18px; margin-left: 4px; }
+    .meter { display: inline-block; position: relative; margin: 8px 0; font-size: 22px; line-height: 1; letter-spacing: .1em; color: var(--line-strong); }
+    .meter::before { content: "★★★★★"; }
+    .meter::after { content: "★★★★★"; position: absolute; top: 0; left: 0; width: var(--fill, 0%); overflow: hidden; white-space: nowrap; color: var(--accent); }
+    .ratings .count { color: var(--muted); }
+    .bars { list-style: none; margin: 0; padding: 0 0 0 24px; border-left: 1px solid var(--line); display: grid; gap: 2px; }
+    .bars button {
+      width: 100%; display: grid; grid-template-columns: 30px 1fr 36px 40px; gap: 12px; align-items: center; padding: 9px 12px;
+      font: inherit; color: var(--ink); text-align: left; background: transparent; border: 0; border-radius: 12px; cursor: pointer;
+      transition: background-color .15s, opacity .2s;
+    }
+    .bars button:hover { background: color-mix(in srgb, var(--ink) 5%, transparent); }
+    .bars button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .bars button[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+    .bars.filtering button[aria-pressed="false"] { opacity: .45; }
+    .bars .label { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .bars .label i { font-style: normal; font-size: 12px; color: var(--accent); }
+    .bars .track { height: 10px; border-radius: 5px; background: var(--line); overflow: hidden; }
+    .bars .fill {
+      display: block; height: 100%; width: 0; border-radius: 5px; transition: width .7s cubic-bezier(.4, 0, .2, 1);
+      background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 72%, transparent), var(--accent));
+    }
+    .bars li:nth-child(2) .fill { transition-delay: 70ms; }
+    .bars li:nth-child(3) .fill { transition-delay: 140ms; }
+    .bars li:nth-child(4) .fill { transition-delay: 210ms; }
+    .bars li:nth-child(5) .fill { transition-delay: 280ms; }
+    .bars .n { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .bars .pct { text-align: right; color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
+    .kept-private { color: var(--muted); font-size: 14px; margin: 0 0 12px; }
+    .list-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; color: var(--muted); margin: 0; min-height: 1.6em; }
+    .list-line button, .visitor-notes .more {
+      font: inherit; font-weight: 600; color: var(--accent); background: transparent; border: 0; padding: 8px 4px; cursor: pointer;
+    }
+    .visitor-notes .more { display: block; margin: 20px auto 0; padding: 10px 20px; border: 1px solid var(--line-strong); border-radius: 10px; }
+    .visitor-notes .more:disabled { opacity: .6; cursor: default; }
+    @media (max-width: 640px) {
+      .ratings { grid-template-columns: 1fr; gap: 20px; padding: 20px; }
+      .ratings .average { text-align: left; }
+      .bars { padding: 20px 0 0; border-left: 0; border-top: 1px solid var(--line); }
+    }
+    @media (prefers-reduced-motion: reduce) { .bars .fill, .bars button { transition: none; } }
     .notes { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
     .notes li { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 20px; }
     .notes li p { margin: 0; }
@@ -181,7 +233,7 @@
     })();
   </script>
   <script>
-    // The hero's live line, the published notes and the note form talk to the site's own backend (worker/), named
+    // The hero's live line, the notes and the note form talk to the site's own backend (worker/), named
     // by portfolio.json's "api" as data-api on their elements. Without one, none of them is on the page and nothing
     // here runs. The backend counts a visitor once a day, so the app counting the same page load again changes nothing.
     (function () {
@@ -189,31 +241,123 @@
         if (!/^\d{4}-\d{2}-\d{2}$/.test(day || "")) return "";
         return new Date(day + "T00:00:00Z").toLocaleDateString("en", { month: "short", year: "numeric", timeZone: "UTC" });
       }
-      function showNotes(data) {
-        var box = document.querySelector(".visitor-notes[data-api]");
-        if (!box || !data || !data.notes || !data.notes.length) return;
-        var list = box.querySelector("ul");
-        data.notes.forEach(function (note) {
-          var item = document.createElement("li");
-          if (note.rating) {
-            var stars = document.createElement("p");
-            stars.className = "stars";
-            stars.setAttribute("role", "img");
-            stars.setAttribute("aria-label", note.rating + " of 5 stars");
-            stars.textContent = "★".repeat(note.rating) + "☆".repeat(5 - note.rating);
-            item.appendChild(stars);
-          }
-          var words = document.createElement("p");
-          words.textContent = note.message;
-          item.appendChild(words);
-          var by = document.createElement("p");
-          by.className = "by";
-          var when = monthYear(note.date);
-          by.textContent = (note.name || "A visitor") + (when ? " · " + when : "");
-          item.appendChild(by);
-          list.appendChild(item);
+      // The notes: the dashboard's numbers, a page of notes at a time, one star's or all, newest first. The same
+      // words as the app (FeedbackCopy).
+      var notesBox = document.querySelector(".visitor-notes[data-api]");
+      var browsing = { stars: null, last: null, loading: false };
+      function plural(n, one, many) { return n + " " + (n === 1 ? one : many); }
+      function noteItem(note) {
+        var item = document.createElement("li");
+        if (note.rating) {
+          var stars = document.createElement("p");
+          stars.className = "stars";
+          stars.setAttribute("role", "img");
+          stars.setAttribute("aria-label", note.rating + " of 5 stars");
+          stars.textContent = "★".repeat(note.rating) + "☆".repeat(5 - note.rating);
+          item.appendChild(stars);
+        }
+        var words = document.createElement("p");
+        words.textContent = note.message;
+        item.appendChild(words);
+        var by = document.createElement("p");
+        by.className = "by";
+        var when = monthYear(note.date);
+        by.textContent = (note.name || "A visitor") + (when ? " · " + when : "");
+        item.appendChild(by);
+        return item;
+      }
+      function showRatings(r) {
+        var board = notesBox.querySelector(".ratings");
+        if (!r || !r.count || r.average == null) { board.hidden = true; return; }
+        var average = Number(r.average).toFixed(1);
+        board.querySelector(".score strong").textContent = average;
+        var meter = board.querySelector(".meter");
+        meter.style.setProperty("--fill", (r.average / 5 * 100) + "%");
+        meter.setAttribute("aria-label", "Average " + average + " of 5");
+        board.querySelector(".count").textContent = "from " + plural(r.count, "rating", "ratings");
+        Array.prototype.forEach.call(board.querySelectorAll(".bars button"), function (button) {
+          var stars = Number(button.dataset.stars), n = (r.stars && r.stars[stars]) || 0;
+          var percent = Math.round(r.count ? n / r.count * 100 : 0);
+          button.querySelector(".n").textContent = n;
+          button.querySelector(".pct").textContent = percent + "%";
+          button.setAttribute("aria-label", plural(stars, "star", "stars") + ": " + plural(n, "rating", "ratings") + ", " + percent + " percent");
+          var fill = button.querySelector(".fill");
+          fill.style.minWidth = n ? "10px" : "0";
+          // Set after the first paint, so the bars grow in from the left (the CSS skips it for reduced motion).
+          requestAnimationFrame(function () { requestAnimationFrame(function () { fill.style.width = percent + "%"; }); });
         });
-        box.hidden = false;
+        board.hidden = false;
+        var kept = notesBox.querySelector(".kept-private");
+        var n = r.private || 0;
+        kept.textContent = n === 1
+          ? "Every rating counts. One came with a note sent privately, before notes were public: its stars are here, its words are not."
+          : "Every rating counts. " + n + " came with notes sent privately, before notes were public: their stars are here, their words are not.";
+        kept.hidden = !n;
+      }
+      function showList(data, append) {
+        var list = notesBox.querySelector("ul.notes");
+        if (!append) list.textContent = "";
+        data.notes.forEach(function (note) { list.appendChild(noteItem(note)); });
+        if (data.notes.length) browsing.last = data.notes[data.notes.length - 1].id;
+        var more = notesBox.querySelector(".more");
+        more.hidden = !data.more;
+        more.disabled = false;
+        more.textContent = "Show more notes";
+        var line = notesBox.querySelector(".list-line"), stars = browsing.stars;
+        line.textContent = "";
+        var words = null;
+        if (stars && !list.children.length) words = "No public notes with " + plural(stars, "star", "stars") + " yet.";
+        else if (stars) words = plural(data.total, "note", "notes") + " with " + plural(stars, "star", "stars");
+        else if (!list.children.length && !(data.ratings && data.ratings.count)) words = "No notes yet. Be the first to leave one below.";
+        if (words) line.appendChild(document.createTextNode(words));
+        if (stars) {
+          var all = document.createElement("button");
+          all.type = "button";
+          all.textContent = "All notes";
+          all.addEventListener("click", function () { loadNotes(null, null, false); });
+          line.appendChild(all);
+        }
+        var bars = notesBox.querySelector(".bars");
+        bars.classList.toggle("filtering", !!stars);
+        Array.prototype.forEach.call(bars.querySelectorAll("button"), function (button) {
+          button.setAttribute("aria-pressed", String(Number(button.dataset.stars) === stars));
+        });
+      }
+      function showNotes(data) {
+        if (!notesBox || !data || !data.notes) return;
+        showRatings(data.ratings);
+        showList(data, false);
+        notesBox.hidden = false;
+      }
+      // A page of notes: [stars]'s or all, after the note [before] for the next page; [fresh] asks past the cache.
+      function loadNotes(stars, before, fresh) {
+        if (!notesBox || browsing.loading) return;
+        browsing.loading = true;
+        var query = [];
+        if (stars) query.push("stars=" + stars);
+        if (before) query.push("before=" + before);
+        if (fresh) query.push("fresh=" + Date.now());
+        if (before) { var more = notesBox.querySelector(".more"); more.disabled = true; more.textContent = "Loading…"; }
+        fetch(notesBox.dataset.api + "/notes" + (query.length ? "?" + query.join("&") : ""), { credentials: "omit" })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .catch(function () { return null; })
+          .then(function (data) {
+            browsing.loading = false;
+            if (!data || !data.notes) return;
+            browsing.stars = stars;
+            if (fresh) showRatings(data.ratings);
+            showList(data, !!before);
+            notesBox.hidden = false;
+          });
+      }
+      if (notesBox) {
+        Array.prototype.forEach.call(notesBox.querySelectorAll(".bars button"), function (button) {
+          button.addEventListener("click", function () {
+            var stars = Number(button.dataset.stars);
+            loadNotes(browsing.stars === stars ? null : stars, null, false);
+          });
+        });
+        notesBox.querySelector(".more").addEventListener("click", function () { loadNotes(browsing.stars, browsing.last, false); });
       }
       var stats = document.querySelector(".live-stats[data-api]");
       if (stats) {
@@ -228,7 +372,7 @@
           var parts = [];
           if (notes && notes.ratings && notes.ratings.count && notes.ratings.average != null) {
             var count = notes.ratings.count;
-            parts.push("★ " + Number(notes.ratings.average).toFixed(1) + " from " + count + (count === 1 ? " note" : " notes"));
+            parts.push("★ " + Number(notes.ratings.average).toFixed(1) + " from " + count + (count === 1 ? " rating" : " ratings"));
           }
           if (visits && visits.total) {
             var since = monthYear(visits.since);
@@ -255,7 +399,7 @@
         })
           .then(function (r) { return r.json().then(function (body) { return { ok: r.ok, body: body }; }); })
           .then(function (r) {
-            if (r.ok) { form.reset(); status.textContent = "Thanks, your note is in."; }
+            if (r.ok) { form.reset(); status.textContent = "Thanks, your note is up."; loadNotes(null, null, true); }
             else { status.textContent = (r.body && r.body.error) || "The note could not be sent. Try again, or email me."; }
           })
           .catch(function () { status.textContent = "The note could not be sent. Check the connection and try again."; })

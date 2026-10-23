@@ -190,47 +190,77 @@ test("the consent box is read however it arrives, and defaults to no", async () 
   assert.equal(feedbackRows().at(-1).consent, 1, "a ticked checkbox posts 'on'");
 });
 
-test("a note is public only with the visitor's tick and the owner's click, and the rating is the published notes'", async () => {
+test("a note is public as it arrives; the rating counts every star not hidden, and says how many notes were private", async () => {
   const empty = await call("/notes");
-  assert.equal(empty.headers.get("Cache-Control"), "public, max-age=60");
+  assert.equal(empty.headers.get("Cache-Control"), "public, max-age=15");
   assert.equal(empty.headers.get("Access-Control-Allow-Origin"), SITE);
-  assert.deepEqual(await empty.json(), { visits: { total: 0, today: 0, since: null }, ratings: { count: 0, average: null }, notes: [] });
+  assert.deepEqual(await empty.json(), {
+    visits: { total: 0, today: 0, since: null },
+    ratings: { count: 0, average: null, stars: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }, private: 0 },
+    notes: [],
+    total: 0,
+    more: false,
+  });
 
   await post("/feedback", { name: "Ada", contact: "ada@example.com", rating: 5, message: "Great", consent: true });
-  await post("/feedback", { rating: 4, message: "Good", consent: "1" }, { address: "198.51.100.2" });
-  await post("/feedback", { name: "Troll", rating: 1, message: "Private rant", consent: false }, { address: "198.51.100.3" });
-  await post("/feedback", { message: "No stars", consent: true }, { address: "198.51.100.4" });
-  assert.deepEqual((await publicNotes()).notes, [], "nothing shows before the owner says so");
-
-  assert.equal((await act(1, "publish")).status, 303);
-  assert.equal((await act(2, "publish", { now: DAY_TWO })).status, 303);
-  assert.equal((await act(4, "publish", { now: DAY_TWO })).status, 303);
+  await post("/feedback", { rating: 4, message: "Good", consent: "1" }, { address: "198.51.100.2", now: DAY_TWO });
+  await post("/feedback", { name: "Quiet", rating: 1, message: "Before notes were public", consent: false }, { address: "198.51.100.3" });
+  await post("/feedback", { message: "No stars", consent: true }, { address: "198.51.100.4", now: DAY_TWO });
   const shown = await publicNotes({ now: DAY_TWO });
-  assert.deepEqual(shown.ratings, { count: 2, average: 4.5 }, "a note without stars is shown but does not rate");
+  assert.deepEqual(shown.ratings, { count: 3, average: 3.3, stars: { 1: 1, 2: 0, 3: 0, 4: 1, 5: 1 }, private: 1 },
+    "a note without stars does not rate; a private note's stars do, and are counted as private");
   assert.deepEqual(shown.notes, [
     { id: 4, name: null, rating: null, message: "No stars", date: "2026-10-25" },
     { id: 2, name: null, rating: 4, message: "Good", date: "2026-10-25" },
     { id: 1, name: "Ada", rating: 5, message: "Great", date: "2026-10-24" },
-  ]);
+  ], "no owner's click needed; the private note's words never show");
+  assert.equal(shown.total, 3);
+  assert.equal(shown.more, false);
   assert.ok(!JSON.stringify(shown).includes("ada@example.com"), "the contact is never public");
 
   const refused = await act(3, "publish");
-  assert.equal(refused.status, 409, "no tick, no publishing");
+  assert.equal(refused.status, 409, "a note sent without the tick stays private");
   assert.match(await refused.text(), /did not agree/);
 
   assert.equal((await act(1, "hide")).status, 303);
   const afterHide = await publicNotes();
-  assert.deepEqual(afterHide.ratings, { count: 1, average: 4 });
+  assert.deepEqual(afterHide.ratings, { count: 2, average: 2.5, stars: { 1: 1, 2: 0, 3: 0, 4: 1, 5: 0 }, private: 1 }, "hidden: shown nowhere, counted nowhere");
   assert.deepEqual(afterHide.notes.map((note) => note.id), [4, 2]);
   assert.equal((await act(1, "unhide")).status, 303);
   assert.deepEqual((await publicNotes()).notes.map((note) => note.id), [4, 2, 1]);
-  assert.equal((await act(2, "unpublish")).status, 303);
+  assert.equal((await act(2, "unpublish")).status, 303, "the 1.0 app's Unpublish hides");
   assert.deepEqual((await publicNotes()).notes.map((note) => note.id), [4, 1]);
+  assert.equal((await act(2, "publish")).status, 303, "and its Publish unhides");
+  assert.deepEqual((await publicNotes()).notes.map((note) => note.id), [4, 2, 1]);
 
   assert.equal((await act(3, "delete")).status, 303);
   assert.deepEqual(feedbackRows().map((row) => row.id), [1, 2, 4]);
   assert.equal((await act(1, "explode")).status, 400);
   assert.equal((await act(99, "hide")).status, 404);
+});
+
+test("the public notes come a page at a time, all of them or one star's", async () => {
+  for (let i = 1; i <= 15; i++) {
+    await post("/feedback", { rating: (i % 5) + 1, message: `Note ${i}`, consent: true }, { address: `198.51.100.${i}` });
+  }
+  const first = await publicNotes();
+  assert.equal(first.notes.length, LIMITS.notesPage);
+  assert.deepEqual(first.notes.slice(0, 2).map((note) => note.id), [15, 14], "newest first");
+  assert.equal(first.total, 15);
+  assert.equal(first.more, true);
+  const rest = await (await call(`/notes?before=${first.notes.at(-1).id}`)).json();
+  assert.deepEqual(rest.notes.map((note) => note.id), [3, 2, 1]);
+  assert.equal(rest.more, false);
+  assert.deepEqual(rest.ratings, first.ratings, "the rating is the same on every page");
+
+  const fives = await (await call("/notes?stars=5")).json();
+  assert.deepEqual(fives.notes.map((note) => note.rating), [5, 5, 5]);
+  assert.equal(fives.total, 3);
+  assert.equal(fives.ratings.count, 15, "filtering the list does not filter the rating");
+  const two = await (await call("/notes?stars=5&limit=2")).json();
+  assert.deepEqual([two.notes.length, two.more], [2, true]);
+  const ignored = await (await call("/notes?stars=9&before=abc&limit=0")).json();
+  assert.deepEqual([ignored.notes.length, ignored.total], [LIMITS.notesPage, 15], "a parameter out of range is ignored");
 });
 
 test("the inbox's buttons need the password and must be pressed on the inbox page itself", async () => {
@@ -354,21 +384,21 @@ test("the inbox asks for the password, then shows the notes and the visits, esca
   await call("/visits", { method: "POST", now: DAY_TWO, address: "198.51.100.2" });
   await post("/feedback", { name: "<b>Ada</b>", contact: "ada@example.com", rating: 3, message: "Great <script>alert(1)</script>", consent: true });
   await post("/feedback", { contact: "linkedin.com/in/ada", message: "No rating" });
-  await post("/feedback", { message: "Already up", consent: true }, { address: "198.51.100.5" });
-  await act(3, "publish");
+  await post("/feedback", { message: "Taken down", consent: true }, { address: "198.51.100.5" });
+  await act(3, "hide");
 
   const open = await call("/inbox", { headers: basic(env.ADMIN_TOKEN, "whoever"), now: DAY_TWO });
   assert.equal(open.status, 200);
   assert.equal(open.headers.get("X-Robots-Tag"), "noindex");
   assert.equal(open.headers.get("Cache-Control"), "no-store");
   const page = await open.text();
-  assert.match(page, /2 visits since 2026-10-24 · 1 today \(2026-10-25, Asia\/Manila\) · 3 notes, 1 waiting/);
-  assert.match(page, /<strong>Waiting<\/strong>/, "the consented, unpublished note waits");
+  assert.match(page, /2 visits since 2026-10-24 · 1 today \(2026-10-25, Asia\/Manila\) · 3 notes, 1 on the site/);
+  assert.match(page, /<strong>On the site<\/strong>/, "a note sent as public is up at once");
   assert.match(page, /<span class="dim">Private<\/span>/, "the note without a tick is private");
-  assert.match(page, /Published<br>/);
-  assert.match(page, /<form method="post" action="\/inbox\/notes\/1">.*value="publish" class="primary"/s);
-  assert.match(page, /<form method="post" action="\/inbox\/notes\/2">.*value="publish" disabled/s);
-  assert.match(page, /<form method="post" action="\/inbox\/notes\/3">.*value="unpublish"/s);
+  assert.match(page, /Hidden<br>/);
+  assert.match(page, /<form method="post" action="\/inbox\/notes\/1"><button name="action" value="hide">/);
+  assert.match(page, /<form method="post" action="\/inbox\/notes\/3"><button name="action" value="unhide">/);
+  assert.doesNotMatch(page, /value="publish"/, "nothing waits for a Publish click");
   assert.match(page, /&lt;b&gt;Ada&lt;\/b&gt;/);
   assert.match(page, /Great &lt;script&gt;alert\(1\)&lt;\/script&gt;/);
   assert.doesNotMatch(page, /<script>alert/);
@@ -746,7 +776,7 @@ test("the inbox shows the messages, escaped, with their buttons, and today's lin
   await click("linkedin", { address: "198.51.100.2" });
 
   const page = await (await call("/inbox", { headers: basic(env.ADMIN_TOKEN) })).text();
-  assert.match(page, /· 0 notes, 0 waiting · 2 messages, 1 unread/);
+  assert.match(page, /· 0 notes, 0 on the site · 2 messages, 1 unread/);
   assert.match(page, /<h2>Link clicks today<\/h2>\n<ul class="days"><li><span>LinkedIn<\/span><strong>2<\/strong><\/li><li><span>GitHub<\/span><strong>0<\/strong><\/li><\/ul>/);
   assert.match(page, /<h2>Messages<\/h2>/);
   assert.match(page, /<td class="topic">Freelance<\/td>/);
@@ -816,7 +846,7 @@ test("the summary: today's and all-time numbers, hiring, and whether push is set
   await click("github", { now: DAY_TWO, address: "198.51.100.2" });
   await post("/feedback", { message: "One", consent: true });
   await post("/feedback", { message: "Two", consent: true }, { now: DAY_TWO });
-  await app("/admin/feedback/1", { method: "POST", payload: { action: "publish" } });
+  await app("/admin/feedback/1", { method: "POST", payload: { action: "hide" } });
   const message = (topic, address, options) => post("/messages", { contact: "x@example.com", topic, message: topic }, { address, ...options });
   await message("job", "198.51.100.11");
   await message("freelance", "198.51.100.12");

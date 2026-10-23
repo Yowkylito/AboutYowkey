@@ -256,7 +256,7 @@ class OwnerViewModel(
             _notes.update { loaded -> loaded.copy(value = loaded.value?.mapNotNull { if (it.id == note.id) it.after(action, now()) else it }) }
             refresh(Tab.Dashboard)
             when (action) {
-                NoteAction.Publish -> "Published: it is on the site now."
+                NoteAction.Publish -> "Back on the site."
                 NoteAction.Unpublish -> "Taken off the site."
                 NoteAction.Hide -> "Hidden."
                 NoteAction.Unhide -> "No longer hidden."

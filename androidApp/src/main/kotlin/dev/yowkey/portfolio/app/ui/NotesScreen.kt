@@ -15,7 +15,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
@@ -38,8 +37,9 @@ import dev.yowkey.portfolio.app.owner.Tab
 import java.time.ZoneId
 
 /**
- * The visitors' notes, newest first, with the inbox's buttons. Publishing needs the visitor's consent, so without
- * it the button is off and says why. A note a notification named is scrolled to and outlined.
+ * The visitors' notes, newest first, with the inbox's buttons. A note is on the site as soon as it arrives, so the
+ * levers are Hide (off the site, and its stars stop counting) and Delete. A note a notification named is scrolled to
+ * and outlined.
  */
 @Composable
 fun NotesScreen(owner: OwnerViewModel) {
@@ -94,13 +94,8 @@ private fun NoteCard(note: AdminNote, zone: ZoneId, focused: Boolean, busy: Bool
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 when {
                     note.isHidden -> Tag("Hidden")
-                    note.isPublished -> Positive.let { (container, content) -> Tag("On the site", container, content) }
-                    else -> Tag("Not published")
-                }
-                if (note.consent) {
-                    Tag("May be published", MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
-                } else {
-                    Tag("Private: no consent")
+                    note.isPublic -> Positive.let { (container, content) -> Tag("On the site", container, content) }
+                    else -> Tag("Private: only its stars count")
                 }
             }
             SelectionContainer {
@@ -112,11 +107,6 @@ private fun NoteCard(note: AdminNote, zone: ZoneId, focused: Boolean, busy: Bool
                 }
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (note.isPublished && !note.isHidden) {
-                    OutlinedButton(onClick = { onAct(NoteAction.Unpublish) }, enabled = !busy) { Text("Unpublish") }
-                } else {
-                    Button(onClick = { onAct(NoteAction.Publish) }, enabled = !busy && note.consent) { Text("Publish") }
-                }
                 if (note.isHidden) {
                     OutlinedButton(onClick = { onAct(NoteAction.Unhide) }, enabled = !busy) { Text("Unhide") }
                 } else {
@@ -126,7 +116,7 @@ private fun NoteCard(note: AdminNote, zone: ZoneId, focused: Boolean, busy: Bool
             }
             if (!note.consent) {
                 Text(
-                    "The visitor did not agree to this note being shown, so it cannot be published.",
+                    "Sent before notes were public, without the visitor's tick: its words stay private, its stars count.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
