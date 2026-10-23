@@ -6,7 +6,7 @@
     "summary": "On ArenaPlus I led the move from a hybrid WebView app to native and built the wallet flows: deposits, withdrawals and bank-linking. Outside work I build Android, Compose Multiplatform and AI apps end to end; this site is one, compiled to WebAssembly.",
     "location": "Quezon City, Philippines",
     "email": "yukstangonan@gmail.com",
-    "availability": "Open to relocation to Singapore",
+    "availability": "Open to relocation to any Country",
     "proof": [
       { "value": "53%", "label": "of ArenaPlus V2's code written by me: 270K+ lines across 413 commits" },
       { "value": "30 days", "label": "to ship the Arena Social app solo, rebuilt from web to native with ~100% of the code" },
