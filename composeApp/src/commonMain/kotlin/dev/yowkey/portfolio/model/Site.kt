@@ -199,18 +199,19 @@ data class MessageDraft(
     val message: String = "",
 ) {
     /**
-     * What stops this message from being sent, as sentences for the visitor; empty when it can go. The two required
-     * fields come first, then the limits, then the topic, in the backend's order, so both name the same problem first.
+     * What stops this message from being sent, as sentences for the visitor; empty when it can go. The message, then
+     * the contact, then the name, then the topic, in the backend's order (`validateMessage`), so both name the same
+     * problem first.
      */
     val problems: List<String>
         get() = buildList {
             val text = message.trim()
             val reply = contact.trim()
             if (text.isEmpty()) add("Write a message first.")
+            else if (text.length > MAX_MESSAGE) add("Keep the message under $MAX_MESSAGE characters.")
             if (reply.isEmpty()) add("Leave an email or another way to reach you.")
-            if (text.length > MAX_MESSAGE) add("Keep the message under $MAX_MESSAGE characters.")
+            else if (reply.length > MAX_CONTACT) add("Keep the email under $MAX_CONTACT characters.")
             if (name.trim().length > MAX_NAME) add("Keep the name under $MAX_NAME characters.")
-            if (reply.length > MAX_CONTACT) add("Keep the email under $MAX_CONTACT characters.")
             if (topic.isNotBlank() && MessageTopic.of(topic.trim()) == null) add("Pick one of the topics.")
         }
 

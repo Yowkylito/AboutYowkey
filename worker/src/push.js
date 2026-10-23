@@ -13,8 +13,11 @@
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const SCOPE = "https://www.googleapis.com/auth/firebase.messaging";
-/** What FCM says about a token that will never work again: the app was removed, or the token is not one. */
-const DEAD_TOKEN = new Set(["UNREGISTERED", "NOT_FOUND", "INVALID_ARGUMENT"]);
+/**
+ * What FCM says about a token that will never work again: the app was removed. INVALID_ARGUMENT says that too when
+ * the token is not one, but also when the payload is wrong, so it only counts when FCM names the token as the field.
+ */
+const DEAD_TOKEN = new Set(["UNREGISTERED", "NOT_FOUND"]);
 /** An access token is used until this long before Google says it expires. */
 const EARLY = 5 * 60 * 1000;
 
@@ -85,8 +88,8 @@ async function sendOne(send, url, access, token, data) {
       body: JSON.stringify({ message: { token, data, android: { priority: "HIGH" } } }),
     });
     if (response.ok) return { token, ok: true, status: response.status };
-    const reasons = await fcmReasons(response);
-    const dead = reasons.some((reason) => DEAD_TOKEN.has(reason));
+    const { reasons, badToken } = await fcmReasons(response);
+    const dead = badToken || reasons.some((reason) => DEAD_TOKEN.has(reason));
     if (!dead) console.error(`FCM refused a push: ${response.status} ${reasons.join(", ")}`);
     return { token, ok: false, dead, status: response.status };
   } catch (error) {
@@ -95,14 +98,22 @@ async function sendOne(send, url, access, token, data) {
   }
 }
 
-/** The error's status and its FCM error codes, e.g. ["NOT_FOUND", "UNREGISTERED"]. */
+/**
+ * The error's status and its FCM error codes, e.g. ["NOT_FOUND", "UNREGISTERED"], and whether it is an
+ * INVALID_ARGUMENT whose BadRequest detail names `message.token`: the token itself is malformed.
+ */
 async function fcmReasons(response) {
   try {
     const { error } = await response.json();
-    const codes = (error?.details || []).map((detail) => detail?.errorCode).filter(Boolean);
-    return [error?.status, ...codes].filter(Boolean);
+    const details = error?.details || [];
+    const codes = details.map((detail) => detail?.errorCode).filter(Boolean);
+    const reasons = [error?.status, ...codes].filter(Boolean);
+    const badToken =
+      reasons.includes("INVALID_ARGUMENT") &&
+      details.some((detail) => (detail?.fieldViolations || []).some((violation) => violation?.field === "message.token"));
+    return { reasons, badToken };
   } catch {
-    return [];
+    return { reasons: [], badToken: false };
   }
 }
 

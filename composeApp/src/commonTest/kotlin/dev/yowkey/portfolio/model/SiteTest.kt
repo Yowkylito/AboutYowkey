@@ -117,7 +117,7 @@ class SiteTest {
         assertEquals(emptyList(), MessageDraft(contact = "a@b.c", topic = " ", message = "Hi").problems, "a blank topic is none")
     }
 
-    /** Every sentence the worker can answer with, in its order: the required fields, then the limits, then the topic. */
+    /** Every sentence the worker can answer with, in its order: the message, the contact, the name, then the topic. */
     @Test
     fun aMessagesProblemsComeInTheBackendsOrder() {
         val nothing = MessageDraft("n".repeat(MessageDraft.MAX_NAME + 1), "", "nope", "")
@@ -132,11 +132,11 @@ class SiteTest {
         )
         val tooMuch = MessageDraft("n".repeat(81), "c".repeat(MessageDraft.MAX_CONTACT + 1), "job", "x".repeat(2001))
         assertEquals(
-            listOf("Keep the message under 2000 characters.", "Keep the name under 80 characters.", "Keep the email under 160 characters."),
+            listOf("Keep the message under 2000 characters.", "Keep the email under 160 characters.", "Keep the name under 80 characters."),
             tooMuch.problems,
         )
         assertEquals(
-            listOf("Leave an email or another way to reach you.", "Keep the message under 2000 characters."),
+            listOf("Keep the message under 2000 characters.", "Leave an email or another way to reach you."),
             MessageDraft(message = "x".repeat(2001)).problems,
         )
     }

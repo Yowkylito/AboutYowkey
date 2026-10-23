@@ -938,22 +938,33 @@ function fakeGoogle(publicKey, answers = {}) {
   return calls;
 }
 
-const fcmError = (status, httpStatus, errorCode) => [
+const fcmError = (status, httpStatus, errorCode, field) => [
   httpStatus,
-  { error: { code: httpStatus, status, message: "test", details: [{ "@type": "type.googleapis.com/google.firebase.fcm.v1.FcmError", errorCode }] } },
+  {
+    error: {
+      code: httpStatus,
+      status,
+      message: "test",
+      details: [
+        { "@type": "type.googleapis.com/google.firebase.fcm.v1.FcmError", errorCode },
+        ...(field ? [{ "@type": "type.googleapis.com/google.rpc.BadRequest", fieldViolations: [{ field, description: "test" }] }] : []),
+      ],
+    },
+  },
 ];
 
 test("an alert is pushed to every phone as data-only, high priority, and dead tokens are dropped", async () => {
   const { secret, publicKey } = await testServiceAccount();
   env.FCM_SERVICE_ACCOUNT = secret;
-  for (const token of ["phone-ok", "phone-gone", "phone-bad", "phone-not-found", "phone-busy"]) {
+  for (const token of ["phone-ok", "phone-gone", "phone-bad", "phone-not-found", "phone-busy", "phone-payload"]) {
     await app("/admin/devices", { method: "POST", payload: { token, platform: "android" } });
   }
   const google = fakeGoogle(publicKey, {
     "phone-gone": fcmError("NOT_FOUND", 404, "UNREGISTERED"),
-    "phone-bad": fcmError("INVALID_ARGUMENT", 400, "INVALID_ARGUMENT"),
+    "phone-bad": fcmError("INVALID_ARGUMENT", 400, "INVALID_ARGUMENT", "message.token"),
     "phone-not-found": [404, { error: { code: 404, status: "NOT_FOUND", message: "Requested entity was not found." } }],
     "phone-busy": fcmError("UNAVAILABLE", 503, "UNAVAILABLE"),
+    "phone-payload": fcmError("INVALID_ARGUMENT", 400, "INVALID_ARGUMENT", "message.data"),
   });
   const quiet = mock.method(console, "error", () => {});
 
@@ -975,7 +986,7 @@ test("an alert is pushed to every phone as data-only, high priority, and dead to
     exp: Date.parse(DAY_ONE) / 1000 + 3600,
   });
 
-  assert.equal(google.fcm.length, 5);
+  assert.equal(google.fcm.length, 6);
   const toOk = google.fcm.find((entry) => entry.body.message.token === "phone-ok");
   assert.equal(toOk.url, "https://fcm.googleapis.com/v1/projects/demo-portfolio/messages:send");
   assert.equal(toOk.authorization, "Bearer ya29.test-1");
@@ -987,14 +998,14 @@ test("an alert is pushed to every phone as data-only, high priority, and dead to
     },
   }, "data only: no notification block, every value a string");
 
-  assert.deepEqual(query("SELECT token FROM devices ORDER BY token"), [{ token: "phone-busy" }, { token: "phone-ok" }], "UNREGISTERED, INVALID_ARGUMENT and NOT_FOUND are dropped; a busy server is not");
-  assert.equal(quiet.mock.callCount(), 1, "the busy one is logged");
+  assert.deepEqual(query("SELECT token FROM devices ORDER BY token"), [{ token: "phone-busy" }, { token: "phone-ok" }, { token: "phone-payload" }], "UNREGISTERED, NOT_FOUND and a malformed token are dropped; a busy server or a payload FCM refuses is not");
+  assert.equal(quiet.mock.callCount(), 2, "the busy one and the refused payload are logged");
 
   await post("/messages", { contact: "bob@example.com", topic: "job", message: "Hiring?" }, { now: "2026-10-24T10:40:00.000Z" });
   await settle();
   assert.equal(google.token.length, 1, "the access token is reused while it is fresh");
-  const second = google.fcm.slice(5);
-  assert.deepEqual(second.map((entry) => entry.body.message.token).sort(), ["phone-busy", "phone-ok"]);
+  const second = google.fcm.slice(6);
+  assert.deepEqual(second.map((entry) => entry.body.message.token).sort(), ["phone-busy", "phone-ok", "phone-payload"]);
   assert.deepEqual(second[0].body.message.data, { id: "2", kind: "message", title: "New message · Job", body: "bob@example.com: Hiring?", ref_id: "1" });
 
   await post("/messages", { contact: "bob@example.com", message: "Later" }, { now: "2026-10-24T10:56:00.000Z" });
