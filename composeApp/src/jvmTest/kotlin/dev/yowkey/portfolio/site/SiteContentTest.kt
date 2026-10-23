@@ -214,6 +214,15 @@ class SiteContentTest {
         assertEquals(anyPrivate, StaticHtml.escape(RepoVisibility.PRIVATE_NOTE) in page)
     }
 
+    @Test
+    fun everyUnofficialConceptSaysSoInItsArticle() {
+        portfolio.projects.filter { it.disclaimer != null }.forEach { project ->
+            val article = page.substringAfter("<article id=\"${project.anchor}\">").substringBefore("</article>")
+            assertTrue(">${Project.UNOFFICIAL_BADGE}</span>" in article, "${project.id}: no unofficial badge")
+            assertTrue("<p class=\"disclaimer\">${StaticHtml.escape(project.disclaimer!!)}</p>" in article, "${project.id}: no disclaimer")
+        }
+    }
+
     /** The card's lead (the cover clip, else the cover) opens its article, ahead of the title. */
     @Test
     fun coversComeFirstInTheirArticle() {
