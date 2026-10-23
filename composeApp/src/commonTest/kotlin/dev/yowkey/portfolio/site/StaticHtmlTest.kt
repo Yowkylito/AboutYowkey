@@ -3,6 +3,7 @@ package dev.yowkey.portfolio.site
 import dev.yowkey.portfolio.data.PortfolioParser
 import dev.yowkey.portfolio.model.Decision
 import dev.yowkey.portfolio.model.Engineering
+import dev.yowkey.portfolio.model.FeedbackCopy
 import dev.yowkey.portfolio.model.Module
 import dev.yowkey.portfolio.model.Project
 import dev.yowkey.portfolio.model.ProofPoint
@@ -72,6 +73,38 @@ class StaticHtmlTest {
         val article = StaticHtml.content(portfolio.copy(projects = listOf(project))).substringAfter("<article id=\"project-two\">")
         assertTrue("<span class=\"badge\">Private repo</span> <span class=\"badge\">${Project.UNOFFICIAL_BADGE}</span>" in article)
         assertTrue("<p>S</p>\n<p class=\"disclaimer\">Not &lt;their&gt; app</p>" in article, "right under the summary, escaped")
+    }
+
+    /** With a backend named, the Contact section ends in the note form and the page in the visit count's place. */
+    @Test
+    fun theNoteFormAndTheVisitCountAppearOnlyWithABackendAndPostToIt() {
+        val none = StaticHtml.content(portfolio)
+        assertFalse("<form" in none)
+        assertFalse("data-api" in none)
+        assertFalse("<footer" in none)
+
+        val html = StaticHtml.content(portfolio.copy(api = "https://api.example/\"x"))
+        val contact = html.substringAfter("<section id=\"contact\">").substringBefore("</section>")
+        assertTrue("<h3 id=\"feedback\">${FeedbackCopy.TITLE}</h3>" in contact)
+        assertTrue(
+            "<form class=\"feedback\" method=\"post\" action=\"https://api.example/&quot;x/feedback\" data-api=\"https://api.example/&quot;x\">" in contact,
+            "the form posts to the backend, escaped",
+        )
+        listOf(
+            "<input name=\"name\" maxlength=\"80\" autocomplete=\"name\">",
+            "<input name=\"contact\" type=\"email\" maxlength=\"160\" autocomplete=\"email\">",
+            "<select name=\"rating\"><option value=\"\">No rating</option><option value=\"5\">5 · Excellent</option>",
+            "<option value=\"1\">1 · Poor</option></select>",
+            "<textarea name=\"message\" required maxlength=\"2000\" rows=\"5\"></textarea>",
+            "<label class=\"trap\" aria-hidden=\"true\"><span>Website</span><input name=\"website\" tabindex=\"-1\" autocomplete=\"off\"></label>",
+            "<button type=\"submit\">${FeedbackCopy.SEND}</button>",
+            "<p class=\"status\" role=\"status\" aria-live=\"polite\"></p>",
+        ).forEach { assertTrue(it in contact, "the form lacks $it") }
+        assertTrue(
+            html.substringAfterLast("</section>").trim() ==
+                "<footer class=\"site-footer\" hidden><p class=\"muted visits\" data-api=\"https://api.example/&quot;x\"></p></footer>",
+            "the footer closes the page, hidden until the backend answers",
+        )
     }
 
     @Test

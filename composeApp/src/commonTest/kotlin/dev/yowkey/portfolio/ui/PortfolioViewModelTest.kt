@@ -1,7 +1,11 @@
 package dev.yowkey.portfolio.ui
 
 import dev.yowkey.portfolio.data.PortfolioRepository
+import dev.yowkey.portfolio.data.SiteApi
+import dev.yowkey.portfolio.data.SiteApiException
+import dev.yowkey.portfolio.model.FeedbackDraft
 import dev.yowkey.portfolio.model.Portfolio
+import dev.yowkey.portfolio.model.VisitCount
 import dev.yowkey.portfolio.samplePortfolio
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -16,6 +20,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNull
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class PortfolioViewModelTest {
@@ -38,9 +43,30 @@ class PortfolioViewModelTest {
         }
     }
 
+    private class FakeSiteApi : SiteApi {
+        var visitResult: () -> VisitCount = { VisitCount(7, 1, "2026-10-24") }
+        var sendResult: () -> Unit = {}
+        val visitCalls = mutableListOf<String>()
+        val sent = mutableListOf<Pair<String, FeedbackDraft>>()
+        var gate: CompletableDeferred<Unit>? = null
+
+        override suspend fun recordVisit(api: String): VisitCount {
+            visitCalls += api
+            return visitResult()
+        }
+
+        override suspend fun sendFeedback(api: String, draft: FeedbackDraft) {
+            sent += api to draft
+            gate?.await()
+            sendResult()
+        }
+    }
+
+    private val withApi = samplePortfolio().copy(api = "https://api.example")
+
     @Test
     fun startsLoadingThenBecomesReady() = runTest(dispatcher) {
-        val viewModel = PortfolioViewModel(FakeRepository { samplePortfolio() })
+        val viewModel = PortfolioViewModel(FakeRepository { samplePortfolio() }, FakeSiteApi())
         assertEquals(PortfolioUiState.Loading, viewModel.state.value)
         advanceUntilIdle()
         assertEquals(PortfolioUiState.Ready(samplePortfolio()), viewModel.state.value)
@@ -49,7 +75,7 @@ class PortfolioViewModelTest {
     @Test
     fun failureBecomesErrorAndRetryRecovers() = runTest(dispatcher) {
         val repository = FakeRepository { throw IllegalArgumentException("broken content") }
-        val viewModel = PortfolioViewModel(repository)
+        val viewModel = PortfolioViewModel(repository, FakeSiteApi())
         advanceUntilIdle()
         assertEquals(PortfolioUiState.Error("broken content"), viewModel.state.value)
 
@@ -62,7 +88,7 @@ class PortfolioViewModelTest {
     @Test
     fun retryWhileLoadingDoesNotStartASecondLoad() = runTest(dispatcher) {
         val repository = FakeRepository { samplePortfolio() }.apply { gate = CompletableDeferred() }
-        val viewModel = PortfolioViewModel(repository)
+        val viewModel = PortfolioViewModel(repository, FakeSiteApi())
         advanceUntilIdle()
         viewModel.retry()
         viewModel.retry()
@@ -72,5 +98,93 @@ class PortfolioViewModelTest {
         repository.gate?.complete(Unit)
         advanceUntilIdle()
         assertIs<PortfolioUiState.Ready>(viewModel.state.value)
+    }
+
+    @Test
+    fun theVisitIsCountedOnceTheContentIsReadyAndOnlyWithABackend() = runTest(dispatcher) {
+        val quiet = FakeSiteApi()
+        PortfolioViewModel(FakeRepository { samplePortfolio() }, quiet).also { advanceUntilIdle() }
+        assertEquals(emptyList(), quiet.visitCalls, "no api, no call")
+
+        val siteApi = FakeSiteApi()
+        val viewModel = PortfolioViewModel(FakeRepository { withApi }, siteApi)
+        assertNull(viewModel.visits.value)
+        advanceUntilIdle()
+        assertEquals(VisitCount(7, 1, "2026-10-24"), viewModel.visits.value)
+        assertEquals(listOf("https://api.example"), siteApi.visitCalls)
+    }
+
+    @Test
+    fun theVisitIsCountedOnceWhateverTheRetriesAndAFailureLeavesNoCount() = runTest(dispatcher) {
+        val repository = FakeRepository { throw IllegalStateException("first try") }
+        val siteApi = FakeSiteApi()
+        val viewModel = PortfolioViewModel(repository, siteApi)
+        advanceUntilIdle()
+        assertEquals(emptyList(), siteApi.visitCalls, "an error is not a visit")
+        repository.result = { withApi }
+        viewModel.retry()
+        advanceUntilIdle()
+        assertEquals(1, siteApi.visitCalls.size)
+
+        val down = FakeSiteApi().apply { visitResult = { throw SiteApiException("No connection") } }
+        val offline = PortfolioViewModel(FakeRepository { withApi }, down)
+        advanceUntilIdle()
+        assertIs<PortfolioUiState.Ready>(offline.state.value, "the page does not depend on the backend")
+        assertNull(offline.visits.value)
+    }
+
+    @Test
+    fun aNoteGoesOutOnceAndTheFormFollowsIt() = runTest(dispatcher) {
+        val siteApi = FakeSiteApi().apply { gate = CompletableDeferred() }
+        val viewModel = PortfolioViewModel(FakeRepository { withApi }, siteApi)
+        advanceUntilIdle()
+        assertEquals(FeedbackUiState.Idle, viewModel.feedback.value)
+
+        val draft = FeedbackDraft("Ada", "", 5, "Hi")
+        viewModel.sendFeedback(draft)
+        advanceUntilIdle()
+        assertEquals(FeedbackUiState.Sending, viewModel.feedback.value)
+        viewModel.sendFeedback(draft.copy(message = "again"))
+        viewModel.resetFeedback()
+        advanceUntilIdle()
+        assertEquals(FeedbackUiState.Sending, viewModel.feedback.value, "a second tap, or a reset, changes nothing mid-flight")
+        assertEquals(listOf("https://api.example" to draft), siteApi.sent)
+
+        siteApi.gate?.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(FeedbackUiState.Sent, viewModel.feedback.value)
+        viewModel.resetFeedback()
+        assertEquals(FeedbackUiState.Idle, viewModel.feedback.value)
+    }
+
+    @Test
+    fun aNoteWithAProblemOrARefusalFailsWithTheSentence() = runTest(dispatcher) {
+        val siteApi = FakeSiteApi()
+        val viewModel = PortfolioViewModel(FakeRepository { withApi }, siteApi)
+        advanceUntilIdle()
+
+        viewModel.sendFeedback(FeedbackDraft(message = "   "))
+        advanceUntilIdle()
+        assertEquals(FeedbackUiState.Failed("Write a message first."), viewModel.feedback.value)
+        assertEquals(emptyList(), siteApi.sent, "nothing incomplete is sent")
+
+        siteApi.sendResult = { throw SiteApiException("That is plenty for one day, thank you. Try again tomorrow.") }
+        viewModel.sendFeedback(FeedbackDraft(message = "Sixth"))
+        advanceUntilIdle()
+        assertEquals(FeedbackUiState.Failed("That is plenty for one day, thank you. Try again tomorrow."), viewModel.feedback.value)
+        assertEquals(1, siteApi.sent.size)
+        viewModel.resetFeedback()
+        assertEquals(FeedbackUiState.Idle, viewModel.feedback.value)
+    }
+
+    @Test
+    fun withoutABackendNothingIsSent() = runTest(dispatcher) {
+        val siteApi = FakeSiteApi()
+        val viewModel = PortfolioViewModel(FakeRepository { samplePortfolio() }, siteApi)
+        advanceUntilIdle()
+        viewModel.sendFeedback(FeedbackDraft(message = "Hello?"))
+        advanceUntilIdle()
+        assertEquals(FeedbackUiState.Idle, viewModel.feedback.value)
+        assertEquals(emptyList(), siteApi.sent)
     }
 }

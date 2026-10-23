@@ -223,6 +223,15 @@ class SiteContentTest {
         }
     }
 
+    /** Once the content names the backend, the page carries the note form and the visit count's place; not before. */
+    @Test
+    fun theNoteFormAndTheVisitCountFollowTheContentsBackend() {
+        val api = portfolio.api
+        assertEquals(api != null, "<form class=\"feedback\"" in page)
+        assertEquals(api != null, "class=\"muted visits\"" in page)
+        api?.let { assertTrue("action=\"${StaticHtml.escape(it)}/feedback\"" in page) }
+    }
+
     /** The card's lead (the cover clip, else the cover) opens its article, ahead of the title. */
     @Test
     fun coversComeFirstInTheirArticle() {

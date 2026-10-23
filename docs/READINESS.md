@@ -13,8 +13,13 @@ apply; what does is below. `[x]` done, `[ ]` open, `N/A` with the reason.
 
 ## 2. Security
 
-- N/A authentication, authorisation, rate limiting: no server, no accounts, no API
-- [x] No secrets in the repo or the bundle; there are none to have. CI runs gitleaks over the full history
+- [x] The one server-side piece is the site's own worker (`worker/`): the visit count and the note inbox. Its owner
+  routes (`GET /feedback`, `/inbox`) take `ADMIN_TOKEN` only, compared in constant time, and stay closed while the
+  token is unset; a visitor may leave 5 notes a day (by a daily hash; the address is never stored); every field has
+  a type and length limit and the body a size limit; a browser's origin is checked against an allow-list; a hidden
+  form field catches bots; the inbox escapes everything it shows. All of it tested in Node against SQLite
+- [x] No secrets in the repo or the bundle: the worker's are set with `wrangler secret put`, and its local
+  `.dev.vars` is gitignored. CI runs gitleaks over the full history
 - [x] Links limited to `https://` and `mailto:` by the parser (blocks `javascript:` URLs in content)
 - [x] Project ids limited to `a-z`, `0-9` and `-` by the parser: they are written into the URL fragment and into HTML
   `id`s, and the router only accepts that shape back
@@ -48,7 +53,10 @@ apply; what does is below. `[x]` done, `[ ]` open, `N/A` with the reason.
 
 ## 4. Database
 
-- N/A: content is one JSON file in the repo, versioned by git
+- Content is one JSON file in the repo, versioned by git
+- Visits and notes live in a D1 (SQLite) database on Cloudflare: `worker/schema.sql`, idempotent, applied with
+  `npm run db:init`. Three tables: `visits` (a count per day), `visitors` (today's hashes, deleted the next day) and
+  `feedback`. Nothing identifying is kept beyond what a visitor types into the form
 
 ## 5. Real-world testing
 
@@ -72,7 +80,8 @@ performance warn).
 
 - [x] Deploy on every push to `main`: a content fix is live in minutes
 - [x] Lighthouse report kept as a workflow artifact on each deploy
-- [ ] Privacy-friendly visit counts (for example GoatCounter). Trigger: after the link is first shared
+- [x] Visit counts (once per visitor per day, no addresses kept) and a feedback inbox, on the site's own worker. The
+  page shows them once `portfolio.json` names the worker (README, "Visits and feedback")
 - [ ] Custom domain (`CNAME`). Trigger: when a domain is bought
 
 ## Not done
@@ -83,3 +92,5 @@ performance warn).
 - Android / iOS targets. Trigger: when an app-store demo is wanted
 - Custom font. The default font is used; bundling Inter (as in The Eagle's Watch) is a small follow-up
 - `og:image` for link previews. Trigger: when there is artwork for it
+- A notification for a new note (email, say): the inbox is pulled, not pushed. Trigger: when checking it becomes a chore
+- Deleting a note from the inbox page: today it is one `wrangler d1 execute` command (README). Trigger: the first note worth deleting
