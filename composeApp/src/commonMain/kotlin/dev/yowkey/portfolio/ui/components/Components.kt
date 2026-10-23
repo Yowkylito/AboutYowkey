@@ -219,14 +219,21 @@ fun Bullet(text: String, modifier: Modifier = Modifier) {
     }
 }
 
-/** Opens [link] with the platform's handler: a new tab on the web, the default browser or mail app on desktop. */
+/**
+ * Opens [link] with the platform's handler: a new tab on the web, the default browser or mail app on desktop. Then,
+ * and only then, [onOpened] hears of it (to count the click), so nothing it does can hold up or stop the link.
+ */
 @Composable
-fun LinkButton(link: Link, modifier: Modifier = Modifier, primary: Boolean = false) {
+fun LinkButton(link: Link, modifier: Modifier = Modifier, primary: Boolean = false, onOpened: () -> Unit = {}) {
     val uriHandler = LocalUriHandler.current
+    val open = {
+        uriHandler.openUri(link.url)
+        onOpened()
+    }
     if (primary) {
-        Button(onClick = { uriHandler.openUri(link.url) }, modifier = modifier) { Text(link.label) }
+        Button(onClick = open, modifier = modifier) { Text(link.label) }
     } else {
-        OutlinedButton(onClick = { uriHandler.openUri(link.url) }, modifier = modifier) { Text(link.label) }
+        OutlinedButton(onClick = open, modifier = modifier) { Text(link.label) }
     }
 }
 

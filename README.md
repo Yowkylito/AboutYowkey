@@ -170,6 +170,16 @@ Browsers without WasmGC, or a failed download, just keep the HTML version. It ca
 screens do, one `<article id="project-<id>">` per project, and a `#/projects/<id>` link scrolls to that article
 there too.
 
+With an `api` in `portfolio.json` (see below), both versions also count clicks on the profile's LinkedIn and GitHub
+links, and carry a private **Message me** form. A click leaves as a beacon (`navigator.sendBeacon`), which the browser
+delivers even as the link takes the tab away; the page sends it at most once per link per page load and never makes
+the link wait for it. The worker counts it once per visitor per day per link, telling visitors apart by the same
+salted daily hash as visits, and nothing is stored on the device. The desktop window is the owner's, so it counts
+nothing. The message form sits above the published notes and the public **Leave a note** form, and each is badged
+Private or Public: a message asks for a way to reply (an email, or anything else) and an optional topic (a job, a
+freelance project, a collaboration, something else), only the owner reads it, and it is never shown on the site.
+Without the page's script, both forms post as plain HTML forms and the worker answers with a page.
+
 ## Run it
 
 JDK 17+ (Android Studio's bundled JBR works).

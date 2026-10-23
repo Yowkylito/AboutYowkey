@@ -6,9 +6,12 @@ import androidx.lifecycle.viewModelScope
 import dev.yowkey.portfolio.data.PortfolioRepository
 import dev.yowkey.portfolio.data.SiteApi
 import dev.yowkey.portfolio.model.FeedbackDraft
+import dev.yowkey.portfolio.model.Link
+import dev.yowkey.portfolio.model.MessageDraft
 import dev.yowkey.portfolio.model.Portfolio
 import dev.yowkey.portfolio.model.SiteNotes
 import dev.yowkey.portfolio.model.VisitCount
+import dev.yowkey.portfolio.model.trackingKey
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -34,6 +37,17 @@ sealed interface FeedbackUiState {
     data class Failed(val message: String) : FeedbackUiState
 }
 
+/** The private message form's state, the same steps as the note form's. */
+@Immutable
+sealed interface MessageUiState {
+    data object Idle : MessageUiState
+    data object Sending : MessageUiState
+    data object Sent : MessageUiState
+
+    /** [message] is a sentence for the visitor: what was wrong with the message, or that the server was out of reach. */
+    data class Failed(val message: String) : MessageUiState
+}
+
 class PortfolioViewModel(
     private val repository: PortfolioRepository,
     private val siteApi: SiteApi,
@@ -53,10 +67,17 @@ class PortfolioViewModel(
     private val _feedback = MutableStateFlow<FeedbackUiState>(FeedbackUiState.Idle)
     val feedback: StateFlow<FeedbackUiState> = _feedback.asStateFlow()
 
+    private val _message = MutableStateFlow<MessageUiState>(MessageUiState.Idle)
+    val message: StateFlow<MessageUiState> = _message.asStateFlow()
+
     private var loadJob: Job? = null
     private var visitJob: Job? = null
     private var notesJob: Job? = null
     private var sendJob: Job? = null
+    private var messageJob: Job? = null
+
+    /** The tracked links already counted on this page load, by their `trackingKey`. */
+    private val clicked = mutableSetOf<String>()
 
     init {
         load()
@@ -139,5 +160,54 @@ class PortfolioViewModel(
     /** Back to the empty form, for another note or once a failure has been read. Ignored while a note is on its way. */
     fun resetFeedback() {
         if (sendJob?.isActive != true) _feedback.value = FeedbackUiState.Idle
+    }
+
+    /**
+     * Sends the private [draft] unless one is already on its way; [message] follows it, as [feedback] follows a note.
+     * A draft with a problem fails at once, with the problem, and nothing is sent. Without a backend there is no form.
+     */
+    fun sendMessage(draft: MessageDraft) {
+        val api = (state.value as? PortfolioUiState.Ready)?.portfolio?.api ?: return
+        if (messageJob?.isActive == true) return
+        draft.problems.firstOrNull()?.let {
+            _message.value = MessageUiState.Failed(it)
+            return
+        }
+        _message.value = MessageUiState.Sending
+        messageJob = viewModelScope.launch {
+            _message.value = try {
+                siteApi.sendMessage(api, draft)
+                MessageUiState.Sent
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                MessageUiState.Failed(e.message ?: "The message could not be sent. Try again, or email me.")
+            }
+        }
+    }
+
+    /** Back to the empty form, for another message or once a failure has been read. Ignored mid-flight. */
+    fun resetMessage() {
+        if (messageJob?.isActive != true) _message.value = MessageUiState.Idle
+    }
+
+    /**
+     * Counts that [link] was opened, when it is one the backend tracks (LinkedIn, GitHub): at most once per link per
+     * page load, as the server counts it at most once a day anyway. Called after the link has opened, and never
+     * holds it up: the request runs on its own, and a failure is dropped, since it changes nothing on the page.
+     */
+    fun trackClick(link: Link) {
+        val api = (state.value as? PortfolioUiState.Ready)?.portfolio?.api ?: return
+        val key = link.trackingKey ?: return
+        if (!clicked.add(key)) return
+        viewModelScope.launch {
+            try {
+                siteApi.trackClick(api, key)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Not counted, and that is all.
+            }
+        }
     }
 }
