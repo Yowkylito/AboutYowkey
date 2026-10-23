@@ -843,6 +843,12 @@
           "height": 1600
         },
         {
+          "file": "seventhj-easel.webp",
+          "caption": "Works: a painting on the easel, laid stroke by stroke in code, with its artist, medium and price (sample data)",
+          "width": 720,
+          "height": 1600
+        },
+        {
           "file": "seventhj-sculpture.webp",
           "caption": "The sculpture room: a piece from the software 3D renderer that you drag to turn (sample data)",
           "width": 720,
@@ -851,12 +857,6 @@
         {
           "file": "seventhj-sale.webp",
           "caption": "A sale in a sheet: its steps from approval to delivery, then the price, discount and commission (sample data)",
-          "width": 720,
-          "height": 1600
-        },
-        {
-          "file": "seventhj-artists.webp",
-          "caption": "Artists, gallery favourites first, with each one's stock and starting price (sample data)",
           "width": 720,
           "height": 1600
         }
