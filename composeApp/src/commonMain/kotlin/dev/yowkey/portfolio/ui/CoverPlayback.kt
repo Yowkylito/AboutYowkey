@@ -30,6 +30,15 @@ object CoverPlayback {
             .take(max)
             .toSet()
 
+    /**
+     * Whether a row [size] px tall at [offset] stays above the bottom [keepClearPx] of a viewport ending at
+     * [viewportEnd]: the corner where Back to top floats. On the web a playing cover is an HTML `<video>` laid over
+     * the canvas, which Compose cannot draw on top of, so a cover that could pass under the button does not play
+     * while the button shows; it starts once its row has risen clear. Nothing to keep clear (0) clears every row.
+     */
+    fun clearOf(offset: Int, size: Int, viewportEnd: Int, keepClearPx: Int): Boolean =
+        keepClearPx <= 0 || offset + size <= viewportEnd - keepClearPx
+
     /** The share of an item [size] px tall at [offset] that lies inside the viewport [viewportStart, viewportEnd). */
     fun visibleFraction(offset: Int, size: Int, viewportStart: Int, viewportEnd: Int): Float {
         if (size <= 0) return 0f

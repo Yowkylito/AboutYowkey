@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -91,7 +90,7 @@ private fun HeroIntro(profile: Profile, compact: Boolean) {
             text = profile.headline,
             style = MaterialTheme.typography.headlineSmall,
             color = MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.widthIn(max = 720.dp),
+            modifier = Modifier.readingMeasure(MaterialTheme.typography.headlineSmall),
         )
     }
 }
@@ -135,7 +134,7 @@ private fun HeroSummary(summary: String) {
         text = summary,
         style = MaterialTheme.typography.bodyLarge,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.widthIn(max = 640.dp),
+        modifier = Modifier.readingMeasure(MaterialTheme.typography.bodyLarge),
     )
 }
 

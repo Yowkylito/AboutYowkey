@@ -3,6 +3,7 @@ package dev.yowkey.portfolio.ui
 import dev.yowkey.portfolio.ui.CoverPlayback.VisibleRow
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class CoverPlaybackTest {
@@ -40,5 +41,15 @@ class CoverPlaybackTest {
         assertEquals(0f, CoverPlayback.visibleFraction(offset = 900, size = 200, viewportStart = 0, viewportEnd = 800))
         assertEquals(0f, CoverPlayback.visibleFraction(offset = 0, size = 0, viewportStart = 0, viewportEnd = 800))
         assertEquals(0.4f, CoverPlayback.visibleFraction(offset = 0, size = 2000, viewportStart = 0, viewportEnd = 800))
+    }
+
+    /** While Back to top shows, a cover whose row reaches into its corner waits until the row has risen clear. */
+    @Test
+    fun aCoverThatCouldPassUnderBackToTopWaitsUntilItsRowIsClear() {
+        // A 2000px viewport, the button's corner the bottom 140px.
+        assertTrue(CoverPlayback.clearOf(offset = 1000, size = 800, viewportEnd = 2000, keepClearPx = 140), "ends 200px above the end")
+        assertTrue(CoverPlayback.clearOf(offset = 1060, size = 800, viewportEnd = 2000, keepClearPx = 140), "ends exactly at the corner")
+        assertFalse(CoverPlayback.clearOf(offset = 1100, size = 800, viewportEnd = 2000, keepClearPx = 140), "reaches into it")
+        assertTrue(CoverPlayback.clearOf(offset = 1900, size = 800, viewportEnd = 2000, keepClearPx = 0), "no button, nothing to keep clear")
     }
 }

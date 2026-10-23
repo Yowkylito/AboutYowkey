@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -149,15 +148,14 @@ fun GroupHeader(title: String, note: String?, modifier: Modifier = Modifier) {
 /** A short note under a header, such as why some projects have no source link. */
 @Composable
 fun SectionNote(text: String, modifier: Modifier = Modifier) {
-    Text(
-        text,
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = modifier.widthIn(max = 640.dp),
-    )
+    val style = MaterialTheme.typography.bodyMedium
+    Text(text, style = style, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = modifier.readingMeasure(style))
 }
 
-/** A timeline entry; the rail is drawn, not composed, and stops at the last job. */
+/**
+ * A timeline entry; the rail is drawn, not composed, and stops at the last job. The role and its place read as one
+ * heading block, the bullets start a clear step below it, and each bullet is a paragraph apart from the next.
+ */
 @Composable
 fun JobEntry(experience: Experience, isLast: Boolean, wide: Boolean, modifier: Modifier = Modifier) {
     val rail = MaterialTheme.colorScheme.outline
@@ -179,8 +177,8 @@ fun JobEntry(experience: Experience, isLast: Boolean, wide: Boolean, modifier: M
                     if (!isLast) drawLine(rail, Offset(x, 16.dp.toPx()), Offset(x, size.height), 1.dp.toPx())
                     drawCircle(dot, radius = 4.dp.toPx(), center = Offset(x, 9.dp.toPx()))
                 }
-                .padding(start = 28.dp, bottom = if (isLast) 0.dp else 36.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+                .padding(start = 28.dp, bottom = if (isLast) 0.dp else 44.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Text(
                 "${experience.role} · ${experience.company}",
@@ -192,7 +190,10 @@ fun JobEntry(experience: Experience, isLast: Boolean, wide: Boolean, modifier: M
                 Text(meta, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             if (experience.highlights.isNotEmpty()) {
-                Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(
+                    Modifier.padding(top = 10.dp).readingMeasure(MaterialTheme.typography.bodyMedium),
+                    verticalArrangement = Arrangement.spacedBy(ParagraphGap),
+                ) {
                     experience.highlights.forEach { Bullet(it) }
                 }
             }
@@ -218,7 +219,13 @@ fun AwardList(awards: List<Award>, wide: Boolean, modifier: Modifier = Modifier)
                     if (!wide && award.date != null) {
                         Text(award.date, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    Text(award.detail, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    val detail = MaterialTheme.typography.bodyMedium
+                    Text(
+                        award.detail,
+                        style = detail,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.readingMeasure(detail),
+                    )
                 }
             }
         }
@@ -254,6 +261,7 @@ fun ContactBlock(email: String?, links: List<Link>, modifier: Modifier = Modifie
             "Hiring for Android, or have a project in mind? Let's talk.",
             style = MaterialTheme.typography.headlineSmall,
             color = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.readingMeasure(MaterialTheme.typography.headlineSmall),
         )
         email?.let {
             Text(it, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
