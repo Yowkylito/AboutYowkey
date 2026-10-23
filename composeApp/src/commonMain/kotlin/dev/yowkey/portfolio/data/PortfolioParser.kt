@@ -58,6 +58,9 @@ object PortfolioParser {
             // A still or a cover has nothing to play, so a video twin there would ship unused.
             val stray = gallery.filter { it.shot.video && !it.isClip }.map { it.shot.file }
             require(stray.isEmpty()) { "project ${project.id}: only clips and the cover clip take \"video\", not $stray" }
+            project.icon?.let { icon ->
+                require(SCREENSHOT_FILE.matches(icon)) { "project ${project.id}: icon must be a plain name ending in .webp, got $icon" }
+            }
             validateCard(project)
             validateWork(project)
             project.engineering?.let { validateEngineering(project.id, it) }

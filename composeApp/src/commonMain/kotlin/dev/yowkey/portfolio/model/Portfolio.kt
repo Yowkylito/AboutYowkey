@@ -104,6 +104,11 @@ data class Project(
     val period: String? = null,
     /** Whether the source is on GitHub for anyone to read. Null when not stated: the card then shows no badge. */
     val visibility: RepoVisibility? = null,
+    /**
+     * The app's own launcher icon: a square WebP in `files/icons/`, shown before the title on the card, the detail
+     * screen and the static page. Leave it out when the app has no icon of its own; the title then stands alone.
+     */
+    val icon: String? = null,
     /** The splash screen shown large at the top of the card; its `.thumb.webp` is the card's hero image. */
     val cover: Screenshot? = null,
     /**
@@ -155,6 +160,9 @@ data class Project(
     /** The id of the project's article in the static page (`#project-<id>`). */
     val anchor: String get() = "project-$id"
 
+    /** [icon]'s path relative to composeResources, or null when the project has none. */
+    val iconPath: String? get() = icon?.let { "$ICONS_DIR/$it" }
+
     val isWork: Boolean get() = company != null
 
     /** Company, role and period: the line under the title on the detail screen and the static page. */
@@ -175,6 +183,9 @@ data class Project(
         const val MAX_IMPACT = 4
         const val MAX_OPTIMIZATIONS = 6
         const val MAX_LINE_WORDS = 40
+
+        /** Relative to composeResources, like [Screenshot.SCREENS_DIR]. */
+        const val ICONS_DIR = "files/icons"
     }
 }
 

@@ -101,6 +101,7 @@ private val previewWork = Project(
     id = "arenaplus",
     title = "ArenaPlus",
     summary = "A sports entertainment app.",
+    icon = "arenaplus.webp",
     tagline = "Co-built the V2 Android app from day one and led its move from WebView to native",
     company = "DigiPlus",
     role = "Android developer",

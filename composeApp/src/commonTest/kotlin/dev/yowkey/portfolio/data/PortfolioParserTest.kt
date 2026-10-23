@@ -112,6 +112,15 @@ class PortfolioParserTest {
     }
 
     @Test
+    fun iconIsAPlainWebpNameInTheIconsFolder() {
+        val portfolio = PortfolioParser.parse(withSecondProject("\"icon\": \"second.webp\""))
+        assertEquals(listOf(null, "files/icons/second.webp"), portfolio.projects.map { it.iconPath })
+        listOf("../x.webp", "dir/x.webp", "x.png", "x.thumb.webp", "").forEach { bad ->
+            assertFailsWith<IllegalArgumentException>(bad) { PortfolioParser.parse(withSecondProject("\"icon\": \"$bad\"")) }
+        }
+    }
+
+    @Test
     fun aFileCannotBeListedTwiceInOneGallery() {
         val error = assertFailsWith<IllegalArgumentException> {
             PortfolioParser.parse(withSecondProject("\"clips\": [${media("a.webp")}], \"screenshots\": [${media("a.webp")}]"))
