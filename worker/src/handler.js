@@ -9,7 +9,8 @@
  *   GET  /visits             { total, today, since }    reads the counts without adding to them
  *   POST /visits             { total, today, since }    counts one visit per visitor per day, then answers as GET
  *   POST /clicks             { ok, counted }            one click per visitor per day on a tracked link (JSON, or sendBeacon's text/plain)
- *   GET  /notes              { visits, ratings, notes } the published notes, newest first, and the rating they add up to
+ *   GET  /notes              { visits, ratings, notes, total, more }  the public notes, newest first, a page at a time
+ *                            (?before=<id>, ?stars=1..5, ?limit=1..50), and every rating counted star by star
  *   POST /feedback           { ok }                     JSON from the page's script, or a plain HTML form post
  *   POST /messages           { ok }                     a private message to the owner: JSON, or a plain HTML form post
  *   GET  /feedback           { visits, items }          owner only: `Authorization: Bearer <ADMIN_TOKEN>`
@@ -18,8 +19,10 @@
  *   POST /inbox/messages/:id 303 → /inbox               owner only, from the inbox page: read, unread, archive, unarchive, delete
  *   /admin/*                 JSON                       the owner's app, Bearer ADMIN_TOKEN: listed at "The owner's app" below
  *
- * A note is shown on the site only when the visitor ticked the consent box and the owner published it; hiding it
- * takes it down again without deleting it. The visitor's contact is never public. A message is never public at all.
+ * A note is public as soon as it arrives: the form says so, and sends `consent`. Notes left before that, without the
+ * visitor's tick, keep their words private; their stars still count in the rating, which says how many. The owner
+ * takes a note down by hiding it (it then counts nowhere) or deleting it. The visitor's contact is never public. A
+ * message is never public at all.
  *
  * Everything is counted by the owner's local day (TIME_ZONE), and the cron writes that day's report at 23:59.
  *
@@ -39,8 +42,9 @@ export const LIMITS = Object.freeze({
   messagesPerDay: 3,
   /** Characters of request body read; more is a 413. */
   body: 16 * 1024,
-  /** Published notes `GET /notes` returns, newest first. */
-  publicNotes: 12,
+  /** Public notes a page of `GET /notes` holds, newest first, unless it asks for up to `notesPageMax`. */
+  notesPage: 12,
+  notesPageMax: 50,
   /** Characters of an FCM token; real ones are under 200. */
   token: 4096,
   /** Characters of a message or note an alert quotes. */
@@ -58,7 +62,10 @@ export const TOPICS = Object.freeze(["job", "freelance", "collaboration", "other
  */
 const BOT = /bot|crawl|spider|slurp|lighthouse|headless|preview|facebookexternalhit|curl\/|wget\/|python|go-http-client|java\/|https?:\/\//i;
 
-const PUBLISHED = "published_at IS NOT NULL AND hidden_at IS NULL";
+/** A note anyone may read: sent as public, and not taken down. */
+const PUBLIC = "consent = 1 AND hidden_at IS NULL";
+/** A rating the page counts: any note's that the owner has not hidden, its words public or not. */
+const COUNTED = "rating IS NOT NULL AND hidden_at IS NULL";
 const ENOUGH_FOR_TODAY = "That is plenty for one day, thank you. Try again tomorrow.";
 
 /**
@@ -85,7 +92,8 @@ export async function handleRequest(request, env, ctx, { now = new Date(), fetch
     if (path === "/visits" && request.method === "POST") return json(await recordVisit(request, env, now), 200, cors);
     if (path === "/clicks" && request.method === "POST") return await recordClick(request, env, now, cors);
     if (path === "/notes" && request.method === "GET") {
-      return json(await publicNotes(env.DB, localDay(env, now)), 200, { ...cors, "Cache-Control": "public, max-age=60" });
+      // Short: a visitor who has just left a note reloads the list, and should find it there.
+      return json(await publicNotes(env.DB, localDay(env, now), url), 200, { ...cors, "Cache-Control": "public, max-age=15" });
     }
     if (path === "/feedback" && request.method === "POST") return await submitFeedback(request, env, now, cors, alerts);
     if (path === "/feedback" && request.method === "GET") return await listFeedback(request, env, url, now);
@@ -231,20 +239,52 @@ function clickCounts(links, rows) {
 
 // ---- Public notes ----
 
-/** What the page shows: the visits, the published notes' rating, and the latest published notes. Never a contact. */
-async function publicNotes(db, today) {
-  const [visits, rating, { results }] = await Promise.all([
+/**
+ * What the page shows: the visits; the rating, star by star, from every note the owner has not hidden; and a page
+ * of the public notes, newest first, all of them or those with [stars] stars. `private` says how many of the counted
+ * ratings came with words the visitor kept private, so the page can say why it shows fewer notes than ratings.
+ * `before` pages on: the notes older than that id. Never a contact.
+ */
+async function publicNotes(db, today, url) {
+  const stars = wholeNumber(url.searchParams.get("stars"), 1, 5);
+  const before = wholeNumber(url.searchParams.get("before"), 1, Number.MAX_SAFE_INTEGER);
+  const limit = wholeNumber(url.searchParams.get("limit"), 1, LIMITS.notesPageMax) ?? LIMITS.notesPage;
+  const filter = stars ? `${PUBLIC} AND rating = ${stars}` : PUBLIC;
+  const [visits, { results: counted }, { n: total }, { results: page }] = await Promise.all([
     visitCounts(db, today),
-    db.prepare(`SELECT COUNT(rating) AS count, ROUND(AVG(rating), 1) AS average FROM feedback WHERE ${PUBLISHED}`).first(),
+    db.prepare(`SELECT rating, COUNT(*) AS n, SUM(consent = 0) AS private FROM feedback WHERE ${COUNTED} GROUP BY rating`).all(),
+    db.prepare(`SELECT COUNT(*) AS n FROM feedback WHERE ${filter}`).first(),
     db
       .prepare(
-        `SELECT id, name, rating, message, substr(published_at, 1, 10) AS date FROM feedback WHERE ${PUBLISHED} ` +
-          "ORDER BY published_at DESC, id DESC LIMIT ?1",
+        `SELECT id, name, rating, message, COALESCE(day, substr(created_at, 1, 10)) AS date FROM feedback ` +
+          `WHERE ${filter} AND id < ?1 ORDER BY id DESC LIMIT ?2`,
       )
-      .bind(LIMITS.publicNotes)
+      .bind(before ?? Number.MAX_SAFE_INTEGER, limit + 1)
       .all(),
   ]);
-  return { visits, ratings: { count: rating.count, average: rating.average }, notes: results };
+  return { visits, ratings: ratingSummary(counted), notes: page.slice(0, limit), total, more: page.length > limit };
+}
+
+/** `{ count, average, stars: { "1": n … "5": n }, private }` from the counted ratings grouped by star. */
+function ratingSummary(rows) {
+  const stars = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  let count = 0;
+  let sum = 0;
+  let kept = 0;
+  for (const row of rows) {
+    stars[row.rating] = row.n;
+    count += row.n;
+    sum += row.rating * row.n;
+    kept += row.private;
+  }
+  return { count, average: count ? Math.round((sum / count) * 10) / 10 : null, stars, private: kept };
+}
+
+/** A query parameter as a whole number from [min] to [max]; null when it is missing or anything else. */
+function wholeNumber(value, min, max) {
+  if (value == null || !/^\d+$/.test(value)) return null;
+  const number = Number(value);
+  return number >= min && number <= max ? number : null;
 }
 
 // ---- Feedback ----
@@ -473,8 +513,10 @@ async function inboxAction(request, env, kind, id, now, url) {
 }
 
 /**
- * What the owner may do to a note, from the inbox's buttons or the app: one set of rules for both. Publishing needs
- * the visitor's tick. Returns `{ status: 200 }`, or a status with a title and the sentence saying why not.
+ * What the owner may do to a note, from the inbox's buttons or the app: one set of rules for both. A note is public
+ * on arrival, so the owner's levers are hide and unhide (and delete). "publish" and "unpublish" are the 1.0 app's
+ * names for the same two, kept so its buttons still work; publishing a note sent without the visitor's tick is
+ * refused, as before. Returns `{ status: 200 }`, or a status with a title and the sentence saying why not.
  */
 async function noteAction(db, id, action, now) {
   const note = await db.prepare("SELECT id, consent FROM feedback WHERE id = ?1").bind(id).first();
@@ -484,11 +526,9 @@ async function noteAction(db, id, action, now) {
   switch (action) {
     case "publish":
       if (!note.consent) return refusal(409, "Not published", "The visitor did not agree to this note being shown.");
-      statement = db.prepare("UPDATE feedback SET published_at = ?1, hidden_at = NULL WHERE id = ?2").bind(stamp, id);
+      statement = db.prepare("UPDATE feedback SET published_at = COALESCE(published_at, ?1), hidden_at = NULL WHERE id = ?2").bind(stamp, id);
       break;
     case "unpublish":
-      statement = db.prepare("UPDATE feedback SET published_at = NULL WHERE id = ?1").bind(id);
-      break;
     case "hide":
       statement = db.prepare("UPDATE feedback SET hidden_at = ?1 WHERE id = ?2").bind(stamp, id);
       break;
@@ -668,7 +708,7 @@ async function summary(env, now) {
     db
       .prepare(
         "SELECT COUNT(*) AS total, COUNT(CASE WHEN day = ?1 THEN 1 END) AS today, " +
-          `COUNT(CASE WHEN ${PUBLISHED} THEN 1 END) AS published FROM feedback`,
+          `COUNT(CASE WHEN ${PUBLIC} THEN 1 END) AS published FROM feedback`,
       )
       .bind(today)
       .first(),
