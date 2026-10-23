@@ -5,9 +5,10 @@ import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import dev.yowkey.portfolio.app.owner.OwnerViewModel
 import dev.yowkey.portfolio.app.ui.YowkeyRoot
+import dev.yowkey.portfolio.app.ui.applySystemBars
+import dev.yowkey.portfolio.ui.theme.AndroidThemeStore
 import org.koin.androidx.viewmodel.ext.android.viewModel
 
 /**
@@ -20,7 +21,7 @@ class MainActivity : ComponentActivity() {
     private val owner: OwnerViewModel by viewModel()
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        enableEdgeToEdge()
+        applySystemBars(AndroidThemeStore.dark.value)
         super.onCreate(savedInstanceState)
         DebugApi.capture(this, intent)
         if (savedInstanceState == null) owner.start(OwnerLink.from(intent))

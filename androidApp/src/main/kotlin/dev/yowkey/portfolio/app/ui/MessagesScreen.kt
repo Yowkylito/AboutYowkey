@@ -30,6 +30,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
@@ -130,6 +131,10 @@ private fun Filters(all: List<AdminMessage>, selected: MessageFilter, onSelect: 
             FilterChip(
                 selected = filter == selected,
                 onClick = { onSelect(filter) },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                ),
                 label = { Text(if (n > 0 && filter != MessageFilter.Archived) "${filter.label} · $n" else filter.label) },
             )
         }

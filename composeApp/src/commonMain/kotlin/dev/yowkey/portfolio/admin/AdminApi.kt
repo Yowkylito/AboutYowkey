@@ -56,7 +56,7 @@ class AdminApi(
         val query = buildString {
             append("?")
             if (after != null) append("after=").append(after).append("&")
-            append("limit=").append(limit.coerceIn(1, 500))
+            append("limit=").append(limit.coerceIn(1, 200))
         }
         return get("/admin/notifications$query", Items.serializer(AdminNotification.serializer())).items
     }

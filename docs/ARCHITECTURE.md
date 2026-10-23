@@ -52,6 +52,39 @@ salted daily hash it uses for visits; nothing is kept on the device. The private
 `POST /messages`) mirrors the note form, its rules the worker's own sentences in the worker's order, and is badged
 Private against the note form's Public; only the owner reads a message, and the site never shows one.
 
+## Android
+
+```
+androidApp/  com.android.application, applicationId dev.yowkey.portfolio ("Yowkey")
+  YowkeyApplication ── startKoin(appModule, platformModule, ownerModule) · AndroidThemeStore.init · channels · PollWorker
+  MainActivity ── YowkeyRoot ─┬─ guest view: App() (the shared page, unchanged) + BackHandler → Navigator.back()
+       ▲                      ├─ SignInScreen ─┐
+       │ OwnerLink            └─ AdminScreen ──┴─ OwnerViewModel ── OwnerSession ── AdminApi ──► worker /admin/*
+       │ (shortcut "Owner",       Dashboard · Messages · Notes · Records · Settings        │
+       │  notification taps)                                                               └─ OwnerStore + TokenCipher
+  push/  PushService (FCM data message) ─┐                                                   (prefs; token sealed with an
+         PollWorker (WorkManager, 15 min)┴─► AlertNotifier: notification id = record id,      Android Keystore AES-GCM key)
+         RegisterWorker (POST /admin/devices)   channels messages / notes / daily, tap → OwnerLink
+composeApp/  com.android.kotlin.multiplatform.library (namespace dev.yowkey.portfolio.shared), next to jvm and wasmJs
+  androidMain/  UrlConnectionTransport (HttpTransport + AdminTransport) · platformModule (InMemoryNavigator,
+                HttpSiteApi(countsVisits from AndroidHost)) · ClipVideo (ExoPlayer → TextureView) · AnimatedClip
+                (first frame) · ThemeStore (SharedPreferences)
+  commonMain/admin/  AdminApi, AdminTransport, the owner routes' DTOs, and the pure rules (filters, the 30-day
+                series, top countries, the backup check's cursor), tested in commonTest/admin
+  skikoMain/  what the desktop and the web share and Android has not: AnimatedClip over Skia's Codec
+```
+
+| Piece | One job |
+|---|---|
+| Guest view | The portfolio exactly as on the web: the shared `App`, kept clear of the system bars and the keyboard (edge to edge, `safeDrawing` insets), Back popping the in-memory `Navigator`. It counts its visit and clicks like a browser (`countsVisits = true`) only when the owner was signed out when the app started. Card covers, the viewer and the detail hero play the clips' 60 fps `.mp4` twins with Media3 ExoPlayer, muted and looping, paused while `playing` is false or the window is hidden; a failed video falls back to the WebP, which Android, with no Skia, shows as its first frame. |
+| Way in | The guest UI is untouched: a static launcher shortcut, "Owner" (long-press the icon), and every notification open MainActivity with an `OwnerLink` (`yowkey-owner://messages/34`, no intent filter). Signed in, the app opens on the admin view, which has "Portfolio" in its top bar; from the guest view the owner gets back with Back or the corner button, which guests never see. |
+| `OwnerSession` | Signs in by checking the password (the worker's `ADMIN_TOKEN`) with `GET /admin/summary`, then seals it in the Keystore, notes where the alert records stand, schedules the backup check and registers for push. A 401 anywhere signs out to the sign-in screen with the reason; sign-out sends `DELETE /admin/devices`, cancels the work, unregisters from FCM and clears the notifications. The server is `Portfolio.api` from the bundled `portfolio.json`. |
+| `AdminApi` | The owner routes over an `AdminTransport` (an `HttpTransport` that also takes headers, for the bearer token): JSON with `ignoreUnknownKeys`, the worker's `{error}` sentence as the error, 401 as `AdminSignedOutException`, nothing reached as an offline error. |
+| Push | Firebase Cloud Messaging, data-only. The config file (`androidApp/google-services.json`) is never committed; the build applies the Google services plugin only when it is there. Without it the app builds and runs the same with push off. `PushService` turns each message into the notification the backup check would make; `onRegistered`/`onNewToken` re-register while signed in. |
+| Backup check | `PollWorker`, periodic every 15 minutes with a network constraint, only while signed in: `GET /admin/notifications?after=<cursor>` (oldest first), each record through the same `AlertNotifier`, the cursor and the ids already shown kept in `OwnerStore` (`planPoll`). Its first run only notes the newest id, so old alerts never flood in. Settings has "Check now". |
+| Theme | The page's own: light unless the visitor (or the owner, in Settings) switches, kept in `AndroidThemeStore`; the admin view and the system bars' icons follow the same choice. |
+| Debug only | `DebugApi` (src/debug; src/release has a no-op twin) redirects every request to a local worker given with `--es debug_api http://10.0.2.2:8787`, and the debug network config allows plain HTTP to 10.0.2.2 and localhost only. |
+
 ## Performance notes
 
 - Grids are chunked into rows before they reach `LazyColumn`, so each row is one keyed item with a stable

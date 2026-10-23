@@ -240,6 +240,7 @@ class OwnerViewModel(
         perform(message.id, { it.act(message.id, action) }) {
             _messages.update { loaded -> loaded.copy(value = loaded.value?.mapNotNull { if (it.id == message.id) it.after(action, now()) else it }) }
             if (action == MessageAction.Delete) closeMessage()
+            refresh(Tab.Dashboard) // the unread badge and the hiring count
             when (action) {
                 MessageAction.Archive -> "Archived."
                 MessageAction.Unarchive -> "Back in the inbox."
@@ -253,6 +254,7 @@ class OwnerViewModel(
     fun act(note: AdminNote, action: NoteAction) {
         perform(note.id, { it.act(note.id, action) }) {
             _notes.update { loaded -> loaded.copy(value = loaded.value?.mapNotNull { if (it.id == note.id) it.after(action, now()) else it }) }
+            refresh(Tab.Dashboard)
             when (action) {
                 NoteAction.Publish -> "Published: it is on the site now."
                 NoteAction.Unpublish -> "Taken off the site."

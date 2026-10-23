@@ -1,6 +1,7 @@
 package dev.yowkey.portfolio.admin
 
 import androidx.compose.runtime.Immutable
+import dev.yowkey.portfolio.model.MessageTopic
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -101,7 +102,7 @@ data class AdminMessage(
     @SerialName("created_at") val createdAt: String = "",
     val name: String? = null,
     val contact: String = "",
-    val topic: String = MessageTopic.OTHER,
+    val topic: String = MessageTopic.Other.wire,
     val message: String = "",
     @SerialName("read_at") val readAt: String? = null,
     @SerialName("archived_at") val archivedAt: String? = null,
@@ -110,8 +111,19 @@ data class AdminMessage(
     val isArchived: Boolean get() = archivedAt != null
 
     /** About a job or freelance work: "who wants to hire me". */
-    val isHiring: Boolean get() = topic == MessageTopic.JOB || topic == MessageTopic.FREELANCE
-    val topicLabel: String get() = MessageTopic.label(topic)
+    val isHiring: Boolean get() = MessageTopic.of(topic).let { it == MessageTopic.Job || it == MessageTopic.Freelance }
+
+    /**
+     * The topic's short label, as the worker's push titles have it ("New message · Job"); the visitor's form words
+     * them for the visitor ([MessageTopic.label]).
+     */
+    val topicLabel: String
+        get() = when (MessageTopic.of(topic)) {
+            MessageTopic.Job -> "Job"
+            MessageTopic.Freelance -> "Freelance"
+            MessageTopic.Collaboration -> "Collaboration"
+            else -> "Other"
+        }
 
     /** Who sent it, as a heading: the name they gave, else their contact. */
     val sender: String get() = name?.takeIf { it.isNotBlank() } ?: contact.ifBlank { "Someone" }
@@ -121,21 +133,6 @@ data class AdminMessage(
 }
 
 private val EmailAddress = Regex("^[^\\s@<>]+@[^\\s@<>]+\\.[^\\s@<>]+$")
-
-/** The topics `POST /messages` takes, and the labels the worker's push titles use. */
-object MessageTopic {
-    const val JOB = "job"
-    const val FREELANCE = "freelance"
-    const val COLLABORATION = "collaboration"
-    const val OTHER = "other"
-
-    fun label(topic: String): String = when (topic) {
-        JOB -> "Job"
-        FREELANCE -> "Freelance"
-        COLLABORATION -> "Collaboration"
-        else -> "Other"
-    }
-}
 
 /** One alert the worker recorded (`GET /admin/notifications`), and the data of the push it sent for it. */
 @Immutable

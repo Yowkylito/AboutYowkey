@@ -14,6 +14,7 @@ import dev.yowkey.portfolio.data.UrlConnectionTransport
 import dev.yowkey.portfolio.di.AndroidHost
 import dev.yowkey.portfolio.di.appModule
 import dev.yowkey.portfolio.di.platformModule
+import dev.yowkey.portfolio.ui.theme.AndroidThemeStore
 import org.koin.android.ext.koin.androidApplication
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
@@ -29,6 +30,7 @@ class YowkeyApplication : Application(), Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
+        AndroidThemeStore.init(this)
         val store = OwnerStore(this)
         startKoin {
             androidContext(this@YowkeyApplication)

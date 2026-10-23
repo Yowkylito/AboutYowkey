@@ -1,6 +1,11 @@
 package dev.yowkey.portfolio.app.ui
 
+import android.graphics.Color
+import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalActivity
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -13,6 +18,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -26,22 +32,29 @@ import dev.yowkey.portfolio.R
 import dev.yowkey.portfolio.app.owner.OwnerViewModel
 import dev.yowkey.portfolio.ui.navigation.Navigator
 import dev.yowkey.portfolio.ui.navigation.Route
+import dev.yowkey.portfolio.ui.theme.AndroidThemeStore
 import dev.yowkey.portfolio.ui.theme.PortfolioTheme
 import org.koin.compose.koinInject
 
 private enum class Face { Portfolio, SignIn, Admin }
 
-/** The guest view, the sign-in screen or the admin view, in the portfolio's own theme. */
+/**
+ * The guest view, the sign-in screen or the admin view, in the portfolio's own theme: light unless the visitor
+ * switched the page to dark, which the admin view and the system bars then follow too.
+ */
 @Composable
 fun YowkeyRoot(owner: OwnerViewModel, reducedMotion: Boolean) {
     val signedIn by owner.signedIn.collectAsState()
     val nav by owner.nav.collectAsState()
+    val dark by AndroidThemeStore.dark.collectAsState()
+    val activity = LocalActivity.current as? ComponentActivity
+    LaunchedEffect(activity, dark) { activity?.applySystemBars(dark) }
     val face = when {
         nav.portfolio -> Face.Portfolio
         !signedIn -> Face.SignIn
         else -> Face.Admin
     }
-    PortfolioTheme {
+    PortfolioTheme(darkTheme = dark) {
         Crossfade(targetState = face, label = "face") { shown ->
             when (shown) {
                 Face.Portfolio -> GuestView(signedIn = signedIn, reducedMotion = reducedMotion, onOwner = owner::showOwner)
@@ -51,6 +64,18 @@ fun YowkeyRoot(owner: OwnerViewModel, reducedMotion: Boolean) {
         }
     }
 }
+
+/** Edge to edge, with the bars' icons dark on the light theme and light on the dark one (not the system's mode). */
+fun ComponentActivity.applySystemBars(dark: Boolean) {
+    enableEdgeToEdge(
+        statusBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT) { dark },
+        navigationBarStyle = SystemBarStyle.auto(LightNavigationScrim, DarkNavigationScrim) { dark },
+    )
+}
+
+// The scrims Android puts behind three-button navigation by default (gesture navigation shows none).
+private val LightNavigationScrim = Color.argb(0xe6, 0xFF, 0xFF, 0xFF)
+private val DarkNavigationScrim = Color.argb(0x80, 0x1b, 0x1b, 0x1b)
 
 /**
  * The portfolio exactly as the web shows it (the shared [App]), kept clear of the system bars and the keyboard.

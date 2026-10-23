@@ -48,8 +48,14 @@ fun RecordsScreen(owner: OwnerViewModel) {
     Column(Modifier.fillMaxSize()) {
         val selected = if (nav.dailyRecords) 1 else 0
         PrimaryTabRow(selectedTabIndex = selected) {
-            androidx.compose.material3.Tab(selected = selected == 0, onClick = { owner.showDailyRecords(false) }, text = { Text("Alerts") })
-            androidx.compose.material3.Tab(selected = selected == 1, onClick = { owner.showDailyRecords(true) }, text = { Text("Daily reports") })
+            listOf("Alerts", "Daily reports").forEachIndexed { index, label ->
+                androidx.compose.material3.Tab(
+                    selected = selected == index,
+                    onClick = { owner.showDailyRecords(index == 1) },
+                    text = { Text(label) },
+                    unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
         if (selected == 0) {
             LoadableContent(

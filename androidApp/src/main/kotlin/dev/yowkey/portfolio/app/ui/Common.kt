@@ -1,7 +1,6 @@
 package dev.yowkey.portfolio.app.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -27,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import dev.yowkey.portfolio.app.owner.Loadable
@@ -111,7 +111,11 @@ fun Tag(text: String, container: Color = MaterialTheme.colorScheme.surfaceVarian
 
 /** A tag's colours for something that is fine and live (a note on the site, push on), on either theme. */
 val Positive: Pair<Color, Color>
-    @Composable get() = if (isSystemInDarkTheme()) Color(0xFF1F3A22) to Color(0xFFBFE5C2) else Color(0xFFDCEFD9) to Color(0xFF1B4D1F)
+    @Composable get() = if (MaterialTheme.colorScheme.background.luminance() < 0.5f) {
+        Color(0xFF1F3A22) to Color(0xFFBFE5C2)
+    } else {
+        Color(0xFFDCEFD9) to Color(0xFF1B4D1F)
+    }
 
 /** Asks before something that cannot be undone. */
 @Composable
