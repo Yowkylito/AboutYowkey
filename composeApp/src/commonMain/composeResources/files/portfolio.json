@@ -21,7 +21,7 @@
     { "title": "Hybrid to native migration", "description": "Moving a WebView app to native Android module by module, without stopping releases." },
     {
       "title": "Payments, wallets and integrations",
-      "description": "Deposit, withdrawal and bank-linking flows, eKYC, payment gateways and Adjust attribution, built to handle money carefully."
+      "description": "Deposit, withdrawal and bank-linking flows, identity verification, payment gateways and attribution, built to handle money carefully."
     },
     {
       "title": "Performance and Play compliance",
@@ -44,55 +44,53 @@
       "summary": "ArenaPlus is DigiPlus's sports entertainment app. I co-built its V2 Android app from the first commit, wrote more than half of its code, built its deposit, withdrawal and bank-linking flows, and led the migration that took the app from a hybrid WebView shell to a native-only runtime.",
       "figures": [
         { "value": "53%", "label": "of V2's code, written by me" },
-        { "value": "270K+", "label": "lines across 413 commits" },
-        { "value": "20", "label": "Gradle modules on the architecture I set up" }
+        { "value": "270K+", "label": "lines across 413 commits" }
       ],
       "impact": [
-        "Took ArenaPlus from a hybrid WebView app to a native-only runtime, with V2 running inside the original app as decoupled modules",
+        "Took ArenaPlus from a hybrid WebView app to a native-only app, without stopping releases",
         "Players deposit, withdraw and link bank accounts through flows I built end to end",
-        "Attribution and first-deposit bonuses run automatically from the campaign triggers I built",
         "Recognised for it: Rank #2 of the Top 9 awardees chosen by executive leadership, #1 story-point owner of about 40 engineers, and the ArenaPlus team's Rockstar of the Month"
       ],
       "highlights": [
-        "Set up V2's day-one Gradle architecture, UI foundations and navigation, then wrote 53% of its code: 270K+ lines across 413 commits",
-        "Led the WebView-to-native migration: ported V2 into the original app as decoupled modules and switched it on flow by flow, each with a fallback to its web version",
-        "Built deposits, withdrawals, automated bank-linking and a custom withdrawal module end to end, with identity-verification (eKYC) checks where the rules require them",
-        "Integrated Adjust attribution with automated channel tracking, campaign triggers and first-deposit bonus delivery",
-        "Built a shake-to-open API debugger for the team, skeleton loaders, and livestreams that unlock with a validated bet"
+        "Set up V2's architecture, UI foundations and navigation from day one, then wrote 53% of its code: 270K+ lines across 413 commits",
+        "Led the WebView-to-native migration, moving the app over flow by flow, each with a way back to its web version",
+        "Built deposits, withdrawals and bank-linking end to end, with identity-verification checks where the rules require them",
+        "Integrated third-party SDKs for analytics and attribution",
+        "Built a shake-to-open API debugger for testing, and skeleton loading states"
       ],
       "optimizations": [
-        "Cut cold-start work: SDK set-up moved off the main thread, duplicate initialisation and unused SDKs removed, the network stack pre-warmed behind the splash; added a startup Macrobenchmark and Baseline Profiles",
-        "Removed wasted recomposition: a Compose stability configuration across 16 modules, and stable allocations in the navigation host every screen sits under",
+        "Cut cold-start work: SDK set-up moved off the main thread, unused SDKs removed and the network stack pre-warmed behind the splash; added startup benchmarks and Baseline Profiles",
+        "Removed wasted recomposition with a Compose stability configuration and stable allocations in the navigation host",
         "Reduced memory use under heavy real-time traffic, and made the app ready for 16 KB memory pages",
-        "Security audit of the app's network, WebView and logging layers; shipped the fixes with unit tests and device checks",
-        "Audited the R8-minified release: keep rules verified for every serialized model and all 241 serializers, then a device smoke test with no crash or ANR",
-        "Audited each native flow against its web version, screen by screen, before switching it on"
+        "Security review of the app's network, WebView and logging layers; shipped the fixes with tests",
+        "Audited the minified release build so every serialized model survives R8, then smoke-tested it on a device",
+        "Checked each native flow against its web version, screen by screen, before switching it on"
       ],
       "engineering": {
-        "builtWith": ["Jetpack Compose", "Koin", "Retrofit + OkHttp", "SignalR"],
+        "builtWith": ["Jetpack Compose", "Koin", "Retrofit + OkHttp", "WebSockets"],
         "platforms": ["Android"],
-        "architecture": "V2 is a multi-module Compose app: an app module over 15 feature modules (home, sports, casino, wallet, profile and more) and 3 core modules for UI, data and the sportsbook, wired with Koin. For the migration, the original app hosts V2 as decoupled modules, and a router opens each flow natively or in its web version.",
+        "architecture": "A multi-module Compose app: feature modules over shared core modules for UI and data, wired with Koin. During the migration the new app ran inside the original one, and each flow could open natively or in its web version.",
         "decisions": [
           {
             "title": "Migrate inside the shipping app",
-            "detail": "V2 went into the original app as decoupled modules instead of replacing it, so releases continued and each flow could move to native on its own schedule."
+            "detail": "The new app went into the original one instead of replacing it, so releases continued and each flow could move to native on its own schedule."
           },
           {
-            "title": "A rollout that can back out",
-            "detail": "A server-side switch turns the native app on or off without a release, and a start after a native crash reopens the web version, so a crash does not leave players stuck."
+            "title": "Every flow can fall back",
+            "detail": "Each native flow keeps a way back to its web version, so a problem in one flow does not leave players stuck."
           },
           {
             "title": "Stable types for Compose",
-            "detail": "Compose treats a List as unstable, so every screen taking a network model re-ran on any change. A stability configuration across 16 modules lets those screens skip."
+            "detail": "Compose treats a List as unstable, so screens taking network models re-ran on any change. A stability configuration lets those screens skip."
           }
         ],
         "quality": [
-          "Startup Macrobenchmark and Baseline Profiles",
-          "Table-driven unit tests for identity-verification and routing rules",
-          "R8 release builds smoke-tested on a device"
+          "Startup benchmarks and Baseline Profiles",
+          "Table-driven unit tests for business rules",
+          "Release builds smoke-tested on a device"
         ]
       },
-      "stack": ["Kotlin", "Jetpack Compose", "Koin", "Retrofit", "OkHttp", "Gson", "SignalR", "Adjust SDK", "Baseline Profiles", "Macrobenchmark"]
+      "stack": ["Kotlin", "Jetpack Compose", "Koin", "Retrofit", "OkHttp", "Gson", "WebSockets", "Baseline Profiles", "Macrobenchmark"]
     },
     {
       "id": "arena-social",
@@ -143,8 +141,10 @@
       "company": "DigiPlus",
       "role": "Android developer",
       "title": "GameZone",
-      "tagline": "DigiPlus's Filipino card games app: one of the developers on its Android side",
-      "summary": "GameZone is DigiPlus's online home for Filipino card games such as Tongits and Pusoy. I'm one of the Android developers on its mobile app.",
+      "tagline": "DigiPlus's Filipino card games app: optimizations and bug fixes on its Android app",
+      "summary": "GameZone is DigiPlus's online home for Filipino card games such as Tongits and Pusoy. I worked on its Android app, mainly on optimizations and on fixing bugs alongside the team.",
+      "highlights": ["Helped find and fix bugs in the Android app, working alongside the team"],
+      "optimizations": ["Optimization work on the Android app"],
       "engineering": { "platforms": ["Android"] },
       "stack": ["Kotlin", "Android"]
     },
@@ -937,13 +937,14 @@
       "period": "2024 – Present",
       "location": "Taguig, Philippines",
       "highlights": [
-        "Wrote 53% of ArenaPlus V2's code (270K+ lines, 413 commits), co-building it from day one: Gradle architecture, UI foundations, navigation",
-        "Shipped Arena Social solo in 30 days (~100% of the code): web to native, with custom navigators and sticky video playback",
-        "Led the switch from a hybrid WebView app to native-only, porting V2 into the V1 shell as decoupled :v2 modules",
-        "Built the core wallet flows end to end: deposits, withdrawals, automated bank-linking and a custom Pay & Go withdrawal module",
-        "Added 16 KB page-size support for Google Play compliance, integrated third-party eKYC, and optimised layouts for memory under heavy real-time traffic",
-        "Optimised the Altenar and Saba sports-betting API integrations, built a shake-to-open API debugger, and added skeleton loaders and bet-validated NBA livestream gating",
-        "Integrated Adjust SDK 5.8 with automated channel attribution, campaign triggers and first-deposit bonus delivery"
+        "Android developer on ArenaPlus, Arena Social and GameZone",
+        "Wrote 53% of ArenaPlus V2's code (270K+ lines, 413 commits), co-building it from day one: architecture, UI foundations, navigation",
+        "Shipped Arena Social solo in 30 days (~100% of the code): a web product turned into a native app",
+        "Led the move from a hybrid WebView app to a native-only app, without stopping releases",
+        "Built the payment flows end to end: deposits, withdrawals and bank-linking",
+        "Performance, memory and startup optimizations, release-build audits and a security review of the app",
+        "Integrated third-party SDKs for identity verification, analytics and attribution",
+        "Optimizations and bug fixes on the GameZone Android app"
       ]
     },
     {
@@ -986,7 +987,7 @@
     },
     {
       "name": "Security and integrations",
-      "items": ["eKYC SDKs", "Payment gateways", "Wallets and bank-linking", "Adjust SDK", "Vulnerability scanning"]
+      "items": ["eKYC SDKs", "Payment gateways", "Wallets and bank-linking", "Attribution SDKs", "Vulnerability scanning"]
     },
     {
       "name": "Performance",
