@@ -116,5 +116,7 @@ performance warn).
 - Custom font. The default font is used; bundling Inter (as in The Eagle's Watch) is a small follow-up
 - `og:image` for link previews. Trigger: when there is artwork for it
 - Editing a note's words (a typo the visitor made, say): today it is shown as is, or hidden. Trigger: the first such note
+- [x] The owner pins the notes that should come first (inbox or app); only a note on the site can be pinned, and
+  hiding one unpins it. A note may say how its writer knows the owner, which each star's sheet sorts by
 - Holding back notes with links or abuse until the owner has looked: today every note is up at once and the owner
   hides what should not be. Trigger: the first spam note that gets through the daily limit and the bot trap
