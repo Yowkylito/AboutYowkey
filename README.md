@@ -270,4 +270,52 @@ Cloudflare Workers" template, with D1 edit added). Without them the workflow onl
 `.wrangler/` (`npm run db:init:local` first, which applies the migrations locally; copy `.dev.vars.example` to `.dev.vars` for the two secrets). Set
 `"api": "http://localhost:8787"` in `portfolio.json` while testing: the parser allows `http://` for localhost only.
 
+**Messages, link clicks and the owner's app**: the worker also keeps
+
+- **Messages**: what the contact form sends privately (the contact is required, so there is someone to write back
+  to; the topic is job, freelance, collaboration or other). A message is never on the site. A visitor may send 3
+  a day, and the same hidden field catches bots.
+- **Link clicks**: how many visitors clicked the links named in `TRACKED_LINKS` (`worker/wrangler.toml`: LinkedIn
+  and GitHub), once per visitor per day per link, told apart by the same daily hash as visits and deleted the
+  same way. Bots are not counted.
+- **Countries**: Cloudflare's guess at a counted visit's country, kept only as a count per country per day, never
+  next to a visitor.
+
+Everything is counted by your day, Asia/Manila (`TIME_ZONE`), and at 23:59 there a cron writes the day's report.
+Each new note, new message and daily report is kept as an alert that the Android app reads from the worker's
+`/admin/` routes (the same `ADMIN_TOKEN`, sent as a Bearer token), and, once Firebase is set up, pushed to your
+phone as it happens. The inbox page shows the messages too, with **Mark read**, **Archive** and **Delete**, and
+today's link clicks.
+
+To turn it on, once, in `worker/`:
+
+1. Create the new tables (`worker/migrations/0003`):
+
+   ```bash
+   npm run db:init
+   ```
+
+2. A free [Firebase project](https://console.firebase.google.com/), and in it an Android app with the package name
+   `dev.yowkey.portfolio`. The `google-services.json` it offers is for the app's build, not the worker.
+
+3. The key the worker sends pushes with: in the Firebase console, **Project settings → Service accounts →
+   Generate new private key**. It downloads a JSON file; keep it out of the repo.
+
+4. Hand it to the worker as a secret (Wrangler reads the file from the pipe, so the key is never in a command or a
+   config file), then delete the file:
+
+   ```bash
+   npx wrangler secret put FCM_SERVICE_ACCOUNT < key.json
+   ```
+
+5. Deploy, which also sets up the 23:59 cron:
+
+   ```bash
+   npm run deploy
+   ```
+
+Without step 4 the rest still works: the alerts are kept, and the app finds them when it checks every 15 minutes;
+they just do not arrive the moment they happen. Locally, `npx wrangler dev --test-scheduled` runs the daily report
+when you open `/__scheduled`.
+
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and [`docs/READINESS.md`](docs/READINESS.md).
