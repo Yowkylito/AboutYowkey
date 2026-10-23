@@ -57,19 +57,19 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.window.core.layout.WindowSizeClass
 import dev.yowkey.portfolio.model.Portfolio
-import dev.yowkey.portfolio.model.RepoVisibility
-import dev.yowkey.portfolio.ui.sections.SectionNote
 import dev.yowkey.portfolio.ui.components.SectionHeader
 import dev.yowkey.portfolio.ui.components.rememberRevealProgress
 import dev.yowkey.portfolio.ui.sections.AwardList
 import dev.yowkey.portfolio.ui.sections.CardRow
 import dev.yowkey.portfolio.ui.sections.ContactBlock
 import dev.yowkey.portfolio.ui.sections.Footer
+import dev.yowkey.portfolio.ui.sections.GroupHeader
 import dev.yowkey.portfolio.ui.sections.Hero
 import dev.yowkey.portfolio.ui.sections.JobEntry
 import dev.yowkey.portfolio.ui.sections.ProjectCard
 import dev.yowkey.portfolio.ui.sections.ServiceCard
 import dev.yowkey.portfolio.ui.sections.SkillGroups
+import dev.yowkey.portfolio.ui.sections.WorkCard
 import dev.yowkey.portfolio.ui.detail.ProjectDetailScreen
 import dev.yowkey.portfolio.ui.navigation.Navigator
 import dev.yowkey.portfolio.ui.navigation.Route
@@ -271,9 +271,6 @@ fun PortfolioPage(
         }
     }
     val isCoverPlaying: (String) -> Boolean = remember(playingCovers) { { id -> id in playingCovers.value } }
-    val projectsNote = remember(portfolio) {
-        RepoVisibility.PRIVATE_NOTE.takeIf { portfolio.projects.any { it.visibility == RepoVisibility.Private } }
-    }
 
     Column(modifier.fillMaxSize()) {
         TopBar(
@@ -307,8 +304,7 @@ fun PortfolioPage(
                             .padding(top = item.topSpacing(layout)),
                     ) {
                         PageRow(
-                            item, layout, platformLabel, numbered.indexOf(item.section) + 1, projectsNote, navigate,
-                            onOpenProject, isCoverPlaying,
+                            item, layout, platformLabel, numbered.indexOf(item.section) + 1, navigate, onOpenProject, isCoverPlaying,
                         )
                     }
                 }
@@ -321,6 +317,8 @@ private fun PageItem.topSpacing(layout: PageLayout): Dp = when {
     this is PageItem.Hero -> if (layout.compact) 40.dp else 96.dp
     this is PageItem.Footer -> 96.dp
     showsHeader -> if (layout.compact) 72.dp else 120.dp
+    // The second group of a section: clearly apart from the first group's last row, closer than a new section.
+    this is PageItem.Projects && showsGroupHeader -> if (layout.compact) 56.dp else 72.dp
     this is PageItem.Job -> 0.dp
     else -> 16.dp
 }
@@ -331,7 +329,6 @@ private fun PageRow(
     layout: PageLayout,
     platformLabel: String,
     number: Int,
-    projectsNote: String?,
     onNavigate: (Section) -> Unit,
     onOpenProject: (String) -> Unit,
     isCoverPlaying: (String) -> Boolean,
@@ -349,15 +346,22 @@ private fun PageRow(
         is PageItem.Services -> SectionFrame(item, number, layout) {
             CardRow(item.columns, item.services.size) { i, m -> ServiceCard(item.services[i], m) }
         }
-        is PageItem.Projects -> SectionFrame(item, number, layout, note = projectsNote) {
-            CardRow(item.columns, item.projects.size) { i, m ->
-                val project = item.projects[i]
-                ProjectCard(
-                    project,
-                    playing = { isCoverPlaying(project.id) },
-                    onOpen = { onOpenProject(project.id) },
-                    modifier = m,
-                )
+        is PageItem.Projects -> SectionFrame(item, number, layout) {
+            Column {
+                if (item.showsGroupHeader) GroupHeader(item.group.title, item.note, Modifier.padding(bottom = 24.dp))
+                CardRow(item.columns, item.projects.size) { i, m ->
+                    val project = item.projects[i]
+                    if (project.isWork) {
+                        WorkCard(project, onOpen = { onOpenProject(project.id) }, modifier = m)
+                    } else {
+                        ProjectCard(
+                            project,
+                            playing = { isCoverPlaying(project.id) },
+                            onOpen = { onOpenProject(project.id) },
+                            modifier = m,
+                        )
+                    }
+                }
             }
         }
         is PageItem.Recognition -> SectionFrame(item, number, layout) {
@@ -376,27 +380,18 @@ private fun PageRow(
     }
 }
 
-/**
- * Wide windows put the section header in a left rail beside its rows; narrower ones stack it on top. A [note]
- * goes under the header in either case, and only on the row that shows the header.
- */
+/** Wide windows put the section header in a left rail beside its rows; narrower ones stack it on top. */
 @Composable
 private fun SectionFrame(
     item: PageItem,
     number: Int,
     layout: PageLayout,
-    note: String? = null,
     content: @Composable () -> Unit,
 ) {
-    val headerNote = note?.takeIf { item.showsHeader }
     if (layout.wideSections) {
         Row(Modifier.fillMaxWidth()) {
             Column(Modifier.width(240.dp).padding(end = 24.dp)) {
                 if (item.showsHeader) SectionHeader(number, item.section.title)
-                headerNote?.let {
-                    Spacer(Modifier.height(16.dp))
-                    SectionNote(it)
-                }
             }
             Box(Modifier.weight(1f)) { content() }
         }
@@ -404,10 +399,6 @@ private fun SectionFrame(
         Column(Modifier.fillMaxWidth()) {
             if (item.showsHeader) {
                 SectionHeader(number, item.section.title)
-                headerNote?.let {
-                    Spacer(Modifier.height(12.dp))
-                    SectionNote(it)
-                }
                 Spacer(Modifier.height(28.dp))
             }
             content()

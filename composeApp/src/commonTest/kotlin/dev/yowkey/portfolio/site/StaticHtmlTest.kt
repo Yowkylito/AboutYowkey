@@ -4,6 +4,7 @@ import dev.yowkey.portfolio.data.PortfolioParser
 import dev.yowkey.portfolio.model.Decision
 import dev.yowkey.portfolio.model.Engineering
 import dev.yowkey.portfolio.model.Module
+import dev.yowkey.portfolio.model.ProofPoint
 import dev.yowkey.portfolio.model.RepoVisibility
 import dev.yowkey.portfolio.model.Screenshot
 import dev.yowkey.portfolio.validJson
@@ -88,6 +89,37 @@ class StaticHtmlTest {
     )
 
     @Test
+    fun workLeadsTheProjectsWithItsFiguresAndTitledParts() {
+        val work = portfolio.projects[1].copy(
+            company = "Acme <Co>",
+            role = "Android developer",
+            figures = listOf(ProofPoint("53%", "of the <code>")),
+            impact = listOf("IMPACT"),
+            highlights = listOf("CONTRIBUTION"),
+            optimizations = listOf("AUDIT"),
+        )
+        val html = StaticHtml.content(portfolio.copy(projects = listOf(portfolio.projects[0], work)))
+        val section = html.substringAfter("<section id=\"projects\">")
+        assertTrue(section.indexOf("<article id=\"project-two\">") in 0 until section.indexOf("<article id=\"project-one\">"), "work comes first")
+        assertTrue(
+            section.indexOf("<h3 class=\"group\">Professional work</h3>") in 0 until section.indexOf("<h3 class=\"group\">Personal projects</h3>"),
+        )
+        assertTrue("Products I build at Acme &lt;Co&gt;." in html, "the work note names the company, escaped")
+        val article = html.substringAfter("<article id=\"project-two\">").substringBefore("</article>")
+        listOf(
+            "<h4>Second</h4>",
+            "<p class=\"muted\">Acme &lt;Co&gt; · Android developer</p>",
+            "<li><strong>53%</strong> <span>of the &lt;code&gt;</span></li>",
+        ).forEach { assertTrue(it in article, "missing $it") }
+        val order = listOf(
+            "<ul class=\"figures\">", "<h5>Impact</h5>", "IMPACT", "<h5>My contributions</h5>", "CONTRIBUTION",
+            "<h5>Optimizations and audits</h5>", "AUDIT",
+        )
+        val positions = order.map { article.indexOf(it) }
+        assertTrue(positions.none { it < 0 } && positions == positions.sorted(), "order ${order.zip(positions)}")
+    }
+
+    @Test
     fun everyArticleCarriesItsProjectIdForDeepLinks() {
         val html = StaticHtml.content(portfolio)
         assertTrue("<article id=\"project-one\">" in html)
@@ -102,7 +134,7 @@ class StaticHtmlTest {
             "<p class=\"tagline\">One &lt;line&gt;</p>",
             "<dt>Built with</dt><dd>Kotlin Multiplatform · Compose &lt;Multiplatform&gt;</dd>",
             "<dt>Runs on</dt><dd>Android · iOS</dd>",
-            "<h4>How it&#39;s built</h4>",
+            "<h5>How it&#39;s built</h5>",
             "<p>Layers &amp; &quot;modules&quot;.</p>",
             // Modules as a nested list: each module, then what it depends on.
             "<li><code>:app</code> Entry<ul><li>depends on <code>:core</code></li></ul></li>",
@@ -124,7 +156,7 @@ class StaticHtmlTest {
             cover = Screenshot("splash.webp", "Splash", 720, 1560),
         )
         val article = StaticHtml.content(portfolio.copy(projects = listOf(project))).substringAfter("<article id=\"project-two\">")
-        val order = listOf("splash.thumb.webp", "<h3>", "TAGLINE", "<p>S</p>", "Built with", "HIGHLIGHT", "shot.thumb.webp", "How it&#39;s built", "STACK")
+        val order = listOf("splash.thumb.webp", "<h4>", "TAGLINE", "<p>S</p>", "Built with", "HIGHLIGHT", "shot.thumb.webp", "How it&#39;s built", "STACK")
         val positions = order.map { article.indexOf(it) }
         assertTrue(positions.none { it < 0 } && positions == positions.sorted(), "order ${order.zip(positions)}")
     }
@@ -141,7 +173,7 @@ class StaticHtmlTest {
         val lead = "<picture><source media=\"(prefers-reduced-motion: reduce)\" srcset=\"${StaticHtml.resourceUrl(intro.posterPath)}\">" +
             "<img class=\"cover portrait\" src=\"${StaticHtml.resourceUrl(intro.fullPath)}\""
         assertTrue(article.indexOf(lead) in 0 until article.indexOf("<img"), "the cover clip is the first image: ${article.take(300)}")
-        assertTrue(article.indexOf("intro.webp") < article.indexOf("<h3>"), "the cover clip leads")
+        assertTrue(article.indexOf("intro.webp") < article.indexOf("<h4>"), "the cover clip leads")
         val shots = article.substringAfter("<div class=\"shots\">")
         assertTrue(shots.indexOf("splash.thumb.webp") in 0 until shots.indexOf("ride.webp"), "the still cover opens the gallery")
     }

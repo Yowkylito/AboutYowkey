@@ -192,6 +192,40 @@ class PortfolioParserTest {
 
     private fun words(count: Int) = List(count) { "word" }.joinToString(" ")
 
+    @Test
+    fun workTakesFiguresImpactAndOptimizationsWithinTheirCaps() {
+        fun figure(value: String = "53%", label: String = "of the code") = "{ \"value\": \"$value\", \"label\": \"$label\" }"
+        fun lines(vararg items: String) = items.joinToString { "\"$it\"" }
+        val work = PortfolioParser.parse(
+            withSecondProject(
+                "\"company\": \"Acme\", \"role\": \"Android developer\", \"period\": \"2025\", \"figures\": [${figure()}], " +
+                    "\"impact\": [${lines("Shipped it")}], \"optimizations\": [${lines("Faster start")}]",
+            ),
+        ).projects[1]
+        assertTrue(work.isWork)
+        assertEquals("Acme · Android developer · 2025", work.meta)
+        assertEquals("My contributions", work.highlightsTitle)
+        assertEquals(listOf("53%"), work.figures.map { it.value })
+        val personal = PortfolioParser.parse(withSecondProject("\"period\": \"2025\"")).projects[1]
+        assertEquals("2025" to "Highlights", personal.meta to personal.highlightsTitle)
+
+        listOf(
+            "\"company\": \" \"",
+            // Only work takes them.
+            "\"figures\": [${figure()}]",
+            "\"impact\": [${lines("x")}]",
+            "\"optimizations\": [${lines("x")}]",
+            "\"company\": \"Acme\", \"figures\": [${List(Project.MAX_FIGURES + 1) { figure() }.joinToString()}]",
+            "\"company\": \"Acme\", \"figures\": [${figure(value = "x".repeat(Project.MAX_FIGURE_VALUE + 1))}]",
+            "\"company\": \"Acme\", \"figures\": [${figure(label = "x".repeat(Project.MAX_FIGURE_LABEL + 1))}]",
+            "\"company\": \"Acme\", \"figures\": [${figure(value = " ")}]",
+            "\"company\": \"Acme\", \"impact\": [${lines(*Array(Project.MAX_IMPACT + 1) { "x" })}]",
+            "\"company\": \"Acme\", \"optimizations\": [${lines(*Array(Project.MAX_OPTIMIZATIONS + 1) { "x" })}]",
+            "\"company\": \"Acme\", \"optimizations\": [${lines(words(Project.MAX_LINE_WORDS + 1))}]",
+            "\"company\": \"Acme\", \"impact\": [${lines(" ")}]",
+        ).forEach { bad -> assertFailsWith<IllegalArgumentException>(bad) { PortfolioParser.parse(withSecondProject(bad)) } }
+    }
+
     private fun module(name: String, vararg dependsOn: String, role: String = "Does one thing") =
         "{ \"name\": \"$name\", \"role\": \"$role\", \"dependsOn\": [${dependsOn.joinToString { "\"$it\"" }}] }"
 
