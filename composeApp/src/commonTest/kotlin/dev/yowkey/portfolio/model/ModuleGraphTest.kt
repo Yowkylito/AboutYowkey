@@ -1,7 +1,5 @@
 package dev.yowkey.portfolio.model
 
-import dev.yowkey.portfolio.model.ModuleGraph.Edge
-import dev.yowkey.portfolio.model.ModuleGraph.Slot
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -11,12 +9,7 @@ class ModuleGraphTest {
 
     private fun m(name: String, vararg deps: String) = Module(name, "role", deps.toList())
 
-    private fun ModuleGraph.Plan.names(layer: Int) = layers[layer].map {
-        when (it) {
-            is Slot.Node -> it.module.name
-            is Slot.Lane -> "lane:${edges[it.edge].from}>${edges[it.edge].to}"
-        }
-    }
+    private fun List<List<Module>>.names() = map { layer -> layer.map { it.name } }
 
     private val app = listOf(
         m(":app", ":feature:a", ":feature:b", ":core:model"),
@@ -29,59 +22,45 @@ class ModuleGraphTest {
 
     @Test
     fun everyModuleSitsAboveAllItsDependencies() {
-        val plan = ModuleGraph.plan(app)
-        assertEquals(app.map { it.name }.toSet(), plan.layerOf.keys, "every module once")
+        val layers = ModuleGraph.layers(app)
+        val layerOf = layers.flatMapIndexed { index, layer -> layer.map { it.name to index } }.toMap()
+        assertEquals(app.map { it.name }.sorted(), layerOf.keys.sorted(), "every module once")
         app.forEach { module ->
-            module.dependsOn.forEach { dep -> assertTrue(plan.layerOf.getValue(dep) < plan.layerOf.getValue(module.name), "${module.name} → $dep") }
+            module.dependsOn.forEach { dep -> assertTrue(layerOf.getValue(dep) < layerOf.getValue(module.name), "${module.name} → $dep") }
         }
-        assertEquals(listOf(":core:ui", ":core:model"), plan.names(0), "foundation first, authored order")
         // The longest path decides the layer: :app sits above :feature:a, which sits above :core:data.
-        assertEquals(3, plan.layerOf[":app"])
-    }
-
-    @Test
-    fun anArrowAlreadyImpliedByAnotherIsNotDrawn() {
-        val edges = ModuleGraph.reducedEdges(app)
-        assertTrue(Edge(":app", ":core:model") !in edges, ":app reaches :core:model through :feature:a")
         assertEquals(
+            listOf(listOf(":core:ui", ":core:model"), listOf(":feature:b", ":core:data"), listOf(":feature:a"), listOf(":app")),
+            layers.names(),
+            "foundation first, each layer in authored order",
+        )
+    }
+
+    @Test
+    fun aWideGraphKeepsItsLayersFlat() {
+        // BubuProtect's shape: four modules share a layer, and an unused one sits in the foundation.
+        val layers = ModuleGraph.layers(
             listOf(
-                Edge(":app", ":feature:a"), Edge(":app", ":feature:b"), Edge(":feature:a", ":core:data"),
-                Edge(":feature:b", ":core:ui"), Edge(":core:data", ":core:model"),
+                m("domain"), m("crypto"), m("data", "domain", "crypto"), m("session", "data", "crypto"),
+                m("security", "domain"), m("shield", "domain"), m("otp"), m("backup", "crypto", "domain"),
+                m("ui", "domain", "session", "security", "shield"), m("di", "data", "session", "ui"),
             ),
-            edges,
         )
-        assertEquals(listOf(Edge("a", "b")), ModuleGraph.reducedEdges(listOf(m("a", "b", "b", "ghost"), m("b"))), "repeats and unknowns drop")
+        assertEquals(
+            listOf(listOf("domain", "crypto", "otp"), listOf("data", "security", "shield", "backup"), listOf("session"), listOf("ui"), listOf("di")),
+            layers.names(),
+        )
     }
 
     @Test
-    fun aLongArrowGetsALaneInEveryLayerItCrosses() {
-        // jvm → site skips the di and ui layers; it must pass through them, not through their boxes.
-        val plan = ModuleGraph.plan(
-            listOf(m("jvm", "di", "site"), m("di", "ui"), m("ui", "data"), m("site", "model"), m("data", "model"), m("model")),
-        )
-        assertEquals(listOf(0, 1, 1, 2, 3, 4), listOf("model", "data", "site", "ui", "di", "jvm").map { plan.layerOf.getValue(it) })
-        listOf(2, 3).forEach { layer -> assertTrue("lane:jvm>site" in plan.names(layer), "layer $layer: ${plan.names(layer)}") }
-        assertTrue(plan.layers[1].none { it is Slot.Lane } && plan.layers[4].none { it is Slot.Lane })
-        // site is on the right of data in layer 1 only if its lane keeps right above it, and vice versa: no crossing.
-        val siteSide = plan.names(1).indexOf("site") > plan.names(1).indexOf("data")
-        listOf(2, 3).forEach { layer ->
-            val names = plan.names(layer)
-            assertEquals(siteSide, names.indexOf("lane:jvm>site") > names.indexOfFirst { !it.startsWith("lane") }, "layer $layer: $names")
-        }
-    }
-
-    @Test
-    fun aLayerIsOrderedByWhereItsDependenciesSit() {
-        // Authored backwards: b sits over y (right), a over x (left), so the layer above reads a, b.
-        val plan = ModuleGraph.plan(listOf(m("b", "y"), m("a", "x"), m("x"), m("y")))
-        assertEquals(listOf("x", "y"), plan.names(0))
-        assertEquals(listOf("a", "b"), plan.names(1))
+    fun repeatsAndUnlistedDependenciesDoNotLiftAModule() {
+        assertEquals(listOf(listOf("b"), listOf("a")), ModuleGraph.layers(listOf(m("a", "b", "b", "ghost"), m("b"))).names())
     }
 
     @Test
     fun noModulesNoLayers() {
-        assertTrue(ModuleGraph.plan(emptyList()).layers.isEmpty())
-        assertEquals(listOf("solo"), ModuleGraph.plan(listOf(m("solo"))).names(0))
+        assertTrue(ModuleGraph.layers(emptyList()).isEmpty())
+        assertEquals(listOf(listOf("solo")), ModuleGraph.layers(listOf(m("solo"))).names())
     }
 
     @Test
