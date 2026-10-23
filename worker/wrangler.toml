@@ -1,4 +1,4 @@
-# The portfolio's backend. Setup and the owner's commands: README.md, "Visits and feedback".
+# The portfolio's backend. Setup and the owner's commands: docs/DEVELOPMENT.md, "Visits and feedback".
 # Secrets (ADMIN_TOKEN, VISITOR_SALT) are set with `npx wrangler secret put <NAME>`, never written here. So is the
 # optional FCM_SERVICE_ACCOUNT, the Firebase service-account key (JSON) that lets the worker push alerts to the
 # owner's phone: `npx wrangler secret put FCM_SERVICE_ACCOUNT < key.json`. Without it, alerts are only records the
@@ -19,7 +19,7 @@ database_id = "c5449c6a-b33c-4d07-a92c-1570eefa0eff"
 migrations_dir = "migrations"
 
 [vars]
-# The pages that may call the API from a browser, comma-separated. The second is the local dist server (README, "Run it").
+# The pages that may call the API from a browser, comma-separated. The second is the local dist server (docs/DEVELOPMENT.md, "Run it").
 ALLOWED_ORIGINS = "https://yowkylito.github.io,http://localhost:8080"
 # Where a plain form post (a browser without the page's script) is sent back to.
 SITE_URL = "https://yowkylito.github.io/AboutYowkey/"

@@ -5,7 +5,7 @@ plugins {
     alias(libs.plugins.composeCompiler)
 }
 
-// Push goes through the owner's own Firebase project, whose config file stays out of git (README "Android app").
+// Push goes through the owner's own Firebase project, whose config file stays out of git (docs/DEVELOPMENT.md, "Android app").
 // Without the file the app builds and runs the same: push is off and the 15-minute backup check brings the alerts.
 if (file("google-services.json").exists()) {
     apply(plugin = libs.plugins.googleServices.get().pluginId)
