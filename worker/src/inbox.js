@@ -58,7 +58,7 @@ export function renderInbox({ visits, items, days, today, timeZone, messages = [
     "Inbox",
     `<h1>Inbox</h1>
 <p class="muted">${Number(visits.total)} visits${since} · ${Number(visits.today)} today (${escape(today)}, ${escape(timeZone)}) · ${items.length} notes, ${shown} on the site · ${messages.length} messages, ${unread} unread</p>
-<p class="muted">A note is on the site as soon as it arrives, with the name, the stars and the words, never the contact. Hide takes it down without deleting it (its stars stop counting too). Pin puts a note on the site before the others, the latest pin first; hiding a note unpins it. Notes marked Private came before notes were public, without the visitor's tick: only their stars count. Messages are private: they are never on the site.</p>
+<p class="muted">A note is on the site as soon as it arrives, with the name, the stars and the words, never the contact. Hide takes it down without deleting it (its stars stop counting too). Pin puts a note on the site before the others, the latest pin first; hiding a note unpins it. Notes marked Private came before notes were public, without the visitor's tick: only their stars count, until you press Show on the site because the writer has said yes. Messages are private: they are never on the site.</p>
 ${days.length ? `<h2>Visitors by day</h2>\n<ul class="days">${series}</ul>` : ""}
 ${clickSeries ? `<h2>Link clicks today</h2>\n<ul class="days">${clickSeries}</ul>` : ""}
 <h2>Messages</h2>
@@ -114,7 +114,11 @@ function buttons(item) {
   const button = (action, label, extra = "") => `<button name="action" value="${action}"${extra}>${label}</button>`;
   const remove = button("delete", "Delete", ' class="danger" onclick="return confirm(\'Delete this note for good?\')"');
   const pin = item.pinned_at ? button("unpin", "Unpin") : onTheSite(item) ? button("pin", "Pin") : "";
-  return (item.hidden_at ? button("unhide", "Unhide") : button("hide", "Hide")) + pin + remove;
+  // A private note goes on the site only on the owner's word that its writer agreed, so the button asks for it.
+  const show = item.consent
+    ? ""
+    : button("make-public", "Show on the site", ' onclick="return confirm(\'Only if the writer agreed: show this note on the site?\')"');
+  return show + (item.hidden_at ? button("unhide", "Unhide") : button("hide", "Hide")) + pin + remove;
 }
 
 /** How the writer knows the owner, beside their name; nothing when they did not say. */

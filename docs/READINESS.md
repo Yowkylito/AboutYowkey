@@ -15,7 +15,8 @@ apply; what does is below. `[x]` done, `[ ]` open, `N/A` with the reason.
 
 - [x] The one server-side piece is the site's own worker (`worker/`): the visit count and the note inbox. Its owner
   routes (`GET /feedback`, `/inbox`) take `ADMIN_TOKEN` only, compared in constant time, and stay closed while the
-  token is unset; a visitor may leave 5 notes a day (by a daily hash; the address is never stored); every field has
+  token is unset; a visitor may leave 5 notes a day, and one every 5 minutes (by a daily hash; the address is never
+  stored); every field has
   a type and length limit and the body a size limit; a browser's origin is checked against an allow-list; a hidden
   form field catches bots; the inbox escapes everything it shows; the inbox's buttons (hide, unhide, delete) act
   only on a post from the worker's own origin, since the browser would send the saved Basic credentials with a

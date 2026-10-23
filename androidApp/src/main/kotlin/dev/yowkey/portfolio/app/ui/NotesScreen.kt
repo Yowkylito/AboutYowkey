@@ -82,6 +82,7 @@ fun NotesScreen(owner: OwnerViewModel) {
 @Composable
 private fun NoteCard(note: AdminNote, zone: ZoneId, focused: Boolean, busy: Boolean, onAct: (NoteAction) -> Unit) {
     var confirmDelete by remember { mutableStateOf(false) }
+    var confirmPublic by remember { mutableStateOf(false) }
     OutlinedCard(
         modifier = Modifier.fillMaxWidth(),
         border = if (focused) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
@@ -105,6 +106,10 @@ private fun NoteCard(note: AdminNote, zone: ZoneId, focused: Boolean, busy: Bool
                 }
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                // A private note goes on the site only on the owner's word that its writer agreed: asked for first.
+                if (!note.consent) {
+                    OutlinedButton(onClick = { confirmPublic = true }, enabled = !busy) { Text("Show on the site") }
+                }
                 // Only a note on the site can be pinned: the worker refuses the others, so they are not offered.
                 if (note.isPublic) {
                     if (note.isPinned) {
@@ -122,12 +127,23 @@ private fun NoteCard(note: AdminNote, zone: ZoneId, focused: Boolean, busy: Bool
             }
             if (!note.consent) {
                 Text(
-                    "Sent before notes were public, without the visitor's tick: its words stay private, its stars count.",
+                    "Sent before notes were public, without the visitor's tick: its words stay private, its stars count. " +
+                        "If the writer has said yes since, Show on the site puts it up.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
+    }
+    if (confirmPublic) {
+        ConfirmDialog(
+            title = "Show this note on the site?",
+            text = "Only if its writer agreed: it was sent before notes were public, without the tick that says yes. " +
+                "It shows with their name and words, never their contact.",
+            confirm = "Show it",
+            onConfirm = { onAct(NoteAction.MakePublic) },
+            onDismiss = { confirmPublic = false },
+        )
     }
     if (confirmDelete) {
         ConfirmDialog(

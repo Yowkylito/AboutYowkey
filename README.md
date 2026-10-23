@@ -263,7 +263,8 @@ What it keeps, and nothing more:
   their browser and a secret salt; the address itself is never stored, and the hashes are deleted the next day.
   Crawlers, link previews and CI's Lighthouse run read the count but are not counted.
 - **Notes**: what the form says (name, email and how they know me are optional), the rating, the time, and the
-  day's hash for a limit of 5 notes per visitor per day. A hidden field catches bots that fill every field. The form says a note is public,
+  day's hash for a limit of 5 notes per visitor per day, and one every 5 minutes (`NOTE_GAP_MINUTES` in
+  `worker/wrangler.toml`). A hidden field catches bots that fill every field. The form says a note is public,
   and it is: it shows on the page as soon as it is sent.
 - **What the page shows**: every note, pinned ones first, then newest, a page at a time. A card has the name (or "A
   visitor") and the stars on top, the date with any badge under them (Pinned; Colleague, Friend or Special someone),
@@ -324,7 +325,9 @@ ten minutes, once:
 **Reading the notes, and taking one down**: open `https://aboutyowkey-api.<account>.workers.dev/inbox` in a browser;
 any user name, the password is `ADMIN_TOKEN`. It lists the notes newest first, with the visit totals and the last two
 weeks by day, and a button for each: **Hide** (off the site, but kept), **Unhide**, **Pin** (first on the site, newest
-pin first; only for a note on the site) or **Unpin**, and **Delete**. The app's Notes screen has the same. The page's buttons only work from the
+pin first; only for a note on the site) or **Unpin**, and **Delete**. A private note (sent before notes were public,
+without the tick) also has **Show on the site**, for when its writer has since said yes. The app's Notes screen has
+the same. The page's buttons only work from the
 page itself, so a form on some other site cannot act with your browser's saved password. From the terminal,
 `npm run inbox` prints the same table.
 

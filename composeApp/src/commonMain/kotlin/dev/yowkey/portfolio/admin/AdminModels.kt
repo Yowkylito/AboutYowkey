@@ -210,6 +210,9 @@ enum class NoteAction(val wire: String) {
     Delete("delete"),
     Pin("pin"),
     Unpin("unpin"),
+
+    /** A private note on the site, on the owner's word that its writer has since agreed. */
+    MakePublic("make-public"),
 }
 
 /** What `POST /admin/messages/:id` can do to a message; [wire] is the body's `action`. */

@@ -40,6 +40,8 @@ fun AdminNote.after(action: NoteAction, now: String): AdminNote? = when (action)
     // The worker refuses to pin a note that is not on the site, and the app offers Pin on those only.
     NoteAction.Pin -> copy(pinnedAt = now)
     NoteAction.Unpin -> copy(pinnedAt = null)
+    // As the worker does: public from now on, and back from hidden if it was.
+    NoteAction.MakePublic -> copy(consent = true, hiddenAt = null)
 }
 
 /**
