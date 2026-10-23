@@ -23,6 +23,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class StaticHtmlTest {
@@ -67,18 +68,17 @@ class StaticHtmlTest {
 
     /**
      * The bar, as the app's: the monogram is the Home link, named for screen readers, its letters the name's first
-     * and last initials; the brand slot holds the availability pill and the name over the role (the headline up to
-     * its first " · "); then the switch, named and stated like the app's, the menu button that owns the links, and
-     * the progress line. The `#top` it links to is the page's very first element.
+     * and last initials; the brand slot holds the name over the role (the headline up to its first " · "), and with a
+     * backend the proof chip ahead of it; then the switch, named and stated like the app's, the menu button that owns
+     * the links, and the progress line. The `#top` it links to is the page's very first element.
      */
     @Test
-    fun theBarCarriesTheMarkThePillTheNameAndTheProgress() {
+    fun theBarCarriesTheMarkTheNameAndTheProgress() {
         val bar = StaticHtml.bar(everySection)
         assertTrue(bar.startsWith("<div id=\"top\"></div>\n<header class=\"bar\">"), bar.take(80))
         listOf(
             "<a class=\"mark\" href=\"#top\" aria-label=\"Ada &lt;King&gt;  Lovelace, back to top\"><span aria-hidden=\"true\">AL</span></a>",
-            "<div class=\"brand\"><span class=\"pill\" role=\"img\" aria-label=\"Open to &lt;work&gt;\"><span class=\"dot\" aria-hidden=\"true\"></span>" +
-                "<span class=\"full\" aria-hidden=\"true\">Open to &lt;work&gt;</span><span class=\"short\" aria-hidden=\"true\">Open to &lt;work&gt;</span></span>" +
+            "<div class=\"brand\">" +
                 "<span class=\"who\"><strong>Ada &lt;King&gt;  Lovelace</strong><span aria-label=\"Engineer at &quot;Acme&quot;\">" +
                 "<span class=\"full\" aria-hidden=\"true\">Engineer at &quot;Acme&quot;</span><span class=\"short\" aria-hidden=\"true\">Engineer at &quot;Acme&quot;</span></span></span></div>",
             "<nav class=\"sections\" id=\"sections\" aria-label=\"Sections\"><ul>",
@@ -91,7 +91,7 @@ class StaticHtmlTest {
         assertFalse("<header class=\"hero\"" in bar || "<h1" in bar, "the hero is the content's")
     }
 
-    /** On a phone the pill and the role shorten at whole words, as the app's bar does, and readers hear them whole. */
+    /** On a phone the role shortens at whole words, as the app's bar does, and readers hear it whole. */
     @Test
     fun thePhonesBarShortensAtWholeWordsAsTheAppsDoes() {
         val owner = everySection.copy(
@@ -101,10 +101,22 @@ class StaticHtmlTest {
             ),
         )
         val bar = StaticHtml.bar(owner)
-        assertTrue("aria-label=\"Open to relocation to any Country\"" in bar)
-        assertTrue("<span class=\"short\" aria-hidden=\"true\">Open to relocation</span>" in bar, bar)
         assertTrue("aria-label=\"Android Developer at DigiPlus since 2024\"" in bar)
         assertTrue("<span class=\"short\" aria-hidden=\"true\">Android Developer at DigiPlus</span>" in bar, bar)
+    }
+
+    /**
+     * The availability is the hero's eyebrow, not the bar's: the bar has no pill any more, with an availability or
+     * without, and with a backend or without.
+     */
+    @Test
+    fun theAvailabilityIsTheHerosNotTheBars() {
+        val owner = everySection.copy(profile = everySection.profile.copy(availability = "Open to relocation to any Country"))
+        listOf(owner, owner.copy(api = "https://api.example")).forEach {
+            val bar = StaticHtml.bar(it)
+            assertFalse("class=\"pill\"" in bar || "class=\"dot\"" in bar || "Open to relocation" in bar, bar)
+            assertTrue("<p class=\"eyebrow\">Open to relocation to any Country</p>" in StaticHtml.content(it))
+        }
     }
 
     /** One link per section the page has, to its id, in its order, under the app's names for them. */
@@ -129,11 +141,11 @@ class StaticHtmlTest {
         assertEquals("MS", mark("  mary ann   smith "))
     }
 
-    /** Without an availability there is no pill: the slot waits, empty, for the name to scroll under the bar. */
+    /** Without a backend there is no chip: the slot waits, empty, for the name to scroll under the bar. */
     @Test
-    fun withoutAvailabilityTheSlotHasNoPill() {
+    fun withoutABackendTheSlotHasNoChip() {
         val bar = StaticHtml.bar(portfolio)
-        assertFalse("class=\"pill\"" in bar)
+        assertFalse("class=\"proof\"" in bar || "data-api" in bar || "#notes" in bar, bar)
         assertTrue(
             "<div class=\"brand\"><span class=\"who\"><strong>Ada</strong><span aria-label=\"Engineer\">" +
                 "<span class=\"full\" aria-hidden=\"true\">Engineer</span><span class=\"short\" aria-hidden=\"true\">Engineer</span></span></span></div>" in bar,
@@ -141,14 +153,45 @@ class StaticHtmlTest {
         )
     }
 
-    /** The bar and the button are the page's own: the same with a backend or without, and never talking to one. */
+    /**
+     * With a backend, the slot's proof chip leads it, ahead of the name: a link to the notes' dashboard (whose id the
+     * content then has), hidden and empty, every part of it in place for the script, which only adds the numbers and
+     * the words. The stars and the divider are drawn by CSS, the eye is drawn here, and none of them is read out: the
+     * script gives the link its whole label.
+     */
     @Test
-    fun theBarAndTheButtonNeedNoBackend() {
-        val withApi = everySection.copy(api = "https://api.example")
-        assertEquals(StaticHtml.bar(everySection), StaticHtml.bar(withApi))
-        listOf(StaticHtml.bar(withApi), StaticHtml.backToTop()).forEach {
+    fun withABackendTheSlotLeadsWithTheProofChipForTheScriptToFill() {
+        val owner = everySection.copy(api = "https://api.example/\"x")
+        val brand = StaticHtml.bar(owner).substringAfter("<div class=\"brand\">").substringBefore("</div>")
+        assertTrue(
+            brand.startsWith(
+                "<a class=\"proof\" href=\"#notes\" data-api=\"https://api.example/&quot;x\" hidden>" +
+                    "<span class=\"rate\"><span class=\"meter\" aria-hidden=\"true\"></span><b class=\"avg\"></b><span class=\"words\"></span></span>" +
+                    "<span class=\"sep\" aria-hidden=\"true\"></span>" +
+                    "<span class=\"seen\"><svg class=\"eye\" width=\"15\" height=\"15\" viewBox=\"0 0 16 16\" aria-hidden=\"true\" focusable=\"false\">",
+            ),
+            brand,
+        )
+        assertTrue(brand.substringAfter("<span class=\"seen\">").substringAfter("</svg>").startsWith("<b class=\"visits\"></b><span class=\"words\"></span></span></a><span class=\"who\">"), brand)
+        assertFalse("aria-label" in brand.substringBefore("<span class=\"who\">"), "the script names the chip once it has the numbers")
+        assertFalse(Regex("\\d").containsMatchIn(brand.substringBefore("<svg")), "no number before the backend's")
+        assertTrue("id=\"notes\"" in StaticHtml.content(owner), "the chip's jump lands on the notes")
+    }
+
+    /**
+     * The bar talks to the backend through its chip alone, and only when there is one: otherwise it is the same with
+     * a backend or without, and neither it nor the button ever carries a form.
+     */
+    @Test
+    fun theBarNeedsTheBackendOnlyForItsChip() {
+        val withApi = StaticHtml.bar(everySection.copy(api = "https://api.example"))
+        val chip = assertNotNull(Regex("<a class=\"proof\".*?</a>").find(withApi)?.value, withApi)
+        assertTrue("data-api=\"https://api.example\"" in chip, chip)
+        assertEquals(StaticHtml.bar(everySection), withApi.replace(chip, ""))
+        listOf(StaticHtml.bar(everySection), StaticHtml.backToTop()).forEach {
             assertFalse("data-api" in it || "api.example" in it || "<form" in it, it)
         }
+        assertFalse("<form" in withApi)
         assertEquals(
             "<button class=\"to-top\" type=\"button\" aria-label=\"Back to top\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 20 20\" aria-hidden=\"true\" focusable=\"false\">",
             StaticHtml.backToTop().substringBefore("<path"),
@@ -209,11 +252,12 @@ class StaticHtmlTest {
     }
 
     /**
-     * With a backend named, the hero gets its live line, and the Contact section the published notes' place and
-     * the note form; all three carry the backend's address for the page's script.
+     * With a backend named, the Contact section gets the published notes' place and the note form; both carry the
+     * backend's address for the page's script. The hero has no live line, with a backend or without: the rating and
+     * the visits are the bar's chip's.
      */
     @Test
-    fun theNoteFormTheNotesAndTheLiveLineAppearOnlyWithABackendAndPointToIt() {
+    fun theNoteFormAndTheNotesAppearOnlyWithABackendAndPointToIt() {
         val none = StaticHtml.content(portfolio)
         assertFalse("<form" in none)
         assertFalse("data-api" in none)
@@ -238,11 +282,9 @@ class StaticHtmlTest {
             "<p class=\"status\" role=\"status\" aria-live=\"polite\"></p>",
         ).forEach { assertTrue(it in contact, "the form lacks $it") }
         val hero = html.substringBefore("</header>")
-        assertTrue(
-            "<p class=\"headline\">Engineer</p>\n<p class=\"live-stats muted\" data-api=\"https://api.example/&quot;x\" hidden></p>" in hero,
-            "the live line sits right under the headline, hidden until the backend answers",
-        )
-        val notesBox = "<div class=\"visitor-notes\" data-api=\"https://api.example/&quot;x\" hidden>\n<h3>${FeedbackCopy.NOTES_TITLE}</h3>\n" +
+        assertFalse("live-stats" in html || "data-api" in hero, "the hero does not repeat the bar's numbers")
+        assertTrue("<p class=\"headline\">Engineer</p>\n<p class=\"links\">" in hero, hero)
+        val notesBox = "<div class=\"visitor-notes\" id=\"notes\" data-api=\"https://api.example/&quot;x\" hidden>\n<h3>${FeedbackCopy.NOTES_TITLE}</h3>\n" +
             "<div class=\"ratings\" role=\"group\" aria-label=\"${FeedbackCopy.DASHBOARD}\" hidden>"
         assertTrue(notesBox in contact, "the notes' place, the dashboard first, empty until the script fills it")
         assertTrue(
@@ -252,7 +294,7 @@ class StaticHtmlTest {
         )
         assertFalse("type=\"checkbox\" name=\"consent\"" in contact, "every note is public, as the form says: no box to tick")
         assertTrue(contact.indexOf(notesBox) < contact.indexOf("<form class=\"feedback\""), "the notes come before the form")
-        assertFalse("<footer" in html, "the count moved from the footer to the hero")
+        assertFalse("<footer" in html, "the count moved from the footer to the bar")
     }
 
     /**

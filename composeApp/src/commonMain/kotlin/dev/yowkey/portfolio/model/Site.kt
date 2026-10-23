@@ -7,6 +7,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import kotlin.math.roundToLong
 
 /**
  * What `GET` and `POST /visits` of the site's backend (`worker/`) answer: visitors counted since [since], each at
@@ -118,12 +119,67 @@ data class SiteNotes(
     fun countOf(relation: Relation): Int = relations[relation.wire] ?: 0
 }
 
-/** The hero's live line: the notes' rating and the visit count, each only once it exists. */
+/**
+ * The page bar's proof: the notes' rating and the visit count, each only once it exists. Either is null until the
+ * backend answers (or when it never does), and an answer can still hold nothing: no rated note, no visit counted.
+ */
 @Immutable
 data class LiveStats(val visits: VisitCount? = null, val ratings: RatingSummary? = null) {
-    val ratingLine: String? get() = ratings?.summary
-    val visitsLine: String? get() = visits?.summary
-    val isEmpty: Boolean get() = ratingLine == null && visitsLine == null
+    /** The average to show, once a note carries a rating; null before. */
+    val average: Double? get() = ratings?.takeIf { it.count > 0 }?.average
+
+    /** How many rated; 0 while there is no [average]. */
+    val ratingCount: Int get() = if (average == null) 0 else ratings?.count ?: 0
+
+    /** The visits counted so far; 0 before the first, and before the backend answers. */
+    val visitTotal: Long get() = visits?.total?.coerceAtLeast(0) ?: 0
+
+    val hasRating: Boolean get() = average != null
+    val hasVisits: Boolean get() = visitTotal > 0
+    val isEmpty: Boolean get() = !hasRating && !hasVisits
+
+    /** Both answers are in, whatever they hold: nothing more is coming that would change what can be shown. */
+    val settled: Boolean get() = visits != null && ratings != null
+}
+
+/**
+ * The words and numbers of the bar's proof chip, shared by the app and the static page so both say the same: the
+ * average and the visits in bold, each with its muted word, and one sentence for a screen reader. The numbers count up
+ * from 0 as the chip first shows, so each can be written at a [progress] of the way there (0..1, already eased).
+ */
+object ProofCopy {
+    /** The average to one decimal, [progress] of the way up from 0.0: 4.8 at 1, "2.4" halfway. */
+    fun average(value: Double, progress: Float = 1f): String = oneDecimal(value * progress.coerceIn(0f, 1f))
+
+    /** The visits with grouped digits, [progress] of the way up from 0: "1,234" at 1, "617" halfway. */
+    fun visits(total: Long, progress: Float = 1f): String =
+        groupDigits((total.toDouble() * progress.coerceIn(0f, 1f)).roundToLong())
+
+    /** After the average, muted: "· 1 rating", "· 14 ratings". */
+    fun ratingCount(count: Int): String = "· $count ${if (count == 1) "rating" else "ratings"}"
+
+    /** After the visits, muted: "visits" ("visit" for one). */
+    fun visitsWord(total: Long): String = if (total == 1L) "visit" else "visits"
+
+    /**
+     * The chip as a screen reader hears it, the numbers in full however narrow the bar: "Rated 5.0 out of 5 from 1
+     * rating, 35 visits. Read the reviews." Without a rating, the visits and "See the notes."; null with nothing to say.
+     */
+    fun label(stats: LiveStats): String? {
+        val rating = stats.average?.let { mean ->
+            "Rated ${average(mean)} out of 5 from ${stats.ratingCount} ${if (stats.ratingCount == 1) "rating" else "ratings"}"
+        }
+        val visits = if (stats.hasVisits) "${visits(stats.visitTotal)} ${visitsWord(stats.visitTotal)}" else null
+        return when {
+            rating != null && visits != null -> "$rating, $visits. $READ_REVIEWS"
+            rating != null -> "$rating. $READ_REVIEWS"
+            visits != null -> "$visits. $SEE_NOTES"
+            else -> null
+        }
+    }
+
+    private const val READ_REVIEWS = "Read the reviews."
+    private const val SEE_NOTES = "See the notes."
 }
 
 /** 1234567 → "1,234,567". */
