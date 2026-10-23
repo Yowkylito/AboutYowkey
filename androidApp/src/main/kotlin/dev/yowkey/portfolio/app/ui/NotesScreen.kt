@@ -32,14 +32,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.yowkey.portfolio.admin.AdminNote
 import dev.yowkey.portfolio.admin.NoteAction
+import dev.yowkey.portfolio.admin.pinnedFirst
 import dev.yowkey.portfolio.app.owner.OwnerViewModel
 import dev.yowkey.portfolio.app.owner.Tab
 import java.time.ZoneId
 
 /**
- * The visitors' notes, newest first, with the inbox's buttons. A note is on the site as soon as it arrives, so the
- * levers are Hide (off the site, and its stars stop counting) and Delete. A note a notification named is scrolled to
- * and outlined.
+ * The visitors' notes in the site's order (the pinned first, then newest first), with the inbox's buttons. A note is
+ * on the site as soon as it arrives, so the levers are Hide (off the site, and its stars stop counting), Delete, and
+ * for a note on the site, Pin (it comes first there). A note a notification named is scrolled to and outlined.
  */
 @Composable
 fun NotesScreen(owner: OwnerViewModel) {
@@ -52,7 +53,9 @@ fun NotesScreen(owner: OwnerViewModel) {
         onRefresh = { owner.refresh(Tab.Notes) },
         isEmpty = { it.isEmpty() },
         emptyText = "No notes yet. When a visitor leaves one on the site, it lands here.",
-    ) { notes ->
+    ) { loaded ->
+        // Sorted here, not in the view model, so a pin or a hide re-sorts the list the moment the card changes.
+        val notes = remember(loaded) { pinnedFirst(loaded) }
         val list = rememberLazyListState()
         val focus = nav.noteId
         LaunchedEffect(focus, notes) {
@@ -66,7 +69,8 @@ fun NotesScreen(owner: OwnerViewModel) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             items(notes, key = { it.id }) { note ->
-                Centered {
+                // Animated, so a note that is pinned or unpinned is seen moving to its place.
+                Centered(Modifier.animateItem()) {
                     NoteCard(note, zone, focused = note.id == focus, busy = note.id in working, onAct = { owner.act(note, it) })
                 }
             }
@@ -91,13 +95,7 @@ private fun NoteCard(note: AdminNote, zone: ZoneId, focused: Boolean, busy: Bool
                 Spacer(Modifier.weight(1f))
                 Text(whenText(note.createdAt, zone), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                when {
-                    note.isHidden -> Tag("Hidden")
-                    note.isPublic -> Positive.let { (container, content) -> Tag("On the site", container, content) }
-                    else -> Tag("Private: only its stars count")
-                }
-            }
+            NoteTags(note)
             SelectionContainer {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(note.message, style = MaterialTheme.typography.bodyLarge)
@@ -107,6 +105,14 @@ private fun NoteCard(note: AdminNote, zone: ZoneId, focused: Boolean, busy: Bool
                 }
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                // Only a note on the site can be pinned: the worker refuses the others, so they are not offered.
+                if (note.isPublic) {
+                    if (note.isPinned) {
+                        OutlinedButton(onClick = { onAct(NoteAction.Unpin) }, enabled = !busy) { Text("Unpin") }
+                    } else {
+                        OutlinedButton(onClick = { onAct(NoteAction.Pin) }, enabled = !busy) { Text("Pin") }
+                    }
+                }
                 if (note.isHidden) {
                     OutlinedButton(onClick = { onAct(NoteAction.Unhide) }, enabled = !busy) { Text("Unhide") }
                 } else {
@@ -131,5 +137,23 @@ private fun NoteCard(note: AdminNote, zone: ZoneId, focused: Boolean, busy: Bool
             onConfirm = { onAct(NoteAction.Delete) },
             onDismiss = { confirmDelete = false },
         )
+    }
+}
+
+/**
+ * Where the note stands (on the site, hidden or private), whether it is pinned, and how its writer knows the owner:
+ * the site's badges, so Colleague, Friend or Special someone, and nothing for Other or unsaid.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun NoteTags(note: AdminNote) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        when {
+            note.isHidden -> Tag("Hidden")
+            note.isPublic -> Positive.let { (container, content) -> Tag("On the site", container, content) }
+            else -> Tag("Private: only its stars count")
+        }
+        if (note.isPinned) Tag("Pinned", MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
+        note.badge?.let { Tag(it.label) }
     }
 }

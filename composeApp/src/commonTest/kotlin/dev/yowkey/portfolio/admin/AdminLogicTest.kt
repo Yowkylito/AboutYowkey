@@ -53,6 +53,53 @@ class AdminLogicTest {
     }
 
     @Test
+    fun aPinIsSetAndClearedAsTheWorkerDoesIt() {
+        val now = "2026-10-23T12:00:00.000Z"
+        val public = AdminNote(1, consent = true)
+        val pinned = public.after(NoteAction.Pin, now)!!
+        assertEquals(now, pinned.pinnedAt)
+        assertTrue(pinned.isPinned)
+        assertTrue(pinned.isPublic, "pinning leaves it on the site")
+        assertEquals(public, pinned.after(NoteAction.Unpin, now), "unpinning clears only the pin")
+        assertFalse(public.after(NoteAction.Unpin, now)!!.isPinned, "unpinning a note that is not pinned is harmless")
+    }
+
+    @Test
+    fun hidingANoteUnpinsItAndUnhidingDoesNotPinItAgain() {
+        val now = "2026-10-23T12:00:00.000Z"
+        val pinned = AdminNote(1, consent = true, pinnedAt = "2026-10-22T08:00:00.000Z")
+        val hidden = pinned.after(NoteAction.Hide, now)!!
+        assertEquals(now, hidden.hiddenAt)
+        assertFalse(hidden.isPinned, "hide clears pinned_at")
+        assertFalse(pinned.after(NoteAction.Unpublish, now)!!.isPinned, "the 1.0 app's Unpublish is a hide")
+        assertFalse(hidden.after(NoteAction.Unhide, now)!!.isPinned)
+        assertTrue(hidden.after(NoteAction.Unhide, now)!!.isPublic)
+        assertEquals("2026-10-22T08:00:00.000Z", pinned.after(NoteAction.Unhide, now)!!.pinnedAt, "unhide leaves a pin alone")
+    }
+
+    @Test
+    fun thePinnedComeFirstNewestPinFirstThenTheRestNewestFirst() {
+        val notes = listOf(
+            AdminNote(3, consent = true),
+            AdminNote(9, consent = true),
+            AdminNote(2, consent = true, pinnedAt = "2026-10-23T09:00:00.000Z"),
+            AdminNote(5, consent = false),
+            AdminNote(4, consent = true, pinnedAt = "2026-10-23T11:00:00.000Z"),
+            AdminNote(7, consent = true, hiddenAt = "x"),
+        )
+        assertEquals(listOf(4L, 2, 9, 7, 5, 3), pinnedFirst(notes).map { it.id })
+        assertEquals(listOf(9L, 7, 5, 4, 3, 2), pinnedFirst(notes.map { it.copy(pinnedAt = null) }).map { it.id }, "no pins: newest first")
+        assertEquals(emptyList<AdminNote>(), pinnedFirst(emptyList()))
+
+        // A pin made on the phone moves its note to the top, and unpinning puts it back in its place.
+        val now = "2026-10-23T12:00:00.000Z"
+        val repinned = pinnedFirst(notes.map { if (it.id == 3L) it.after(NoteAction.Pin, now)!! else it })
+        assertEquals(listOf(3L, 4, 2, 9, 7, 5), repinned.map { it.id })
+        val unpinned = pinnedFirst(repinned.map { if (it.id == 4L) it.after(NoteAction.Unpin, now)!! else it })
+        assertEquals(listOf(3L, 2, 9, 7, 5, 4), unpinned.map { it.id })
+    }
+
+    @Test
     fun theChartHasEveryDayUpToTodayWithTheMissingOnesAtZero() {
         val days = listOf(DayStats("2026-10-23", 8), DayStats("2026-10-21", 3), DayStats("2026-09-01", 99))
         val series = visitSeries(days, today = "2026-10-23", count = 4)
