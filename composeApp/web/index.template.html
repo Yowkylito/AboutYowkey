@@ -37,17 +37,23 @@
       if (meta) meta.setAttribute("content", dark ? "#0C0E13" : "#FAFAFA");
     };
     try { window.applyTheme(localStorage.getItem("theme")); } catch (e) { window.applyTheme("light"); }
+    // Marks the page as scripted before the first paint too, so the bar's parts that only the script can work (the
+    // theme switch, the compact menu) take their places from the start rather than shifting the page once it runs.
+    document.documentElement.classList.add("js");
   </script>
   <style>
     :root {
       color-scheme: light;
       --bg: #FAFAFA; --surface: #FFFFFF; --ink: #09090B; --muted: #475569; --line: #E4E4E7; --line-strong: #D4D4D8;
       --accent: #2563EB; --on-accent: #FFFFFF;
+      /* Added for the bar: the monogram's deeper end, and the availability dot. */
+      --accent-deep: #1D4ED8; --ok: #16A34A;
     }
     :root[data-theme="dark"] {
       color-scheme: dark;
       --bg: #0C0E13; --surface: #15181F; --ink: #F4F4F5; --muted: #A1A1AA; --line: #27272A; --line-strong: #3F3F46;
       --accent: #60A5FA; --on-accent: #0B1D3F;
+      --accent-deep: #3B82F6; --ok: #4ADE80;
     }
     * { box-sizing: border-box; }
     /*
@@ -62,6 +68,139 @@
       -webkit-font-smoothing: antialiased;
     }
     #static-content { max-width: 1120px; margin: 0 auto; padding: 96px 20px 120px; }
+    /* Under the bar the hero starts where the app's does (its topSpacing): 40px down on a phone, 96px from 600px up. */
+    @media (max-width: 599px) { #static-content { padding-top: 40px; } }
+    /*
+      The bar over the page (StaticHtml.bar), as the app's TopBar: sticky inside #static-scroll, which is what
+      scrolls. Flat at the very top; once the page moves, the hairline under it and the reading progress along it.
+      --bar-offset is its whole height: a jump to an anchor stops 24px below it. A margin on the targets rather than
+      scroll-padding on the scroller, which would count the bar's own controls as hidden under it and scroll the
+      page each time the keyboard reached one.
+    */
+    :root { --bar-offset: 64px; }
+    #static-content [id] { scroll-margin-top: calc(var(--bar-offset) + 24px); }
+    @media (prefers-reduced-motion: no-preference) { #static-scroll { scroll-behavior: smooth; } }
+    .bar { position: sticky; top: 0; z-index: 5; background: var(--bg); box-shadow: 0 1px 0 var(--line); }
+    /* Where the page can show through, it does, blurred; elsewhere the bar is the page's own colour. */
+    @supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+      .bar {
+        background: color-mix(in srgb, var(--bg) 84%, transparent);
+        -webkit-backdrop-filter: saturate(1.5) blur(14px); backdrop-filter: saturate(1.5) blur(14px);
+      }
+    }
+    .js .bar:not(.scrolled) { box-shadow: none; }
+    .bar-row { display: flex; align-items: center; gap: 12px; max-width: 1120px; height: 64px; margin: 0 auto; padding: 0 20px; }
+    /* The monogram, the way home: the initials on the accent, deepening towards the bottom right. */
+    .mark {
+      flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px;
+      background: var(--accent); background: linear-gradient(135deg, var(--accent), var(--accent-deep));
+      color: var(--on-accent); font-size: 13px; font-weight: 600; letter-spacing: -.02em; line-height: 1; text-decoration: none;
+      box-shadow: inset 0 1px 0 rgb(255 255 255 / .2), 0 1px 2px rgb(0 0 0 / .15);
+    }
+    /* The brand slot: the pill, and the name over the role, share one cell and cross-fade. */
+    .brand { flex: 1 1 auto; min-width: 0; display: grid; align-items: center; }
+    .brand > * { grid-area: 1 / 1; min-width: 0; transition: opacity .22s ease, transform .22s ease, visibility .22s; }
+    .pill {
+      justify-self: start; display: inline-flex; align-items: center; gap: 8px; max-width: 100%; padding: 5px 12px 5px 10px;
+      border: 1px solid var(--line); border-radius: 999px; font-size: 13px; font-weight: 500; line-height: 1.3;
+      background: var(--surface); background: color-mix(in srgb, var(--accent) 6%, var(--surface));
+    }
+    .pill .text, .who strong, .who span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dot { position: relative; flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+    /* The pulse is a ring that grows and fades: transform and opacity only, so it never repaints the bar. */
+    .dot::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: var(--ok); animation: pulse 2.4s cubic-bezier(0, 0, .2, 1) infinite; }
+    @keyframes pulse { from { transform: scale(1); opacity: .6; } 70%, to { transform: scale(2.6); opacity: 0; } }
+    .who { display: flex; flex-direction: column; line-height: 1.25; opacity: 0; visibility: hidden; transform: translateY(6px); }
+    .who strong { font-size: 15px; font-weight: 600; letter-spacing: -.01em; }
+    .who span { color: var(--muted); font-size: 12px; }
+    /* inherit rather than visible, so the bar hidden at hand-off hides what is in it too. */
+    .bar.passed .pill { opacity: 0; visibility: hidden; transform: translateY(-6px); }
+    .bar.passed .who { opacity: 1; visibility: inherit; transform: none; }
+    .sections ul { position: relative; display: flex; gap: 2px; margin: 0; padding: 0; list-style: none; }
+    .sections a {
+      display: block; padding: 8px 10px; border-radius: 8px; color: var(--muted); font-size: 15px; font-weight: 500;
+      line-height: 24px; text-decoration: none; white-space: nowrap; transition: color .15s, background-color .15s;
+    }
+    .sections a:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 5%, transparent); }
+    .sections a[aria-current] { color: var(--accent); }
+    /* The active link's 2px pill, sliding from link to link: the script sets --x and --w from the link's box. */
+    .sections ul::after {
+      content: ""; position: absolute; left: 0; bottom: 3px; width: calc(var(--w, 20px) - 20px); height: 2px; border-radius: 1px;
+      background: var(--accent); opacity: 0; transform: translateX(calc(var(--x, 0px) + 10px)); pointer-events: none;
+    }
+    .sections ul.lit::after { opacity: 1; }
+    .sections ul.glide::after { transition: transform .25s cubic-bezier(.33, 1, .68, 1), width .25s cubic-bezier(.33, 1, .68, 1), opacity .2s; }
+    /* The theme switch, as the app's: a pill with the sun and the moon, the accent knob over whichever is on. */
+    .theme {
+      display: none; position: relative; flex: none; width: 60px; height: 32px; padding: 0; cursor: pointer;
+      color: var(--muted); background: var(--line); border: 1px solid var(--line-strong); border-radius: 999px;
+    }
+    .js .theme { display: block; }
+    .theme .knob { position: absolute; top: 2px; left: 2px; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); transition: transform .22s cubic-bezier(.33, 1, .68, 1); }
+    .theme svg { position: absolute; top: 7px; transition: color .22s; }
+    .theme .sun { left: 7px; color: var(--on-accent); }
+    .theme .moon { left: 35px; }
+    :root[data-theme="dark"] .theme .knob { transform: translateX(28px); }
+    :root[data-theme="dark"] .theme .sun { color: var(--muted); }
+    :root[data-theme="dark"] .theme .moon { color: var(--on-accent); }
+    .menu {
+      display: none; flex: none; place-items: center; width: 40px; height: 40px; margin-right: -8px; padding: 0; cursor: pointer;
+      color: var(--ink); background: transparent; border: 0; border-radius: 10px;
+    }
+    .menu:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+    .bar a:focus-visible, .bar button:focus-visible, .to-top:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    /*
+      How far down the page the reader is, along the bar's bottom edge, over the hairline. CSS draws it straight
+      from the scroll where it can; elsewhere the page's script sets --progress.
+    */
+    .progress {
+      position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--accent); pointer-events: none;
+      transform-origin: 0 50%; transform: scaleX(var(--progress, 0));
+    }
+    @supports (animation-timeline: scroll()) {
+      .progress { animation: progress linear both; animation-timeline: scroll(nearest block); }
+    }
+    @keyframes progress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+    /* Below the width the app shows its links at (plus room for the pill), the links leave the bar's row. */
+    @media (max-width: 899px) {
+      /* Without the script: a row of their own under the bar, scrolling sideways if they must, never the page. */
+      :root:not(.js) { --bar-offset: 112px; }
+      :root:not(.js) .bar-row { flex-wrap: wrap; height: auto; row-gap: 0; }
+      :root:not(.js) .brand { height: 64px; }
+      :root:not(.js) .sections { flex: 1 0 calc(100% + 40px); margin: 0 -20px; overflow-x: auto; scrollbar-width: none; }
+      :root:not(.js) .sections::-webkit-scrollbar { display: none; }
+      :root:not(.js) .sections ul { width: max-content; padding: 0 10px 8px; }
+      /* With it, as the app's compact bar: the switch, then a menu that drops the links down under the bar. */
+      .js .menu { display: grid; }
+      .js .sections {
+        position: absolute; top: calc(100% + 6px); right: 12px; min-width: 220px; padding: 6px;
+        background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 16px 40px rgb(0 0 0 / .16);
+        opacity: 0; visibility: hidden; transform: translateY(-6px); transition: opacity .18s, transform .18s, visibility .18s;
+      }
+      /* Visible at once on opening, so the focus can move in; hidden only once it has faded on closing. */
+      .js .bar.open .sections { opacity: 1; visibility: inherit; transform: none; transition: opacity .18s, transform .18s, visibility 0s; }
+      .js .sections ul { flex-direction: column; }
+      .js .sections ul::after { display: none; }
+      .js .sections a { padding: 10px 14px; color: var(--ink); font-size: 16px; }
+      .js .sections a[aria-current] { color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+    }
+    /* Back to top: a round button at the bottom end, shown by the script once the reader is 1.5 screens down. */
+    .to-top {
+      position: fixed; right: 20px; bottom: 20px; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); z-index: 5;
+      display: grid; place-items: center; width: 48px; height: 48px; padding: 0; cursor: pointer;
+      color: var(--ink); background: var(--surface); border: 1px solid var(--line-strong); border-radius: 50%;
+      box-shadow: 0 6px 20px rgb(0 0 0 / .12), 0 1px 3px rgb(0 0 0 / .08);
+      opacity: 0; visibility: hidden; transform: scale(.85); transition: opacity .2s, transform .2s, visibility .2s;
+    }
+    .to-top.shown { opacity: 1; visibility: inherit; transform: none; }
+    .to-top:hover { border-color: var(--accent); color: var(--accent); }
+    /*
+      The reading measure: running text stops at about 68 characters a line, as the app's ~680dp column, at the
+      body's 1.6 line height. Kept to the lowest specificity, so the parts with a measure of their own keep it.
+    */
+    p, li, dd { max-width: 68ch; text-wrap: pretty; }
+    h1, h2, h3, h4 { text-wrap: balance; }
+    article > ul:not([class]) > li + li { margin-top: .4em; }
     .hero h1 { font-size: clamp(44px, 9vw, 72px); line-height: 1.05; letter-spacing: -0.03em; margin: 8px 0 16px; }
     .headline { font-size: clamp(20px, 3vw, 24px); margin: 0 0 12px; max-width: 720px; }
     .live-stats { font-size: 15px; font-weight: 600; margin: 0 0 16px; }
@@ -87,7 +226,6 @@
     .note { color: var(--muted); max-width: 640px; margin: -8px 0 24px; }
     .badge { display: inline-block; font-size: 13px; font-weight: 600; line-height: 1.4; padding: 1px 8px; border: 1px solid var(--line-strong); border-radius: 6px; color: var(--muted); white-space: nowrap; }
     .links a { display: inline-block; margin: 0 16px 8px 0; padding: 12px 0; }
-    article { scroll-margin-top: 24px; }
     .tagline { font-size: 19px; line-height: 1.45; margin: 8px 0 4px; }
     .disclaimer { color: var(--muted); font-size: 15px; border: 1px solid var(--line-strong); border-radius: 10px; padding: 10px 14px; }
     /* The message form, the note form and the hero's live line: only rendered when portfolio.json names an "api". */
@@ -257,8 +395,9 @@
     .decisions dd { margin: 2px 0 0; color: var(--muted); }
     .quality { padding-left: 20px; }
     #app { position: fixed; inset: 0; opacity: 0; pointer-events: none; transition: opacity .25s ease; }
+    /* Above #static-scroll, so the static page's bar never covers it. */
     .loading-bar {
-      position: fixed; top: 0; left: 0; height: 3px; width: 40%; background: var(--accent);
+      position: fixed; top: 0; left: 0; z-index: 1; height: 3px; width: 40%; background: var(--accent);
       animation: loading 1.4s ease-in-out infinite;
     }
     @keyframes loading { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
@@ -271,27 +410,225 @@
     */
     body.app-ready #static-scroll { pointer-events: none; }
     body.app-ready .loading-bar, body.static-only #app, body.static-only .loading-bar { display: none; }
+    /* Without scripts the app can never load, so there is nothing to wait for. */
+    :root:not(.js) .loading-bar { display: none; }
+    /*
+      The app has its own bar and button. At hand-off the static ones hide, never to fight the app's; the bar by
+      visibility, keeping its place, so nothing under the canvas moves (a shift there still counts against the page).
+    */
+    body.app-ready .bar { visibility: hidden; }
+    body.app-ready .dot::after { animation: none; }
+    body.app-ready .to-top { display: none; }
+    /* Reduced motion: every change in the bar and the button is instant, the dot is still, jumps are not smoothed. */
+    @media (prefers-reduced-motion: reduce) {
+      .brand > *, .sections a, .sections ul.glide::after, .theme .knob, .theme svg, .js .sections, .js .bar.open .sections, .to-top { transition: none; }
+      .dot::after { animation: none; display: none; }
+    }
   </style>
 </head>
 <body>
   <div class="loading-bar" aria-hidden="true"></div>
   <div id="static-scroll">
+{{bar}}
     <main id="static-content">
 {{content}}
     </main>
+{{toTop}}
   </div>
   <div id="app" aria-hidden="true"></div>
   <script>
     // A deep link into the app (#/projects/<id>) lands on that project's article here too, before the app (or
-    // without it, on browsers that cannot run it).
+    // without it, on browsers that cannot run it). On arrival it is simply there; a later change of the address
+    // glides to it like any other jump.
     (function () {
-      function reveal() {
+      function reveal(arriving) {
         var match = /^#\/projects\/([a-z0-9][a-z0-9-]*)\/?$/.exec(location.hash);
         var article = match && document.getElementById("project-" + match[1]);
-        if (article && !document.body.classList.contains("app-ready")) article.scrollIntoView();
+        if (!article || document.body.classList.contains("app-ready")) return;
+        var scroller = document.getElementById("static-scroll");
+        if (arriving) scroller.style.scrollBehavior = "auto";
+        article.scrollIntoView();
+        scroller.style.scrollBehavior = "";
       }
-      reveal();
-      window.addEventListener("hashchange", reveal);
+      reveal(true);
+      window.addEventListener("hashchange", function () { reveal(false); });
+    })();
+  </script>
+  <script>
+    // The bar (StaticHtml.bar) and the back-to-top button. All of it adds to what already works without it: the
+    // links and the monogram are plain anchors, which the CSS scrolls smoothly unless motion is reduced.
+    (function () {
+      var scroller = document.getElementById("static-scroll");
+      var bar = document.querySelector("header.bar");
+      if (!scroller || !bar) return;
+      var root = document.documentElement;
+      var nav = bar.querySelector(".sections"), list = nav.querySelector("ul"), menu = bar.querySelector(".menu");
+      var links = Array.prototype.slice.call(nav.querySelectorAll("a"));
+      var sections = links.map(function (link) { return document.getElementById(link.hash.slice(1)); });
+      var mark = bar.querySelector(".mark"), toTop = document.querySelector(".to-top");
+      function media(query) { return window.matchMedia ? window.matchMedia(query) : { matches: false }; }
+      function onChange(query, listener) {
+        if (query.addEventListener) query.addEventListener("change", listener); else if (query.addListener) query.addListener(listener);
+      }
+
+      // The switch: the same "theme" key the app's switch writes, applied through the head's applyTheme.
+      var theme = bar.querySelector(".theme");
+      function dark() { return root.getAttribute("data-theme") === "dark"; }
+      function showTheme() { theme.setAttribute("aria-checked", String(dark())); }
+      theme.addEventListener("click", function () {
+        var next = dark() ? "light" : "dark";
+        try { localStorage.setItem("theme", next); } catch (e) {}
+        window.applyTheme(next);
+        showTheme();
+      });
+      showTheme();
+
+      // The section being read: the last whose top has passed the reading line, a little under where a jump puts
+      // its heading; at the very end, the last one, however short. Its link is marked, and on a wide bar the
+      // accent pill slides under it.
+      var active = null, atEnd = false;
+      function readingLine() { return bar.getBoundingClientRect().bottom + 32; }
+      function pick() {
+        var line = readingLine(), index = -1;
+        sections.forEach(function (section, i) { if (section && section.getBoundingClientRect().top <= line) index = i; });
+        if (atEnd) index = sections.length - 1;
+        var link = index < 0 ? null : links[index];
+        if (link === active) return;
+        if (active) active.removeAttribute("aria-current");
+        active = link;
+        if (link) link.setAttribute("aria-current", "true");
+        place();
+      }
+      function place() {
+        list.classList.toggle("lit", !!active);
+        if (!active) return;
+        list.style.setProperty("--x", active.offsetLeft + "px");
+        list.style.setProperty("--w", active.offsetWidth + "px");
+      }
+
+      // Narrow screens: the links live in a menu under its button, as in the app. Opening it puts the focus on the
+      // section being read; it closes on a pick, on Esc (the focus back on the button), on a press or the focus
+      // anywhere else, and once the screen is wide enough for the links to sit in the bar.
+      var wide = media("(min-width: 900px)");
+      function isOpen() { return bar.classList.contains("open"); }
+      function setOpen(open) {
+        bar.classList.toggle("open", open);
+        menu.setAttribute("aria-expanded", String(open));
+      }
+      menu.addEventListener("click", function () {
+        setOpen(!isOpen());
+        if (isOpen()) (active || links[0]).focus();
+      });
+      links.forEach(function (link) { link.addEventListener("click", function () { if (isOpen()) setOpen(false); }); });
+      document.addEventListener("keydown", function (event) {
+        if (event.key === "Escape" && isOpen()) { setOpen(false); menu.focus(); }
+      });
+      document.addEventListener(window.PointerEvent ? "pointerdown" : "mousedown", function (event) {
+        if (isOpen() && !bar.contains(event.target)) setOpen(false);
+      });
+      bar.addEventListener("focusout", function (event) {
+        if (isOpen() && event.relatedTarget && !bar.contains(event.relatedTarget)) setOpen(false);
+      });
+      onChange(wide, function () { if (wide.matches) setOpen(false); place(); });
+
+      // Back to top: the focus goes to the bar's own way home first, so a keyboard reader carries on from the top;
+      // the scroll is the CSS's, smooth unless motion is reduced.
+      if (toTop) toTop.addEventListener("click", function () {
+        try { mark.focus({ preventScroll: true }); } catch (e) { mark.focus(); }
+        if (scroller.scrollTo) scroller.scrollTo({ top: 0 }); else scroller.scrollTop = 0;
+      });
+
+      // The reading keys. The page itself never scrolls, #static-scroll does, and until something in it has been
+      // clicked or focused the browser sends the keys to the page, where they do nothing. With nothing focused they
+      // move #static-scroll instead, as the app reads them: about 85% of a screen, 72px for an arrow, the ends for
+      // Home and End, smoothly unless motion is reduced. Whatever has the focus keeps its own keys.
+      var STEPS = { PageDown: 0.85, PageUp: -0.85, " ": 0.85, ArrowDown: 72, ArrowUp: -72 };
+      document.addEventListener("keydown", function (event) {
+        var focus = document.activeElement;
+        if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
+        if ((focus && focus !== document.body && focus !== root) || document.body.classList.contains("app-ready")) return;
+        var step = STEPS[event.key], view = scroller.clientHeight;
+        if (event.key === "Home") step = -scroller.scrollTop;
+        else if (event.key === "End") step = scroller.scrollHeight;
+        else if (step === undefined) return;
+        else if (Math.abs(step) < 1) step = step * view * (event.key === " " && event.shiftKey ? -1 : 1);
+        event.preventDefault();
+        if (scroller.scrollBy) scroller.scrollBy({ top: step }); else scroller.scrollTop += step;
+      });
+
+      // The keyboard moving up the page can land the focus under the bar, which the browser counts as on screen:
+      // once it has had its own say, the page is nudged down just enough to show it. Not the bar's own controls,
+      // nor the star sheet's, which floats above it all.
+      scroller.addEventListener("focusin", function (event) {
+        var target = event.target;
+        if (bar.contains(target) || (target.closest && target.closest("dialog"))) return;
+        requestAnimationFrame(function () {
+          var hidden = bar.getBoundingClientRect().bottom + 8 - target.getBoundingClientRect().top;
+          if (hidden > 0 && document.activeElement === target) scroller.scrollTop -= hidden;
+        });
+      });
+
+      // On scroll, at most once a frame: the hairline, the button, the progress where CSS cannot draw it from the
+      // scroll itself, and the end of the page, where the last section takes its turn.
+      var cssProgress = !!(window.CSS && CSS.supports && CSS.supports("animation-timeline: scroll()"));
+      var queued = false;
+      function update() {
+        queued = false;
+        var top = scroller.scrollTop, view = scroller.clientHeight, room = scroller.scrollHeight - view;
+        bar.classList.toggle("scrolled", top > 0);
+        if (toTop) toTop.classList.toggle("shown", top > view * 1.5);
+        if (!cssProgress) bar.style.setProperty("--progress", room > 0 ? Math.min(1, top / room).toFixed(4) : "0");
+        var end = room > 0 && top >= room - 2;
+        if (end !== atEnd) { atEnd = end; pick(); }
+      }
+      scroller.addEventListener("scroll", function () {
+        if (!queued) { queued = true; requestAnimationFrame(update); }
+      }, { passive: true });
+
+      // Two observers, so nothing is measured on every frame: the hero's name going up under the bar swaps the
+      // brand slot to the name over the role; a section's edge crossing the reading line (a band one pixel tall)
+      // has the active link picked again. Both depend on the bar's height and the screen's, so a resize sets
+      // them up anew.
+      var watchers = [];
+      function watch() {
+        watchers.forEach(function (watcher) { watcher.disconnect(); });
+        watchers = [];
+        if (!window.IntersectionObserver) return pick();
+        var under = Math.round(bar.getBoundingClientRect().bottom), line = Math.round(readingLine());
+        var name = document.querySelector("#static-content .hero h1");
+        if (name) {
+          var hero = new IntersectionObserver(function (entries) {
+            var entry = entries[entries.length - 1];
+            bar.classList.toggle("passed", !entry.isIntersecting && entry.boundingClientRect.top < entry.rootBounds.top);
+          }, { root: scroller, rootMargin: -under + "px 0px 0px 0px" });
+          hero.observe(name);
+          watchers.push(hero);
+        }
+        var below = Math.max(0, scroller.clientHeight - line - 1);
+        var reading = new IntersectionObserver(pick, { root: scroller, rootMargin: -line + "px 0px " + -below + "px 0px" });
+        sections.forEach(function (section) { if (section) reading.observe(section); });
+        watchers.push(reading);
+      }
+      var resizing = false;
+      window.addEventListener("resize", function () {
+        if (resizing) return;
+        resizing = true;
+        requestAnimationFrame(function () { resizing = false; watch(); place(); update(); });
+      });
+      watch();
+      update();
+      // The pill only slides once it has found its first link, never in from the left edge on arrival.
+      requestAnimationFrame(function () { requestAnimationFrame(function () { list.classList.add("glide"); }); });
+
+      // Once the app has drawn over the page, nothing here has anything left to do.
+      if (window.MutationObserver) {
+        new MutationObserver(function (records, observer) {
+          if (!document.body.classList.contains("app-ready")) return;
+          observer.disconnect();
+          watchers.forEach(function (watcher) { watcher.disconnect(); });
+          setOpen(false);
+        }).observe(document.body, { attributes: true, attributeFilter: ["class"] });
+      }
     })();
   </script>
   <script>

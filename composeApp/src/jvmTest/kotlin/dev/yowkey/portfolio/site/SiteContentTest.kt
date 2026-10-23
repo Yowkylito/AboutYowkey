@@ -73,7 +73,7 @@ class SiteContentTest {
     /** The seven-second skim: every point is in the hero, ahead of the first section. */
     @Test
     fun heroShowsProofAvailabilityAndContact() {
-        val hero = page.substringBefore("</header>")
+        val hero = page.substringAfter("<header class=\"hero\">").substringBefore("</header>")
         val proof = portfolio.profile.proof
         assertTrue(proof.size >= 2, "the hero needs at least two proof points")
         proof.forEach { assertTrue(StaticHtml.escape(it.label) in hero, "hero lacks proof ${it.value}") }
@@ -90,6 +90,39 @@ class SiteContentTest {
         val head = page.substringBefore("<style>")
         assertTrue("localStorage.getItem(\"theme\")" in head, "the saved theme is applied before the styles")
         assertTrue("window.applyTheme = function" in head, "the app switches through the page's applyTheme")
+    }
+
+    /**
+     * The bar leads the scrolling page, ahead of the content, and every link in it lands on the page; the button
+     * follows the content. The app replaces both: at hand-off they hide, the bar keeping its place so nothing under
+     * the canvas shifts.
+     */
+    @Test
+    fun theBarAndTheButtonFrameTheContentAndGiveWayToTheApp() {
+        val scroll = page.substringAfter("<div id=\"static-scroll\">").substringBefore("<div id=\"app\"")
+        val bar = StaticHtml.bar(portfolio)
+        assertTrue(scroll.trimStart().startsWith(bar), "the bar opens the scrolling page")
+        assertTrue(scroll.indexOf("<main id=\"static-content\">") > scroll.indexOf("</header>"), "the bar is outside the main content")
+        assertTrue(scroll.indexOf(StaticHtml.backToTop()) > scroll.indexOf("</main>"), "the button follows the content")
+        Regex("href=\"#([\\w-]+)\"").findAll(bar).map { it.groupValues[1] }.toSet().forEach {
+            assertTrue("id=\"$it\"" in page, "the bar links to #$it, which is not on the page")
+        }
+        listOf("body.app-ready .bar { visibility: hidden; }", "body.app-ready .to-top { display: none; }")
+            .forEach { assertTrue(it in page, "the app does not replace the static bar: $it") }
+    }
+
+    /**
+     * Jumps glide only where motion is welcome, land below the bar, and the switch keeps the app's "theme" key, so the
+     * app opens in the theme picked on the static page.
+     */
+    @Test
+    fun jumpsGlideOnlyWithoutReducedMotionAndLandBelowTheBar() {
+        val css = page.substringAfter("<style>").substringBefore("</style>")
+        assertEquals(1, Regex("scroll-behavior: smooth").findAll(css).count())
+        assertTrue("@media (prefers-reduced-motion: no-preference) { #static-scroll { scroll-behavior: smooth; } }" in css)
+        assertTrue("#static-content [id] { scroll-margin-top: calc(var(--bar-offset) + 24px); }" in css)
+        assertFalse("scroll-padding-top" in css, "it would scroll the page whenever the keyboard reached the bar's own controls")
+        assertTrue("localStorage.setItem(\"theme\", next)" in page && "window.applyTheme(next)" in page)
     }
 
     /** The CV carries a personal phone number; the site must never. */

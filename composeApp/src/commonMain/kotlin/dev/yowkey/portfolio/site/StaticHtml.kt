@@ -12,6 +12,7 @@ import dev.yowkey.portfolio.model.Project
 import dev.yowkey.portfolio.model.Relation
 import dev.yowkey.portfolio.model.Screenshot
 import dev.yowkey.portfolio.model.trackingKey
+import dev.yowkey.portfolio.ui.Section
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -38,7 +39,9 @@ object StaticHtml {
             "url" to escape(portfolio.siteUrl),
             "name" to escape(profile.name),
             "jsonLd" to jsonLd(portfolio),
+            "bar" to bar(portfolio),
             "content" to content(portfolio),
+            "toTop" to backToTop(),
             "build" to build,
         )
         val unknown = Regex("\\{\\{(\\w+)}}").findAll(template).map { it.groupValues[1] }.toSet() - values.keys
@@ -54,6 +57,95 @@ object StaticHtml {
         |""".trimMargin()
 
     fun robots(portfolio: Portfolio): String = "User-agent: *\nAllow: /\nSitemap: ${portfolio.siteUrl}sitemap.xml\n"
+
+    /**
+     * The sticky bar over the page, as the app's: the monogram, which is the Home link; the brand slot; a link to each
+     * section the page has, with the app's names; the theme switch and the menu; and the reading progress along its
+     * bottom edge. The hero already shows the name in huge type, so while it is on screen the slot shows the
+     * availability pill, and only once the hero's name has scrolled under the bar the name over the role. Nothing in
+     * it needs the backend.
+     *
+     * Without the page's script it still works as plain HTML: the links and the monogram are anchors (`#top` is the
+     * empty element ahead of the bar, so the jump lands on the page's very top), the slot keeps the pill, and the
+     * switch and the menu, which only the script can work, are not drawn. The script adds the rest: the swap, the
+     * link to the section being read, the switch, the menu on narrow screens, and the progress where CSS cannot
+     * draw it alone.
+     */
+    fun bar(portfolio: Portfolio): String = buildString {
+        val p = portfolio.profile
+        appendLine("<div id=\"top\"></div>")
+        appendLine("<header class=\"bar\">")
+        appendLine("<div class=\"bar-row\">")
+        appendLine(
+            "<a class=\"mark\" href=\"#top\" aria-label=\"${escape("${p.name}, back to top")}\">" +
+                "<span aria-hidden=\"true\">${escape(initials(p.name))}</span></a>",
+        )
+        append("<div class=\"brand\">")
+        p.availability?.let {
+            append("<span class=\"pill\"><span class=\"dot\" aria-hidden=\"true\"></span><span class=\"text\">${escape(it)}</span></span>")
+        }
+        append("<span class=\"who\"><strong>${escape(p.name)}</strong><span>${escape(role(p.headline))}</span></span>")
+        appendLine("</div>")
+        appendLine("<nav class=\"sections\" id=\"sections\" aria-label=\"Sections\"><ul>")
+        sections(portfolio).forEach { appendLine("<li><a href=\"#${it.name.lowercase()}\">${escape(it.title)}</a></li>") }
+        appendLine("</ul></nav>")
+        appendLine(
+            "<button class=\"theme\" type=\"button\" role=\"switch\" aria-checked=\"false\" aria-label=\"Dark theme\">" +
+                "<span class=\"knob\"></span>$SUN_ICON$MOON_ICON</button>",
+        )
+        appendLine(
+            "<button class=\"menu\" type=\"button\" aria-expanded=\"false\" aria-controls=\"sections\" " +
+                "aria-label=\"Open navigation menu\">$MENU_ICON</button>",
+        )
+        appendLine("</div>")
+        appendLine("<span class=\"progress\" aria-hidden=\"true\"></span>")
+        appendLine("</header>")
+    }
+
+    /**
+     * The round button that takes the reader back up. The page's script shows it once they are about a screen and a
+     * half down; without the script it never shows, and the bar's monogram does the same job as a plain link.
+     */
+    fun backToTop(): String = "<button class=\"to-top\" type=\"button\" aria-label=\"Back to top\">$UP_ICON</button>"
+
+    /**
+     * The sections [content] renders, in its order, which is the app's ([Section]): the bar links to each by its id
+     * (the section's name in lower case, `<section id="experience">`) under the title the app's bar gives it.
+     */
+    private fun sections(portfolio: Portfolio): List<Section> = listOfNotNull(
+        Section.Experience.takeIf { portfolio.experience.isNotEmpty() },
+        Section.Recognition.takeIf { portfolio.recognition.isNotEmpty() },
+        Section.Projects.takeIf { portfolio.projects.isNotEmpty() },
+        Section.Skills.takeIf { portfolio.skills.isNotEmpty() },
+        Section.Services.takeIf { portfolio.services.isNotEmpty() },
+        Section.Contact,
+    )
+
+    /** The monogram's letters: the first of the name's first and last words ("RT"), or one for a one-word name. */
+    private fun initials(name: String): String {
+        val words = name.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
+        return listOfNotNull(words.firstOrNull(), words.drop(1).lastOrNull()).joinToString("") { it.first().uppercase() }
+    }
+
+    /** The headline's role, the part before its first " · " ("Android Developer at DigiPlus since 2024"). */
+    private fun role(headline: String): String = headline.substringBefore(" · ").trim()
+
+    /** The switch's two ends, as the app's: the sun on the left, the moon on the right; the knob covers the one that is on. */
+    private const val SUN_ICON = "<svg class=\"sun\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" aria-hidden=\"true\" focusable=\"false\">" +
+        "<circle cx=\"8\" cy=\"8\" r=\"3\" fill=\"currentColor\"/><path d=\"M8 1.2v1.6M8 13.2v1.6M1.2 8h1.6M13.2 8h1.6" +
+        "M3.2 3.2l1.1 1.1M11.7 11.7l1.1 1.1M3.2 12.8l1.1-1.1M11.7 4.3l1.1-1.1\" stroke=\"currentColor\" " +
+        "stroke-width=\"1.5\" stroke-linecap=\"round\"/></svg>"
+
+    private const val MOON_ICON = "<svg class=\"moon\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" aria-hidden=\"true\" focusable=\"false\">" +
+        "<path d=\"M13.6 10.1A5.9 5.9 0 0 1 5.9 2.4a5.9 5.9 0 1 0 7.7 7.7z\" fill=\"currentColor\"/></svg>"
+
+    /** Three lines, as the app's MenuGlyph; its name is the button's label. */
+    private const val MENU_ICON = "<svg width=\"20\" height=\"20\" viewBox=\"0 0 20 20\" aria-hidden=\"true\" focusable=\"false\">" +
+        "<path d=\"M2 5h16M2 10h16M2 15h16\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/></svg>"
+
+    private const val UP_ICON = "<svg width=\"20\" height=\"20\" viewBox=\"0 0 20 20\" aria-hidden=\"true\" focusable=\"false\">" +
+        "<path d=\"M10 16V4.5M4.5 10L10 4.5l5.5 5.5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" " +
+        "stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>"
 
     /** The semantic body: one `<section>` per part of the page, in the same order as the Compose UI (`Section`). */
     fun content(portfolio: Portfolio): String = buildString {
