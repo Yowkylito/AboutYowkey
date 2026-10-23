@@ -43,6 +43,8 @@ data class RatingSummary(
     val average: Double? = null,
     val stars: Map<String, Int> = emptyMap(),
     @SerialName("private") val keptPrivate: Int = 0,
+    /** [keptPrivate] star by star, `"1"` to `"5"`: what each star's sheet says it cannot show. */
+    val privateStars: Map<String, Int> = emptyMap(),
 ) {
     /** "4.8 from 12 ratings", for the star drawn beside it; null until a note carries a rating. */
     val summary: String?
@@ -53,6 +55,9 @@ data class RatingSummary(
 
     /** How many gave [stars] stars. */
     fun countOf(stars: Int): Int = this.stars[stars.toString()] ?: 0
+
+    /** How many of [countOf] came with words kept private. */
+    fun privateCountOf(stars: Int): Int = privateStars[stars.toString()] ?: 0
 
     /** [countOf] as a share of [count], 0 to 1; 0 while nothing is rated. */
     fun shareOf(stars: Int): Float = if (count <= 0) 0f else countOf(stars).toFloat() / count
@@ -71,10 +76,23 @@ data class PublicNote(
     val message: String,
     /** The day it was left, `YYYY-MM-DD`, in the owner's time zone. */
     val date: String? = null,
+    /** How the writer knows the owner, a [Relation]'s wire value; null when they did not say (and for older notes). */
+    val relation: String? = null,
+    /** The owner pinned it: it comes before the others, everywhere notes are listed. */
+    val pinned: Boolean = false,
 ) {
     /** "Ada · Oct 2026", or "A visitor · Oct 2026" for a note left without a name. */
     val byLine: String
-        get() = listOfNotNull(name?.takeIf { it.isNotBlank() } ?: ANONYMOUS, date?.let(::monthAndYear)).joinToString(" · ")
+        get() = listOfNotNull(displayName, date?.let(::monthAndYear)).joinToString(" · ")
+
+    /** The name as the card's title: the one given, or "A visitor". */
+    val displayName: String get() = name?.takeIf { it.isNotBlank() } ?: ANONYMOUS
+
+    /** The card's date line, "Oct 23, 2026"; null without a date. */
+    val dateLine: String? get() = date?.let(::fullDate)
+
+    /** The relation worth a badge: a colleague, a friend, a special someone; not "Other", not unsaid. */
+    val badge: Relation? get() = Relation.of(relation)?.takeIf { it != Relation.Other }
 
     companion object {
         const val ANONYMOUS = "A visitor"
@@ -93,7 +111,15 @@ data class SiteNotes(
     val notes: List<PublicNote> = emptyList(),
     val total: Int = notes.size,
     val more: Boolean = false,
-)
+    /**
+     * How many public notes (of the star asked for, if one was) each [Relation] has, by wire value; a note that
+     * says nothing counts as [Relation.Other]. The sheet's sorter shows these beside its chips.
+     */
+    val relations: Map<String, Int> = emptyMap(),
+) {
+    /** How many public notes [relation] has, by [relations]. */
+    fun countOf(relation: Relation): Int = relations[relation.wire] ?: 0
+}
 
 /** The hero's live line: the notes' rating and the visit count, each only once it exists. */
 @Immutable
@@ -119,7 +145,31 @@ fun monthAndYear(day: String): String? {
     return "${Months[month - 1]} ${match.groupValues[1]}"
 }
 
+/** "2026-10-23" → "Oct 23, 2026"; null for anything that is not such a date. */
+fun fullDate(day: String): String? {
+    val match = Regex("""(\d{4})-(\d{2})-(\d{2})""").matchEntire(day) ?: return null
+    val month = match.groupValues[2].toInt().takeIf { it in 1..12 } ?: return null
+    return "${Months[month - 1]} ${match.groupValues[3].toInt()}, ${match.groupValues[1]}"
+}
+
 private val Months = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+/**
+ * How a note's writer knows the owner, as the note form asks (optional). The star sheet sorts notes by it, and a
+ * card shows it as a badge (except [Other]). The wire values are the backend's (`worker/src/handler.js`, `RELATIONS`).
+ */
+enum class Relation(val wire: String, val label: String, val plural: String) {
+    Colleague("colleague", "Colleague", "Colleagues"),
+    Friend("friend", "Friend", "Friends"),
+    Special("special", "Special someone", "Special someone"),
+    Other("other", "Other", "Others"),
+    ;
+
+    companion object {
+        /** The relation [wire] names, whatever its case and spaces; null for none, or for anything else. */
+        fun of(wire: String?): Relation? = wire?.trim()?.lowercase()?.let { value -> entries.firstOrNull { it.wire == value } }
+    }
+}
 
 /**
  * A note for the owner, as the visitor types it. The rules are the backend's (`worker/src/handler.js`,
@@ -142,6 +192,8 @@ data class FeedbackDraft(
     @OptIn(ExperimentalSerializationApi::class)
     @EncodeDefault
     val consent: Boolean = true,
+    /** How they know the owner, a [Relation]'s wire value; empty for not saying, which the JSON leaves out. */
+    val relation: String = "",
 ) {
     /** What stops this note from being sent, message first, as sentences for the visitor; empty when it can go. */
     val problems: List<String>
@@ -154,10 +206,12 @@ data class FeedbackDraft(
             if (name.trim().length > MAX_NAME) add("Keep the name under $MAX_NAME characters.")
             if (contact.trim().length > MAX_CONTACT) add("Keep the email under $MAX_CONTACT characters.")
             if (rating != null && rating !in 1..5) add("The rating is 1 to 5.")
+            if (relation.isNotBlank() && Relation.of(relation) == null) add("Pick one of the ways you know me.")
         }
 
-    /** Trimmed, as the backend stores it. */
-    fun normalized(): FeedbackDraft = FeedbackDraft(name.trim(), contact.trim(), rating, message.trim(), consent)
+    /** Trimmed, as the backend stores it; the relation lowercase. */
+    fun normalized(): FeedbackDraft =
+        FeedbackDraft(name.trim(), contact.trim(), rating, message.trim(), consent, relation.trim().lowercase())
 
     companion object {
         const val MAX_NAME = 80
@@ -179,6 +233,8 @@ object FeedbackCopy {
     const val CONTACT = "Email"
     const val RATING = "Overall impression"
     const val MESSAGE = "Message"
+    const val RELATION = "How do you know me?"
+    const val PINNED = "Pinned"
     const val SEND = "Send note"
     const val SENDING = "Sending…"
     const val THANKS = "Thanks, your note is up."
@@ -208,6 +264,39 @@ object FeedbackCopy {
     /** A bar as one spoken line: "5 stars: 18 ratings, 75 percent". */
     fun barLabel(stars: Int, count: Int, percent: String): String =
         "$stars ${if (stars == 1) "star" else "stars"}: $count ${if (count == 1) "rating" else "ratings"}, ${percent.removeSuffix("%")} percent"
+
+    // The star sheet, which a dashboard bar opens.
+
+    const val ALL_RELATIONS = "All"
+    const val CLOSE = "Close"
+
+    /** A bar's action, for screen readers: "Show the 5-star notes". */
+    fun openSheet(stars: Int): String = "Show the $stars-star notes"
+
+    /** The sheet's title: "5-star notes". */
+    fun sheetTitle(stars: Int): String = "$stars-star notes"
+
+    /** Under the title: "4 ratings · 1 note to read". */
+    fun sheetSummary(ratings: Int, readable: Int): String =
+        "$ratings ${if (ratings == 1) "rating" else "ratings"} · $readable ${if (readable == 1) "note" else "notes"} to read"
+
+    /** At the end of a star's list, for the ratings whose words are private: their stars are counted, not shown. */
+    fun privateInSheet(count: Int, stars: Int): String =
+        "+$count private $stars-star ${if (count == 1) "rating" else "ratings"}: sent before notes were public, so only " +
+            "${if (count == 1) "its stars are" else "their stars are"} here."
+
+    /** When the sheet's pick has nothing to read: "No notes from colleagues with 5 stars yet." */
+    fun noneInSheet(relation: Relation?, stars: Int): String {
+        val from = when (relation) {
+            null -> ""
+            Relation.Colleague -> " from colleagues"
+            Relation.Friend -> " from friends"
+            Relation.Special -> " from a special someone"
+            Relation.Other -> " from others"
+        }
+        return "No notes$from with $stars ${if (stars == 1) "star" else "stars"} yet."
+    }
+
     /** "5 · Excellent" down to "1 · Poor": the static page's options, the app's star names. */
     fun ratingLabel(rating: Int): String = "$rating · ${Impressions[rating - 1]}"
 
