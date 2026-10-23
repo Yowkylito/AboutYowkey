@@ -51,6 +51,7 @@ Arrows point one way: UI → ViewModel → repository → parser → model. Noth
   video pass pointer events through to the canvas, so the pager still swipes over it. A video that fails to load
   falls back to the WebP.
 - The detail screen's pinned media column and its top bar divider read the scroll offset in the layer and draw
-  phases. The module diagram levels each line of cards with `IntrinsicSize.Min`, like the card grid.
+  phases. The module diagram levels each line of cards with `IntrinsicSize.Min` too, so a card's "uses" names are a
+  `WrapRow` for the same reason.
 - The card grid levels rows with `IntrinsicSize.Min`, so the card's chip groups use `WrapRow`, whose intrinsic
   height matches what it draws (FlowRow's did not, see `WrapRowLayoutTest`).
