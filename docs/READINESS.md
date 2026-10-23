@@ -25,6 +25,8 @@ apply; what does is below. `[x]` done, `[ ]` open, `N/A` with the reason.
   count, and the dashboard says how many). The owner takes a note down by hiding it, from the inbox or the app, and
   hears of every new note at once (or within 15 minutes before push is set up). `GET /notes` is the only public
   read, a page at a time, cached for 15 seconds
+- [x] The owner pins the notes that should come first (inbox or app); only a note on the site can be pinned, and
+  hiding one unpins it. A note may say how its writer knows the owner, which each star's sheet sorts by
 - [x] Link clicks and countries keep nothing about a person: a click is counted once per visitor per day per link
   by the same daily hash as a visit (the hashes deleted with the next day's first click), only for the links in
   `TRACKED_LINKS`, never for a bot; a country is Cloudflare's guess from the address, stored only as a count per
@@ -116,7 +118,5 @@ performance warn).
 - Custom font. The default font is used; bundling Inter (as in The Eagle's Watch) is a small follow-up
 - `og:image` for link previews. Trigger: when there is artwork for it
 - Editing a note's words (a typo the visitor made, say): today it is shown as is, or hidden. Trigger: the first such note
-- [x] The owner pins the notes that should come first (inbox or app); only a note on the site can be pinned, and
-  hiding one unpins it. A note may say how its writer knows the owner, which each star's sheet sorts by
 - Holding back notes with links or abuse until the owner has looked: today every note is up at once and the owner
   hides what should not be. Trigger: the first spam note that gets through the daily limit and the bot trap
