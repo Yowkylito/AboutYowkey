@@ -15,9 +15,8 @@
   <title>{{title}}</title>
   <meta name="description" content="{{description}}">
   <link rel="canonical" href="{{url}}">
-  <meta name="color-scheme" content="light dark">
-  <meta name="theme-color" content="#F7F5F0" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#0E1014" media="(prefers-color-scheme: dark)">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#FAFAFA">
   <meta property="og:type" content="profile">
   <meta property="og:title" content="{{title}}">
   <meta property="og:description" content="{{description}}">
@@ -26,16 +25,29 @@
   <meta name="twitter:card" content="summary">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <script type="application/ld+json">{{jsonLd}}</script>
+  <script>
+    // The page is light unless the visitor switched to dark: the "theme" key in localStorage, "light" or "dark",
+    // which the app's switch writes too. It is applied here, before the first paint, so a saved theme never flashes
+    // the other one; the app calls applyTheme again on a switch, so the page under its canvas and the browser's own
+    // chrome follow. The colours match ui/theme/Theme.kt.
+    window.applyTheme = function (theme) {
+      var dark = theme === "dark";
+      document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+      var meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) meta.setAttribute("content", dark ? "#0C0E13" : "#FAFAFA");
+    };
+    try { window.applyTheme(localStorage.getItem("theme")); } catch (e) { window.applyTheme("light"); }
+  </script>
   <style>
     :root {
-      --bg: #F7F5F0; --surface: #FFFFFF; --ink: #16181D; --muted: #545A66; --line: #E4E0D7; --line-strong: #CFCAC0;
-      --accent: #C2410C; --on-accent: #FFFFFF;
+      color-scheme: light;
+      --bg: #FAFAFA; --surface: #FFFFFF; --ink: #09090B; --muted: #475569; --line: #E4E4E7; --line-strong: #D4D4D8;
+      --accent: #2563EB; --on-accent: #FFFFFF;
     }
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --bg: #0E1014; --surface: #161A20; --ink: #ECEDEF; --muted: #9AA1AD; --line: #262B33; --line-strong: #3A414C;
-        --accent: #FB923C; --on-accent: #1A0E05;
-      }
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #0C0E13; --surface: #15181F; --ink: #F4F4F5; --muted: #A1A1AA; --line: #27272A; --line-strong: #3F3F46;
+      --accent: #60A5FA; --on-accent: #0B1D3F;
     }
     * { box-sizing: border-box; }
     /*
@@ -77,25 +89,29 @@
     article { scroll-margin-top: 24px; }
     .tagline { font-size: 19px; line-height: 1.45; margin: 8px 0 4px; }
     .disclaimer { color: var(--muted); font-size: 15px; border: 1px solid var(--line-strong); border-radius: 10px; padding: 10px 14px; }
-    /* The note form and the footer's visit count: only rendered when portfolio.json names an "api". */
-    form.feedback { display: grid; gap: 14px; max-width: 640px; margin-top: 12px; }
-    form.feedback .fields { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
-    form.feedback label { display: grid; gap: 6px; font-size: 15px; font-weight: 600; }
-    form.feedback label .muted { font-weight: 400; }
-    form.feedback input, form.feedback select, form.feedback textarea {
+    /* The message form, the note form and the hero's live line: only rendered when portfolio.json names an "api". */
+    form.feedback, form.message { display: grid; gap: 14px; max-width: 640px; margin-top: 12px; }
+    form.feedback .fields, form.message .fields { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+    form.feedback label, form.message label { display: grid; gap: 6px; font-size: 15px; font-weight: 600; }
+    form.feedback label .muted, form.message label .muted { font-weight: 400; }
+    form.feedback input, form.feedback select, form.feedback textarea, form.message input, form.message textarea {
       font: inherit; font-weight: 400; color: var(--ink); background: var(--surface);
       border: 1px solid var(--line-strong); border-radius: 10px; padding: 10px 12px;
     }
-    form.feedback textarea { resize: vertical; min-height: 120px; }
-    form.feedback button {
+    form.feedback textarea, form.message textarea { resize: vertical; min-height: 120px; }
+    form.feedback button, form.message button {
       justify-self: start; font: inherit; font-weight: 600; color: var(--on-accent); background: var(--accent);
       border: 0; border-radius: 10px; padding: 12px 20px; cursor: pointer;
     }
-    form.feedback button:disabled { opacity: .6; cursor: default; }
-    form.feedback .trap { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
-    form.feedback label.consent { display: flex; align-items: center; gap: 10px; font-weight: 400; }
-    form.feedback label.consent input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
-    form.feedback .status { margin: 0; min-height: 1.6em; color: var(--muted); }
+    form.feedback button:disabled, form.message button:disabled { opacity: .6; cursor: default; }
+    form.feedback .trap, form.message .trap { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+    form.feedback label.consent, form.message label.topic { display: flex; align-items: center; gap: 10px; font-weight: 400; }
+    form.feedback label.consent input, form.message label.topic input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
+    form.feedback .status, form.message .status { margin: 0; min-height: 1.6em; color: var(--muted); }
+    form.message fieldset { display: flex; flex-wrap: wrap; gap: 8px 20px; border: 0; margin: 0; padding: 0; }
+    form.message legend { padding: 0; margin: 0 0 6px; font-size: 15px; font-weight: 600; }
+    form.message legend .muted { font-weight: 400; }
+    h3 .badge { vertical-align: middle; }
     .visitor-notes { margin: 40px 0 8px; }
     .notes { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
     .notes li { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 20px; }
@@ -243,6 +259,46 @@
             else { status.textContent = (r.body && r.body.error) || "The note could not be sent. Try again, or email me."; }
           })
           .catch(function () { status.textContent = "The note could not be sent. Check the connection and try again."; })
+          .then(function () { button.disabled = false; });
+      });
+    })();
+  </script>
+  <script>
+    // The LinkedIn and GitHub links (data-track) count their clicks, middle clicks included: a beacon, which the browser
+    // delivers even as the link takes the tab away, at most once per link per page load; the backend counts a visitor
+    // once a day per link anyway. The private message form posts like the note form. Both only exist with an "api".
+    (function () {
+      var tracked = {};
+      function track(event) {
+        if (event.type === "auxclick" && event.button !== 1) return;
+        var link = event.currentTarget, name = link.dataset.track;
+        if (tracked[name] || !navigator.sendBeacon) return;
+        tracked[name] = true;
+        try { navigator.sendBeacon(link.dataset.api + "/clicks", JSON.stringify({ link: name })); } catch (e) {}
+      }
+      Array.prototype.forEach.call(document.querySelectorAll("a[data-track][data-api]"), function (link) {
+        link.addEventListener("click", track);
+        link.addEventListener("auxclick", track);
+      });
+      var form = document.querySelector("form.message[data-api]");
+      if (!form) return;
+      form.addEventListener("submit", function (event) {
+        event.preventDefault();
+        var status = form.querySelector(".status");
+        var button = form.querySelector("button");
+        var message = {};
+        new FormData(form).forEach(function (value, key) { message[key] = value; });
+        button.disabled = true;
+        status.textContent = "Sending…";
+        fetch(form.dataset.api + "/messages", {
+          method: "POST", credentials: "omit", headers: { "Content-Type": "application/json" }, body: JSON.stringify(message),
+        })
+          .then(function (r) { return r.json().then(function (body) { return { ok: r.ok, body: body }; }); })
+          .then(function (r) {
+            if (r.ok) { form.reset(); status.textContent = "Thanks, your message is in. I'll reply to the contact you left."; }
+            else { status.textContent = (r.body && r.body.error) || "The message could not be sent. Try again, or email me."; }
+          })
+          .catch(function () { status.textContent = "The message could not be sent. Check the connection and try again."; })
           .then(function () { button.disabled = false; });
       });
     })();

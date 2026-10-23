@@ -170,6 +170,16 @@ Browsers without WasmGC, or a failed download, just keep the HTML version. It ca
 screens do, one `<article id="project-<id>">` per project, and a `#/projects/<id>` link scrolls to that article
 there too.
 
+With an `api` in `portfolio.json` (see below), both versions also count clicks on the profile's LinkedIn and GitHub
+links, and carry a private **Message me** form. A click leaves as a beacon (`navigator.sendBeacon`), which the browser
+delivers even as the link takes the tab away; the page sends it at most once per link per page load and never makes
+the link wait for it. The worker counts it once per visitor per day per link, telling visitors apart by the same
+salted daily hash as visits, and nothing is stored on the device. The desktop window is the owner's, so it counts
+nothing. The message form sits above the published notes and the public **Leave a note** form, and each is badged
+Private or Public: a message asks for a way to reply (an email, or anything else) and an optional topic (a job, a
+freelance project, a collaboration, something else), only the owner reads it, and it is never shown on the site.
+Without the page's script, both forms post as plain HTML forms and the worker answers with a page.
+
 ## Run it
 
 JDK 17+ (Android Studio's bundled JBR works).
@@ -269,5 +279,53 @@ Cloudflare Workers" template, with D1 edit added). Without them the workflow onl
 **Locally**: `npm run dev` in `worker/` serves it at `http://localhost:8787` against a SQLite file under
 `.wrangler/` (`npm run db:init:local` first, which applies the migrations locally; copy `.dev.vars.example` to `.dev.vars` for the two secrets). Set
 `"api": "http://localhost:8787"` in `portfolio.json` while testing: the parser allows `http://` for localhost only.
+
+**Messages, link clicks and the owner's app**: the worker also keeps
+
+- **Messages**: what the contact form sends privately (the contact is required, so there is someone to write back
+  to; the topic is job, freelance, collaboration or other). A message is never on the site. A visitor may send 3
+  a day, and the same hidden field catches bots.
+- **Link clicks**: how many visitors clicked the links named in `TRACKED_LINKS` (`worker/wrangler.toml`: LinkedIn
+  and GitHub), once per visitor per day per link, told apart by the same daily hash as visits and deleted the
+  same way. Bots are not counted.
+- **Countries**: Cloudflare's guess at a counted visit's country, kept only as a count per country per day, never
+  next to a visitor.
+
+Everything is counted by your day, Asia/Manila (`TIME_ZONE`), and at 23:59 there a cron writes the day's report.
+Each new note, new message and daily report is kept as an alert that the Android app reads from the worker's
+`/admin/` routes (the same `ADMIN_TOKEN`, sent as a Bearer token), and, once Firebase is set up, pushed to your
+phone as it happens. The inbox page shows the messages too, with **Mark read**, **Archive** and **Delete**, and
+today's link clicks.
+
+To turn it on, once, in `worker/`:
+
+1. Create the new tables (`worker/migrations/0003`):
+
+   ```bash
+   npm run db:init
+   ```
+
+2. A free [Firebase project](https://console.firebase.google.com/), and in it an Android app with the package name
+   `dev.yowkey.portfolio`. The `google-services.json` it offers is for the app's build, not the worker.
+
+3. The key the worker sends pushes with: in the Firebase console, **Project settings → Service accounts →
+   Generate new private key**. It downloads a JSON file; keep it out of the repo.
+
+4. Hand it to the worker as a secret (Wrangler reads the file from the pipe, so the key is never in a command or a
+   config file), then delete the file:
+
+   ```bash
+   npx wrangler secret put FCM_SERVICE_ACCOUNT < key.json
+   ```
+
+5. Deploy, which also sets up the 23:59 cron:
+
+   ```bash
+   npm run deploy
+   ```
+
+Without step 4 the rest still works: the alerts are kept, and the app finds them when it checks every 15 minutes;
+they just do not arrive the moment they happen. Locally, `npx wrangler dev --test-scheduled` runs the daily report
+when you open `/__scheduled`.
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and [`docs/READINESS.md`](docs/READINESS.md).

@@ -41,10 +41,11 @@ import dev.yowkey.portfolio.model.FeedbackCopy
 import dev.yowkey.portfolio.model.FeedbackDraft
 import dev.yowkey.portfolio.ui.FeedbackUiState
 import dev.yowkey.portfolio.ui.components.StarGlyph
+import dev.yowkey.portfolio.ui.components.StatusBadge
 
 /**
- * The note form under the Contact block: name and email (both optional), an overall impression out of five, the
- * message, the consent to show it, Send. [state] is the ViewModel's: while a note is on its way the button waits; a failure's sentence
+ * The public note form, after the published notes it may join: name and email (both optional), an overall
+ * impression out of five, the message, the consent to show it, Send. [state] is the ViewModel's: while a note is on its way the button waits; a failure's sentence
  * shows beside it; once sent, the form gives way to a thank-you and a way to write another. The draft is saveable,
  * so scrolling the row off the screen and back keeps it; the thank-you need not be.
  */
@@ -57,14 +58,25 @@ fun FeedbackForm(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier.widthIn(max = 640.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text(
-            FeedbackCopy.TITLE,
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.semantics { heading() },
-        )
+        FormTitle(FeedbackCopy.TITLE, FeedbackCopy.PUBLIC)
         Text(FeedbackCopy.INTRO, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (state is FeedbackUiState.Sent) SentNote(onReset) else DraftForm(state, onSend, wide)
+    }
+}
+
+/**
+ * A form's title with who reads what is sent beside it ("Private" for a message, "Public" for a note), so the two
+ * forms of the Contact section cannot be mistaken for each other. One heading node: "Message me, Private".
+ */
+@Composable
+internal fun FormTitle(title: String, audience: String) {
+    Row(
+        Modifier.semantics(mergeDescendants = true) { heading() },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(title, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onBackground)
+        StatusBadge(audience)
     }
 }
 

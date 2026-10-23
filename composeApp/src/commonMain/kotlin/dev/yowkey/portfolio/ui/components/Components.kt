@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -39,6 +40,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.yowkey.portfolio.model.Link
+import dev.yowkey.portfolio.ui.theme.LocalThemeSwitch
 
 private val EaseOutCubic = CubicBezierEasing(0.33f, 1f, 0.68f, 1f)
 
@@ -219,14 +221,21 @@ fun Bullet(text: String, modifier: Modifier = Modifier) {
     }
 }
 
-/** Opens [link] with the platform's handler: a new tab on the web, the default browser or mail app on desktop. */
+/**
+ * Opens [link] with the platform's handler: a new tab on the web, the default browser or mail app on desktop. Then,
+ * and only then, [onOpened] hears of it (to count the click), so nothing it does can hold up or stop the link.
+ */
 @Composable
-fun LinkButton(link: Link, modifier: Modifier = Modifier, primary: Boolean = false) {
+fun LinkButton(link: Link, modifier: Modifier = Modifier, primary: Boolean = false, onOpened: () -> Unit = {}) {
     val uriHandler = LocalUriHandler.current
+    val open = {
+        uriHandler.openUri(link.url)
+        onOpened()
+    }
     if (primary) {
-        Button(onClick = { uriHandler.openUri(link.url) }, modifier = modifier) { Text(link.label) }
+        Button(onClick = open, modifier = modifier) { Text(link.label) }
     } else {
-        OutlinedButton(onClick = { uriHandler.openUri(link.url) }, modifier = modifier) { Text(link.label) }
+        OutlinedButton(onClick = open, modifier = modifier) { Text(link.label) }
     }
 }
 
@@ -239,5 +248,18 @@ fun MenuGlyph(modifier: Modifier = Modifier) {
         listOf(0.25f, 0.5f, 0.75f).forEach { y ->
             drawLine(color, Offset(0f, size.height * y), Offset(size.width, size.height * y), stroke, StrokeCap.Round)
         }
+    }
+}
+
+/**
+ * The light/dark switch in the page's bars. The glyph shows what a press gives, a moon on the light page and a sun
+ * on the dark one; the label says it in words for the accessibility tree.
+ */
+@Composable
+fun ThemeToggle(modifier: Modifier = Modifier) {
+    val theme = LocalThemeSwitch.current
+    val label = if (theme.dark) "Switch to the light theme" else "Switch to the dark theme"
+    IconButton(onClick = theme.toggle, modifier = modifier.semantics { contentDescription = label }) {
+        ThemeGlyph(dark = theme.dark, color = MaterialTheme.colorScheme.onBackground)
     }
 }

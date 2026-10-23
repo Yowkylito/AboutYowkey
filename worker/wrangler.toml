@@ -1,5 +1,8 @@
 # The portfolio's backend. Setup and the owner's commands: README.md, "Visits and feedback".
-# Secrets (ADMIN_TOKEN, VISITOR_SALT) are set with `npx wrangler secret put <NAME>`, never written here.
+# Secrets (ADMIN_TOKEN, VISITOR_SALT) are set with `npx wrangler secret put <NAME>`, never written here. So is the
+# optional FCM_SERVICE_ACCOUNT, the Firebase service-account key (JSON) that lets the worker push alerts to the
+# owner's phone: `npx wrangler secret put FCM_SERVICE_ACCOUNT < key.json`. Without it, alerts are only records the
+# owner's app polls.
 name = "aboutyowkey-api"
 main = "src/index.js"
 compatibility_date = "2026-09-01"
@@ -20,3 +23,11 @@ migrations_dir = "migrations"
 ALLOWED_ORIGINS = "https://yowkylito.github.io,http://localhost:8080"
 # Where a plain form post (a browser without the page's script) is sent back to.
 SITE_URL = "https://yowkylito.github.io/AboutYowkey/"
+# The owner's time zone: visits, clicks, notes and messages are counted by its date, and the daily report is about it.
+TIME_ZONE = "Asia/Manila"
+# The links on the page whose clicks are counted (POST /clicks), comma-separated, lowercase.
+TRACKED_LINKS = "linkedin,github"
+
+[triggers]
+# The daily report. Cron times are UTC: 15:59 UTC is 23:59 in Asia/Manila (UTC+8 all year, no daylight saving).
+crons = ["59 15 * * *"]

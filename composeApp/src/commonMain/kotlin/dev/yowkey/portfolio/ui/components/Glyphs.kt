@@ -7,9 +7,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathOperation
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -17,6 +19,9 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.yowkey.portfolio.model.PlatformKind
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 
 /*
  * Small line glyphs, drawn rather than taken from an icon font or library: nothing extra to download on the web,
@@ -127,6 +132,37 @@ fun CheckGlyph(color: Color, modifier: Modifier = Modifier, glyphSize: Dp = 18.d
             onDrawBehind {
                 drawCircle(color.copy(alpha = 0.14f))
                 drawPath(tick, color, style = stroke)
+            }
+        },
+    )
+}
+
+/** The theme switch's glyph: a sun on the dark page (press for light), a crescent moon on the light one. */
+@Composable
+fun ThemeGlyph(dark: Boolean, color: Color, modifier: Modifier = Modifier, glyphSize: Dp = 20.dp) {
+    Spacer(
+        modifier.size(glyphSize).drawWithCache {
+            val stroke = Stroke(width = 1.8.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+            val w = size.width
+            val c = Offset(w / 2, size.height / 2)
+            if (dark) {
+                val rays = (0 until 8).map { i ->
+                    val angle = (i * PI / 4).toFloat()
+                    Offset(cos(angle), sin(angle))
+                }
+                onDrawBehind {
+                    drawCircle(color, w * 0.19f, c, style = stroke)
+                    rays.forEach { dir ->
+                        drawLine(color, c + dir * (w * 0.33f), c + dir * (w * 0.45f), stroke.width, StrokeCap.Round)
+                    }
+                }
+            } else {
+                // A disc with a second one cut out of its upper right: the crescent's inner edge.
+                val r = w * 0.36f
+                val disc = Path().apply { addOval(Rect(c, r)) }
+                val cut = Path().apply { addOval(Rect(c + Offset(r * 0.6f, -r * 0.6f), r * 0.9f)) }
+                val moon = Path().apply { op(disc, cut, PathOperation.Difference) }
+                onDrawBehind { drawPath(moon, color, style = stroke) }
             }
         },
     )

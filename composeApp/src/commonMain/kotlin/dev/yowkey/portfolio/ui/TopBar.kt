@@ -29,10 +29,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.yowkey.portfolio.ui.components.MenuGlyph
+import dev.yowkey.portfolio.ui.components.ThemeToggle
 
 /**
- * The sticky navigation bar. [scrolled] is a lambda so the divider is decided in the draw phase: scrolling never
- * recomposes the bar, only [active] changes do.
+ * The sticky navigation bar, with the theme switch at its end. [scrolled] is a lambda so the divider is decided in
+ * the draw phase: scrolling never recomposes the bar, only [active] changes do.
  */
 @Composable
 fun TopBar(
@@ -66,11 +67,13 @@ fun TopBar(
             }
             Box(Modifier.weight(1f))
             if (compact) {
+                ThemeToggle()
                 CompactMenu(sections, active, onNavigate)
             } else {
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     sections.forEach { section -> NavLink(section, section == active, onNavigate) }
                 }
+                ThemeToggle()
             }
         }
     }

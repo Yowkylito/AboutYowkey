@@ -96,22 +96,30 @@ class PageItemsTest {
         assertNull(rows.first().note, "no private repo, so no note")
     }
 
-    /** The note form sits in the Contact section, after the contact block, only when the content names a backend. */
+    /**
+     * The two forms sit in the Contact section, only when the content names a backend: the private message form right
+     * after the contact block, the public note form last.
+     */
     @Test
-    fun theNoteFormFollowsContactOnlyWithABackend() {
+    fun theFormsFollowContactOnlyWithABackend() {
         val without = buildPageItems(portfolio, 1, 1)
-        assertFalse(without.any { it is PageItem.Feedback })
+        assertFalse(without.any { it is PageItem.Feedback || it is PageItem.Message })
 
         val items = buildPageItems(portfolio.copy(api = "https://api.example"), 1, 1)
-        assertEquals(listOf(PageItem.Contact(null, portfolio.links), PageItem.Feedback, PageItem.Footer), items.takeLast(3))
-        assertEquals(Section.Contact, PageItem.Feedback.section)
-        assertFalse(PageItem.Feedback.showsHeader)
-        assertEquals(sectionStarts(without).keys.toList(), sectionStarts(items).keys.toList(), "no section, so no nav entry, of its own")
+        assertEquals(
+            listOf(PageItem.Contact(null, portfolio.links), PageItem.Message, PageItem.Feedback, PageItem.Footer),
+            items.takeLast(4),
+        )
+        listOf(PageItem.Message, PageItem.Feedback).forEach {
+            assertEquals(Section.Contact, it.section)
+            assertFalse(it.showsHeader)
+        }
+        assertEquals(sectionStarts(without).keys.toList(), sectionStarts(items).keys.toList(), "no section, so no nav entry, of their own")
     }
 
-    /** The published notes sit between the contact block and the form, chunked like the project cards. */
+    /** The published notes sit between the message form and the note form, chunked like the project cards. */
     @Test
-    fun thePublishedNotesComeBetweenContactAndTheFormInRows() {
+    fun thePublishedNotesComeBetweenTheTwoFormsInRows() {
         val notes = (1..5).map { PublicNote(it.toLong(), "N$it", 5, "M$it", "2026-10-24") }
         val withApi = portfolio.copy(api = "https://api.example")
         val rows = buildPageItems(withApi, 2, 2, notes).filterIsInstance<PageItem.Notes>()
@@ -121,7 +129,10 @@ class PageItemsTest {
         assertTrue(rows.all { it.section == Section.Contact && !it.showsHeader })
 
         val items = buildPageItems(withApi, 1, 1, notes.take(1))
-        assertEquals(listOf(PageItem.Contact(null, portfolio.links), PageItem.Notes(notes.take(1), 1, 0), PageItem.Feedback, PageItem.Footer), items.takeLast(4))
+        assertEquals(
+            listOf(PageItem.Contact(null, portfolio.links), PageItem.Message, PageItem.Notes(notes.take(1), 1, 0), PageItem.Feedback, PageItem.Footer),
+            items.takeLast(5),
+        )
         assertTrue(buildPageItems(portfolio, 1, 1, notes).none { it is PageItem.Notes }, "no backend, no notes, whatever was passed")
         assertTrue(buildPageItems(withApi, 1, 1).none { it is PageItem.Notes }, "no notes yet, no rows")
     }
