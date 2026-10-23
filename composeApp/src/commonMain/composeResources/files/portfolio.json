@@ -162,12 +162,12 @@
         "A control plane and an execution plane: runner agents take jobs from queues on a local PC, stream logs back live and keep an audit trail",
         "Tickets come in from the team chat and the issue tracker through a chat bot and a tracker poller, and an AI coding agent works them",
         "Confirm-first Git: nothing is pushed without a human yes",
-        "An Android client in 15 modules, with Gradle rules that enforce Clean Architecture at compile time, live build streaming over SSE, remote cancel and AI-assisted retries"
+        "An Android client whose Gradle rules enforce Clean Architecture at compile time, with live build streaming over SSE, remote cancel and AI-assisted retries"
       ],
       "engineering": {
         "builtWith": ["Node.js + Express", "SQLite", "Server-Sent Events", "Jetpack Compose"],
         "platforms": ["Self-hosted server", "Android"],
-        "architecture": "A control plane and an execution plane. Runner agents take work from job queues and run it on a local PC; logs stream back over Server-Sent Events and an audit trail records what ran. Chat and tracker integrations feed in the tickets. The Android client is 15 Gradle modules whose dependency rules enforce Clean Architecture, with Ktor, Koin and DataStore.",
+        "architecture": "A control plane and an execution plane. Runner agents take work from job queues and run it on a local PC; logs stream back over Server-Sent Events and an audit trail records what ran. Chat and tracker integrations feed in the tickets. The Android client is split into Gradle modules whose dependency rules enforce Clean Architecture, with Ktor, Koin and DataStore.",
         "decisions": [
           {
             "title": "Control plane split from execution",
@@ -176,7 +176,7 @@
           { "title": "Confirm-first Git", "detail": "Git operations triggered from chat wait for an explicit confirmation before they run." },
           {
             "title": "Layer boundaries enforced by Gradle",
-            "detail": "Clean Architecture boundaries are Gradle dependency rules across 15 modules, so a layer violation fails compilation instead of relying on review."
+            "detail": "Clean Architecture boundaries are Gradle dependency rules between modules, so a layer violation fails compilation instead of relying on review."
           }
         ]
       },
