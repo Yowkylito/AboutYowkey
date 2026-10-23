@@ -485,7 +485,8 @@
         "file": "calm-escape-launch.webp",
         "caption": "Calm Escape's launch: the lotus seal on deep green, then the in-app reveal",
         "width": 332,
-        "height": 720
+        "height": 720,
+        "video": true
       },
       "title": "Calm Escape Premier",
       "tagline": "Multi-tenant spa booking: KMP apps and Next.js sites on one database-enforced schedule",
@@ -604,9 +605,10 @@
       "cover": { "file": "seventhj-cover.webp", "caption": "Seventh J's splash: the SJ mark and wordmark on an obsidian ground", "width": 720, "height": 1600 },
       "coverClip": {
         "file": "seventhj-splash.webp",
-        "caption": "Seventh J's splash: brush strokes swirl inward and settle into the SJ mark",
+        "caption": "Seventh J's splash: brush strokes spiral in over a starry night sky and settle into the SJ mark",
         "width": 252,
-        "height": 560
+        "height": 560,
+        "video": true
       },
       "title": "Seventh J",
       "tagline": "Gallery-inventory app on one Compose Multiplatform UI codebase for Android, iOS and Web",
@@ -667,9 +669,10 @@
       "clips": [
         {
           "file": "seventhj-splash-home.webp",
-          "caption": "First launch on the web build: strokes spin inward, settle into the SJ mark, then hand off to Home as the figures count up",
+          "caption": "First launch: strokes spiral in over a starry night sky, settle into the SJ mark, then hand off to Home",
           "width": 324,
-          "height": 720
+          "height": 720,
+          "video": true
         }
       ],
       "screenshots": [
