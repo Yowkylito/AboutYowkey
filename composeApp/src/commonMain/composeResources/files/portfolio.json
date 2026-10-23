@@ -283,7 +283,7 @@
       "id": "vistago",
       "visibility": "private",
       "cover": { "file": "vistago-cover.webp", "caption": "Vistago's splash: \"Travel, beautifully planned\"", "width": 740, "height": 1600 },
-      "coverClip": { "file": "vistago-splash.webp", "caption": "Vistago's launch: the compass, wordmark and tagline animate in", "width": 332, "height": 720 },
+      "coverClip": { "file": "vistago-splash.webp", "caption": "Vistago's launch: the compass, wordmark and tagline animate in", "width": 332, "height": 720, "video": true },
       "title": "Vistago",
       "tagline": "Offline-first AI travel companion for Android with a self-healing free-LLM model router",
       "summary": "An offline-first AI travel companion for Android: plan trips, translate through the camera, and keep travel memories, with or without a connection.",
