@@ -3,12 +3,15 @@ package dev.yowkey.portfolio.ui
 import dev.yowkey.portfolio.model.Award
 import dev.yowkey.portfolio.model.Experience
 import dev.yowkey.portfolio.model.Project
+import dev.yowkey.portfolio.model.ProjectGroup
+import dev.yowkey.portfolio.model.RepoVisibility
 import dev.yowkey.portfolio.model.Service
 import dev.yowkey.portfolio.model.SkillGroup
 import dev.yowkey.portfolio.samplePortfolio
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class PageItemsTest {
@@ -61,6 +64,35 @@ class PageItemsTest {
         )
         for (columns in 1..2) assertEquals(expected, sectionStarts(buildPageItems(full, columns, columns)).keys.toList())
         assertEquals(expected, Section.entries, "the enum is the page order; keep them in step")
+    }
+
+    /** Work comes first in its own group whatever the content's order; each group's first row carries its title. */
+    @Test
+    fun projectsSplitIntoWorkThenPersonalGroups() {
+        val mixed = samplePortfolio(
+            projects = listOf(
+                Project("side-1", "Side", "S"),
+                Project("job-1", "Job", "S", company = "Acme"),
+                Project("side-2", "Side", "S", visibility = RepoVisibility.Private),
+                Project("job-2", "Job", "S", company = "Acme"),
+                Project("side-3", "Side", "S"),
+            ),
+        )
+        val rows = buildPageItems(mixed, serviceColumns = 2, projectColumns = 2).filterIsInstance<PageItem.Projects>()
+        assertEquals(listOf(listOf("job-1", "job-2"), listOf("side-1", "side-2"), listOf("side-3")), rows.map { row -> row.projects.map { it.id } })
+        assertEquals(listOf(ProjectGroup.Work, ProjectGroup.Personal, ProjectGroup.Personal), rows.map { it.group })
+        assertEquals(listOf(true, true, false), rows.map { it.showsGroupHeader })
+        assertEquals(listOf(true, false, false), rows.map { it.showsHeader }, "one section header, on the first row")
+        assertTrue("Acme" in rows[0].note.orEmpty(), "the work note names the company")
+        assertEquals(RepoVisibility.PRIVATE_NOTE, rows[1].note)
+    }
+
+    @Test
+    fun withoutWorkThereIsOnlyThePersonalGroup() {
+        val rows = buildPageItems(portfolio, 1, 1).filterIsInstance<PageItem.Projects>()
+        assertTrue(rows.all { it.group == ProjectGroup.Personal })
+        assertEquals(1, rows.count { it.showsGroupHeader })
+        assertNull(rows.first().note, "no private repo, so no note")
     }
 
     @Test

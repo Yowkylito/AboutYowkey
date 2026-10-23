@@ -61,6 +61,7 @@ import dev.yowkey.portfolio.model.GalleryItem
 import dev.yowkey.portfolio.model.Link
 import dev.yowkey.portfolio.model.Module
 import dev.yowkey.portfolio.model.Project
+import dev.yowkey.portfolio.model.ProofPoint
 import dev.yowkey.portfolio.model.RepoVisibility
 import dev.yowkey.portfolio.model.Screenshot
 import dev.yowkey.portfolio.ui.PageLayout
@@ -75,6 +76,7 @@ import dev.yowkey.portfolio.ui.image.CoverClip
 import dev.yowkey.portfolio.ui.image.ScreenshotViewer
 import dev.yowkey.portfolio.ui.image.ViewerMediaImage
 import dev.yowkey.portfolio.ui.image.ViewerRequest
+import dev.yowkey.portfolio.ui.sections.FigureList
 import dev.yowkey.portfolio.ui.sections.MediaFrame
 import dev.yowkey.portfolio.ui.sections.ProjectHeading
 import dev.yowkey.portfolio.ui.sections.ScreenshotStrip
@@ -85,7 +87,8 @@ import dev.yowkey.portfolio.ui.theme.PortfolioTheme
 /**
  * One project, in the order a recruiter and then an engineering manager read it: what it is (media, title, line),
  * what it did (highlights), how it is built (chips, architecture, module diagram, decisions, quality), then the
- * gallery, the full stack and the links.
+ * gallery, the full stack and the links. Work has no media; after its title come its figures, impact, my
+ * contributions and the optimizations and audits, then how it is built.
  *
  * Expanded windows put the media on the left and the text on the right, the media staying in view while the text
  * scrolls; narrower ones stack everything in one column. Back is the top bar's button, Escape, the button at the end, or the browser's Back (via the router).
@@ -176,10 +179,18 @@ fun ProjectDetailScreen(
 @Composable
 private fun DetailText(project: Project, compact: Boolean, onBack: () -> Unit, gallery: (@Composable () -> Unit)? = null) {
     DetailHeader(project, compact)
+    // Work, outcome first: the numbers, what it changed, my part in it, then the optimizations and audits.
+    if (project.figures.isNotEmpty()) FigureList(project.figures, large = !compact)
+    if (project.impact.isNotEmpty()) {
+        DetailSection("Impact") { ImpactList(project.impact) }
+    }
     if (project.highlights.isNotEmpty()) {
-        DetailSection("Highlights") {
+        DetailSection(project.highlightsTitle) {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) { project.highlights.forEach { Bullet(it) } }
         }
+    }
+    if (project.optimizations.isNotEmpty()) {
+        DetailSection("Optimizations and audits") { Checklist(project.optimizations) }
     }
     project.engineering?.let { engineering -> HowItsBuilt(engineering) }
     gallery?.invoke()
@@ -262,6 +273,23 @@ private fun Decisions(decisions: List<Decision>) {
                 }
             }
         }
+    }
+}
+
+/** What the work changed, a step up from the bullets that follow: larger text beside one accent rule. */
+@Composable
+private fun ImpactList(items: List<String>) {
+    val rule = MaterialTheme.colorScheme.primary
+    Column(
+        Modifier
+            .drawBehind {
+                val x = 1.5.dp.toPx()
+                drawLine(rule, Offset(x, 0f), Offset(x, size.height), 3.dp.toPx())
+            }
+            .padding(start = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        items.forEach { Text(it, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface) }
     }
 }
 
@@ -461,8 +489,30 @@ private fun ExpandedDetailDarkPreview() = PortfolioTheme(darkTheme = true) {
 @Composable
 private fun TextOnlyDetailPreview() = PortfolioTheme {
     ProjectDetailScreen(
-        Project("myai", "MyAI", "A self-hosted control platform.", highlights = listOf("Confirm-first Git workflow")),
+        Project("automation", "Workflow automation", "A self-hosted control platform.", highlights = listOf("Confirm-first Git workflow")),
         ExpandedPreviewLayout,
+        onBack = {},
+    )
+}
+
+/** Work: figures, impact, contributions, optimizations and audits, then how it is built. */
+@Preview(widthDp = 412, heightDp = 2000)
+@Composable
+private fun WorkDetailPreview() = PortfolioTheme {
+    ProjectDetailScreen(
+        previewProject.copy(
+            id = "arenaplus",
+            title = "ArenaPlus",
+            visibility = null,
+            screenshots = emptyList(),
+            links = emptyList(),
+            company = "DigiPlus",
+            role = "Android developer",
+            figures = listOf(ProofPoint("53%", "of V2's code, written by me"), ProofPoint("270K+", "lines across 413 commits")),
+            impact = listOf("The app runs native-only instead of inside a WebView."),
+            optimizations = listOf("Cut cold-start work on the main thread", "Audited the minified release build"),
+        ),
+        CompactPreviewLayout,
         onBack = {},
     )
 }

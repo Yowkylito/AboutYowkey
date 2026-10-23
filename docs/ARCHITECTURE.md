@@ -11,6 +11,7 @@ ui/      PortfolioRoute ── koinViewModel ──► PortfolioViewModel ──
 data/    PortfolioRepository ◄── ResourcePortfolioRepository(readContent, dispatcher)
            └─ PortfolioParser (decode + validate)
 model/   Portfolio, Profile, Service, Project, Engineering, Experience, SkillGroup, Link   (@Serializable, @Immutable)
+         ProjectGroup (work, then personal: a project with a company is work)
          ModuleGraph (cycle check, dependency layers for the module diagram)
 site/    StaticHtml (common)  ◄── jvmMain/site/StaticSite.kt ◄── Gradle task generateStaticSite
 ```
@@ -23,7 +24,8 @@ Arrows point one way: UI → ViewModel → repository → parser → model. Noth
 | `data/PortfolioParser` | Turns JSON into a valid `Portfolio` or fails with a reason. Shared by the app and the build. |
 | `data/PortfolioRepository` | Loads the portfolio off the main thread; the source (`Res.readBytes`) is injected so tests fake it. |
 | `ui/PortfolioViewModel` | `Loading → Ready | Error`, with a retry that ignores double taps. |
-| `ui/PageItems` | Flattens the portfolio into keyed lazy-list rows for the current column count. Pure, unit-tested. |
+| `ui/PageItems` | Flattens the portfolio into keyed lazy-list rows for the current column count, the projects split into their two groups (work first, each group's first row carrying its title and note). Pure, unit-tested. |
+| `ui/sections` | The page's rows. Projects use `WorkCard` (figures, no media: the code is the employer's) or `ProjectCard` (cover or clip). |
 | `ui/PortfolioScreen` | Stateless page: adaptive layout from `WindowSizeClass`, nav, reveal animation, list ↔ detail switch. |
 | `ui/navigation` | `Route` (`Home` / `Project(id)`, parsed from and written to `#/projects/<id>`) and the `Navigator` interface. The web's `HashNavigator` (wasmJsMain) keeps it in browser history; the desktop uses `InMemoryNavigator`. Provided per platform by `di/platformModule` (expect/actual). |
 | `ui/detail` | `ProjectDetailScreen` (two columns on expanded, one below) and `ModuleDiagram`, bands of cards from `ModuleGraph.layers` that wrap to the width instead of scrolling. |

@@ -7,6 +7,7 @@ import dev.yowkey.portfolio.model.Link
 import dev.yowkey.portfolio.model.Portfolio
 import dev.yowkey.portfolio.model.Profile
 import dev.yowkey.portfolio.model.Project
+import dev.yowkey.portfolio.model.ProjectGroup
 import dev.yowkey.portfolio.model.Service
 import dev.yowkey.portfolio.model.SkillGroup
 
@@ -44,7 +45,18 @@ sealed interface PageItem {
         override val section = Section.Services
     }
 
-    data class Projects(val projects: List<Project>, val columns: Int, override val showsHeader: Boolean) : PageItem {
+    /**
+     * One row of a [ProjectGroup]'s cards. The first row of each group carries the group's title and [note]; only
+     * the first row of the first group carries the section header.
+     */
+    data class Projects(
+        val projects: List<Project>,
+        val columns: Int,
+        override val showsHeader: Boolean,
+        val group: ProjectGroup,
+        val showsGroupHeader: Boolean,
+        val note: String? = null,
+    ) : PageItem {
         override val key = "projects-${projects.first().id}"
         override val section = Section.Projects
     }
@@ -89,8 +101,11 @@ fun buildPageItems(portfolio: Portfolio, serviceColumns: Int, projectColumns: In
         add(PageItem.Job(job, index, isLast = index == portfolio.experience.lastIndex))
     }
     if (portfolio.recognition.isNotEmpty()) add(PageItem.Recognition(portfolio.recognition))
-    portfolio.projects.chunked(projectColumns).forEachIndexed { row, chunk ->
-        add(PageItem.Projects(chunk, projectColumns, showsHeader = row == 0))
+    portfolio.projectGroups.forEachIndexed { index, (group, members) ->
+        val note = group.note(members)
+        members.chunked(projectColumns).forEachIndexed { row, chunk ->
+            add(PageItem.Projects(chunk, projectColumns, showsHeader = index == 0 && row == 0, group, showsGroupHeader = row == 0, note))
+        }
     }
     if (portfolio.skills.isNotEmpty()) add(PageItem.Skills(portfolio.skills))
     portfolio.services.chunked(serviceColumns).forEachIndexed { row, chunk ->
