@@ -28,6 +28,9 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Alignment
 import dev.yowkey.portfolio.model.GalleryItem
@@ -122,7 +125,28 @@ fun ScreenshotStrip(
     }
 }
 
-/** A short note under a section's header, such as why some projects have no source link. */
+/**
+ * A group inside a section, such as Projects' "Professional work": an accent label ruled to the edge, then its
+ * [note]. Unlike both the section header above it and the card titles below, so the hierarchy reads section,
+ * group, card. The label on the background is 4.8:1 in light and 8.4:1 in dark.
+ */
+@Composable
+fun GroupHeader(title: String, note: String?, modifier: Modifier = Modifier) {
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(
+                title.uppercase(),
+                style = MaterialTheme.typography.labelLarge.copy(letterSpacing = 1.4.sp),
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.semantics { heading() },
+            )
+            HorizontalDivider(Modifier.weight(1f), color = MaterialTheme.colorScheme.outlineVariant)
+        }
+        note?.let { SectionNote(it) }
+    }
+}
+
+/** A short note under a header, such as why some projects have no source link. */
 @Composable
 fun SectionNote(text: String, modifier: Modifier = Modifier) {
     Text(

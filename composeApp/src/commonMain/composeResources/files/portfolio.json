@@ -35,6 +35,155 @@
   ],
   "projects": [
     {
+      "id": "arenaplus",
+      "company": "DigiPlus",
+      "role": "Android developer",
+      "period": "Sep 2024 – Present",
+      "title": "ArenaPlus",
+      "tagline": "Co-built the V2 Android app from day one, then led its move from WebView to native",
+      "summary": "ArenaPlus is DigiPlus's sports entertainment app. I co-built its V2 Android app from the first commit, wrote more than half of its code, built its deposit, withdrawal and bank-linking flows, and led the migration that took the app from a hybrid WebView shell to a native-only runtime.",
+      "figures": [
+        { "value": "53%", "label": "of V2's code, written by me" },
+        { "value": "270K+", "label": "lines across 413 commits" },
+        { "value": "20", "label": "Gradle modules on the architecture I set up" }
+      ],
+      "impact": [
+        "ArenaPlus runs native-only: V2 replaced the hybrid WebView app inside the shipping app, with no stop in releases",
+        "Players deposit, withdraw and link bank accounts through flows I built end to end",
+        "Attribution and first-deposit bonuses run automatically from the campaign triggers I built",
+        "Recognised for it: Rank #2 of the Top 9 awardees chosen by executive leadership, #1 story-point owner of about 40 engineers, and the ArenaPlus team's Rockstar of the Month"
+      ],
+      "highlights": [
+        "Set up V2's day-one Gradle architecture, UI foundations and navigation, then wrote 53% of its code: 270K+ lines across 413 commits",
+        "Led the WebView-to-native migration: ported V2 into the original app as decoupled modules and switched it on flow by flow, each with a fallback to its web version",
+        "Built deposits, withdrawals, automated bank-linking and a custom withdrawal module end to end, with identity-verification (eKYC) checks where the rules require them",
+        "Integrated Adjust attribution with automated channel tracking, campaign triggers and first-deposit bonus delivery",
+        "Built a shake-to-open API debugger for the team, skeleton loaders, and livestreams that unlock with a validated bet"
+      ],
+      "optimizations": [
+        "Cut cold-start work: SDK set-up moved off the main thread, duplicate initialisation and unused SDKs removed, the network stack pre-warmed behind the splash; added a startup Macrobenchmark and Baseline Profiles",
+        "Removed wasted recomposition: a Compose stability configuration across 16 modules, and stable allocations in the navigation host every screen sits under",
+        "Reduced memory use under heavy real-time traffic, and made the app ready for 16 KB memory pages",
+        "Security audit of the app's network, WebView and logging layers; shipped the fixes with unit tests and device checks",
+        "Audited the R8-minified release: keep rules verified for every serialized model and all 241 serializers, then a device smoke test with no crash or ANR",
+        "Audited each native flow against its web version, screen by screen, before switching it on"
+      ],
+      "engineering": {
+        "builtWith": ["Jetpack Compose", "Koin", "Retrofit + OkHttp", "SignalR"],
+        "platforms": ["Android"],
+        "architecture": "V2 is a multi-module Compose app: an app module over 15 feature modules (home, sports, casino, wallet, profile and more) and 3 core modules for UI, data and the sportsbook, wired with Koin. For the migration, the original app hosts V2 as decoupled modules, and a router opens each flow natively or in its web version.",
+        "decisions": [
+          {
+            "title": "Migrate inside the shipping app",
+            "detail": "V2 went into the original app as decoupled modules instead of replacing it, so releases continued and each flow could move to native on its own schedule."
+          },
+          {
+            "title": "A rollout that can back out",
+            "detail": "A server-side switch turns the native app on or off without a release, and a start after a native crash reopens the web version, so a crash does not leave players stuck."
+          },
+          {
+            "title": "Stable types for Compose",
+            "detail": "Compose treats a List as unstable, so every screen taking a network model re-ran on any change. A stability configuration across 16 modules lets those screens skip."
+          }
+        ],
+        "quality": [
+          "Startup Macrobenchmark and Baseline Profiles",
+          "Table-driven unit tests for identity-verification and routing rules",
+          "R8 release builds smoke-tested on a device"
+        ]
+      },
+      "stack": ["Kotlin", "Jetpack Compose", "Koin", "Retrofit", "OkHttp", "Gson", "SignalR", "Adjust SDK", "Baseline Profiles", "Macrobenchmark"]
+    },
+    {
+      "id": "arena-social",
+      "company": "DigiPlus",
+      "role": "Android developer, solo",
+      "period": "Jun – Jul 2026",
+      "title": "Arena Social",
+      "tagline": "Built alone and shipped in 30 days: a web product turned into a native Android app",
+      "summary": "Arena Social is a fan community app in the ArenaPlus family, where fans make picks and predictions and watch video. I built its Android app on my own, from the first commit to launch in 30 days, wrapping the web experience in native navigation, loading and video.",
+      "figures": [
+        { "value": "30 days", "label": "from first commit to launch" },
+        { "value": "~100%", "label": "of the code, written by me" },
+        { "value": "95%", "label": "of the commits" }
+      ],
+      "impact": [
+        "DigiPlus got a native Android app for a web-only product in one month, built by one developer",
+        "Fans get native navigation, loading and a pinned video player instead of a website in a frame"
+      ],
+      "highlights": [
+        "Architected the app on Clean Architecture with MVI: Compose screens, use cases and repositories, wired with Koin",
+        "Native navigation around the web content: custom navigators, a header, a bottom bar and a profile sheet that follow the signed-in state",
+        "A video player that stays pinned to the top of the Watch screen while the page scrolls under it",
+        "Native splash, loading and error screens for every web page"
+      ],
+      "optimizations": [
+        "Removed the WebView's white flash between pages and its cookie prompt, so pages open like native screens",
+        "Audited every loading path and gave each a native loading or error state"
+      ],
+      "engineering": {
+        "builtWith": ["Jetpack Compose", "Koin", "Android WebView"],
+        "platforms": ["Android"],
+        "architecture": "One app module layered as Clean Architecture: Compose screens over MVI ViewModels, use cases and repositories, wired with Koin. A WebView host with nested scrolling renders the web sections inside native chrome: header, bottom bar, profile sheet, splash, loading and error views.",
+        "decisions": [
+          {
+            "title": "Native chrome, web content",
+            "detail": "The sections stay web pages inside a native shell: navigation, loading, errors and video are native, and the content comes from the web product."
+          },
+          {
+            "title": "MVI from the first commit",
+            "detail": "Each screen's state is one immutable model that its ViewModel reduces from intents, which kept a solo build predictable under a 30-day deadline."
+          }
+        ]
+      },
+      "stack": ["Kotlin", "Jetpack Compose", "Koin", "Android WebView", "Clean Architecture", "MVI"]
+    },
+    {
+      "id": "gamezone",
+      "company": "DigiPlus",
+      "role": "Android developer",
+      "title": "GameZone",
+      "tagline": "DigiPlus's Filipino card games app: one of the developers on its Android side",
+      "summary": "GameZone is DigiPlus's online home for Filipino card games such as Tongits and Pusoy. I'm one of the Android developers on its mobile app.",
+      "engineering": { "platforms": ["Android"] },
+      "stack": ["Kotlin", "Android"]
+    },
+    {
+      "id": "workflow-automation",
+      "company": "DigiPlus",
+      "period": "Jul 2026",
+      "title": "Workflow automation",
+      "tagline": "Chat-driven ticket and build automation that runs dev jobs on a local machine",
+      "summary": "Internal tooling I built for my day-to-day work: ticket management, task planning and analysis, scheduling and reporting, driven from the team chat and the issue tracker, with an Android app to follow and control the jobs.",
+      "impact": [
+        "Less repetitive manual work: ticket handling, daily planning and status updates are faster and simpler",
+        "Clearer priorities and faster reporting, from one place"
+      ],
+      "highlights": [
+        "A control plane and an execution plane: runner agents take jobs from queues on a local PC, stream logs back live and keep an audit trail",
+        "Tickets come in from the team chat and the issue tracker through a chat bot and a tracker poller, and an AI coding agent works them",
+        "Confirm-first Git: nothing is pushed without a human yes",
+        "An Android client in 15 modules, with Gradle rules that enforce Clean Architecture at compile time, live build streaming over SSE, remote cancel and AI-assisted retries"
+      ],
+      "engineering": {
+        "builtWith": ["Node.js + Express", "SQLite", "Server-Sent Events", "Jetpack Compose"],
+        "platforms": ["Self-hosted server", "Android"],
+        "architecture": "A control plane and an execution plane. Runner agents take work from job queues and run it on a local PC; logs stream back over Server-Sent Events and an audit trail records what ran. Chat and tracker integrations feed in the tickets. The Android client is 15 Gradle modules whose dependency rules enforce Clean Architecture, with Ktor, Koin and DataStore.",
+        "decisions": [
+          {
+            "title": "Control plane split from execution",
+            "detail": "Runner agents with job queues execute on the local PC while the control plane coordinates, streams logs and keeps audit trails."
+          },
+          { "title": "Confirm-first Git", "detail": "Git operations triggered from chat wait for an explicit confirmation before they run." },
+          {
+            "title": "Layer boundaries enforced by Gradle",
+            "detail": "Clean Architecture boundaries are Gradle dependency rules across 15 modules, so a layer violation fails compilation instead of relying on review."
+          }
+        ]
+      },
+      "stack": ["Node.js", "Express", "SQLite", "SSE", "MCP", "Kotlin", "Jetpack Compose", "Ktor", "Koin", "DataStore", "Firebase AI"]
+    },
+    {
       "id": "pawffice",
       "visibility": "private",
       "cover": {
@@ -691,66 +840,6 @@
           "height": 1600
         }
       ]
-    },
-    {
-      "id": "workbuddy",
-      "visibility": "private",
-      "title": "WorkBuddy",
-      "tagline": "Android client for a self-hosted dev dashboard, 15 modules with compile-time boundaries",
-      "summary": "An Android client for a self-hosted developer dashboard: follow builds live, control remote jobs, and retry failures with AI help.",
-      "period": "Jul 2026",
-      "highlights": [
-        "15 modules where Gradle dependency rules enforce Clean Architecture boundaries at compile time",
-        "MVVM/MVI state, live build streaming over SSE, remote job control and cancellation",
-        "AI-assisted retries and on-device Gemini prompt refinement"
-      ],
-      "engineering": {
-        "builtWith": ["Jetpack Compose", "Ktor", "Koin", "Server-Sent Events"],
-        "platforms": ["Android"],
-        "architecture": "A 15-module Android app where Gradle dependency rules enforce Clean Architecture boundaries as compile-time constraints. State management follows MVVM/MVI. Koin provides dependency injection, Ktor handles networking, DataStore holds local settings, and build output streams in over Server-Sent Events.",
-        "decisions": [
-          {
-            "title": "Layer boundaries enforced by Gradle",
-            "detail": "Clean Architecture boundaries are Gradle dependency rules across 15 modules, so a layer violation fails compilation instead of relying on review."
-          },
-          {
-            "title": "Live builds over SSE",
-            "detail": "Build progress streams to the phone over Server-Sent Events, with remote job control and cancellation from the app."
-          },
-          { "title": "AI-assisted recovery", "detail": "Failed jobs get AI-assisted retries, and prompts are refined with on-device Gemini (Firebase AI)." }
-        ]
-      },
-      "stack": ["Kotlin", "Jetpack Compose", "Ktor", "Koin", "DataStore", "SSE", "Firebase AI"]
-    },
-    {
-      "id": "myai",
-      "visibility": "private",
-      "title": "MyAI",
-      "tagline": "Self-hosted control platform that runs mobile dev jobs on a local PC from a chat bot",
-      "summary": "A self-hosted control platform that runs development work on a local PC from chat: tickets in, Claude Code runs, reviewed Git changes out.",
-      "period": "Jul 2026",
-      "highlights": [
-        "Control plane and execution plane split: runner agents, job queues, streamed logs and audit trails",
-        "Lark WebSocket bot and Meegle MCP poller for ticket operations",
-        "Confirm-first Git workflow: nothing is pushed without a human yes"
-      ],
-      "engineering": {
-        "builtWith": ["Node.js + Express", "SQLite", "Server-Sent Events", "MCP"],
-        "platforms": ["Self-hosted server", "Lark bot"],
-        "architecture": "A control plane and an execution plane: runner agents pick work from job queues and execute it on a local PC, logs stream back over Server-Sent Events, and an audit trail records what ran. A Lark WebSocket bot and a Meegle MCP poller feed in ticket operations, Claude Code runs and Git work. Built on Node.js, Express and SQLite.",
-        "decisions": [
-          {
-            "title": "Control plane split from execution",
-            "detail": "Runner agents with job queues execute on the local PC while the control plane coordinates, streams logs and keeps audit trails."
-          },
-          { "title": "Confirm-first Git workflows", "detail": "Git operations triggered from chat wait for an explicit confirmation before they run." },
-          {
-            "title": "Chat and tracker as the interface",
-            "detail": "A Lark WebSocket bot and a Meegle MCP poller drive ticket operations and Claude Code execution."
-          }
-        ]
-      },
-      "stack": ["Node.js", "Express", "SQLite", "SSE", "Lark SDK", "MCP", "Claude Code"]
     },
     {
       "id": "about-yowkey",

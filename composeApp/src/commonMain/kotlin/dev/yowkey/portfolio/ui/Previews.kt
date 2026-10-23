@@ -7,6 +7,7 @@ import dev.yowkey.portfolio.model.Link
 import dev.yowkey.portfolio.model.Portfolio
 import dev.yowkey.portfolio.model.Profile
 import dev.yowkey.portfolio.model.Project
+import dev.yowkey.portfolio.model.ProofPoint
 import dev.yowkey.portfolio.model.RepoVisibility
 import dev.yowkey.portfolio.model.Screenshot
 import dev.yowkey.portfolio.model.Service
@@ -26,6 +27,15 @@ private val previewPortfolio = Portfolio(
     ),
     services = listOf(Service("Android apps", "From first screen to Play Store.")),
     projects = listOf(
+        Project(
+            "w",
+            "A work product",
+            "Built at a job.",
+            company = "Acme",
+            role = "Android developer",
+            figures = listOf(ProofPoint("53%", "of the code, written by me")),
+            impact = listOf("It shipped."),
+        ),
         Project("a", "Short", "One line.", stack = listOf("Kotlin"), visibility = RepoVisibility.Private),
         Project(
             id = "b",

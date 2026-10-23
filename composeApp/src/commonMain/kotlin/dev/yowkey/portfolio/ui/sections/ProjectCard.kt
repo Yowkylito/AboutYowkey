@@ -89,7 +89,7 @@ fun ProjectCard(
     }
 }
 
-/** Title, then role · period and the repository badge. Shared by the card and the detail screen. */
+/** Title, then company · role · period and the repository badge. Shared by the cards and the detail screen. */
 @Composable
 fun ProjectHeading(
     project: Project,
@@ -105,7 +105,7 @@ fun ProjectHeading(
             maxLines = maxTitleLines,
             overflow = TextOverflow.Ellipsis,
         )
-        val meta = listOfNotNull(project.role, project.period).joinToString(" · ")
+        val meta = project.meta
         if (meta.isNotEmpty() || project.visibility != null) {
             WrapRow(horizontalSpacing = 10.dp, verticalSpacing = 6.dp) {
                 if (meta.isNotEmpty()) {
@@ -249,7 +249,7 @@ private fun ProjectCardDarkPreview() = PortfolioTheme(darkTheme = true) {
 @Composable
 private fun TextOnlyProjectCardPreview() = PortfolioTheme {
     ProjectCard(
-        Project("myai", "MyAI", "A self-hosted control platform that runs development work on a local PC from chat: tickets in.", stack = listOf("Node.js", "SQLite")),
+        Project("field-notes", "Field Notes", "A text-only project with no media, so its initials stand in for the cover on the card.", stack = listOf("Node.js", "SQLite")),
         playing = { false },
         onOpen = {},
     )

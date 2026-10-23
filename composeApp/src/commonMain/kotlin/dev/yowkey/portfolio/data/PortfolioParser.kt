@@ -59,8 +59,44 @@ object PortfolioParser {
             val stray = gallery.filter { it.shot.video && !it.isClip }.map { it.shot.file }
             require(stray.isEmpty()) { "project ${project.id}: only clips and the cover clip take \"video\", not $stray" }
             validateCard(project)
+            validateWork(project)
             project.engineering?.let { validateEngineering(project.id, it) }
         }
+    }
+
+    /**
+     * Figures, impact and optimizations are how a work entry tells its story without the code, so only work takes
+     * them; the card has room for three short figures, the detail screen for a handful of one-line points.
+     */
+    private fun validateWork(project: Project) {
+        fun check(condition: Boolean, message: () -> String) = require(condition) { "project ${project.id}: ${message()}" }
+        project.company?.let { check(it.isNotBlank()) { "company is blank; leave it out for a personal project" } }
+        if (!project.isWork) {
+            check(project.figures.isEmpty() && project.impact.isEmpty() && project.optimizations.isEmpty()) {
+                "figures, impact and optimizations are for work; set \"company\" or leave them out"
+            }
+            return
+        }
+        check(project.figures.size <= Project.MAX_FIGURES) { "figures takes at most ${Project.MAX_FIGURES}, got ${project.figures.size}" }
+        project.figures.forEach { figure ->
+            check(figure.value.isNotBlank() && figure.label.isNotBlank()) { "a figure needs a value and a label: $figure" }
+            check(figure.value.length <= Project.MAX_FIGURE_VALUE) {
+                "figure \"${figure.value}\" is longer than ${Project.MAX_FIGURE_VALUE} characters; keep the number short, the label explains it"
+            }
+            check(figure.label.length <= Project.MAX_FIGURE_LABEL) {
+                "the label of figure ${figure.value} is longer than ${Project.MAX_FIGURE_LABEL} characters"
+            }
+        }
+        fun checkLines(name: String, lines: List<String>, max: Int) {
+            check(lines.size <= max) { "$name takes at most $max, got ${lines.size}" }
+            lines.forEach { line ->
+                check(line.isNotBlank()) { "$name has a blank entry" }
+                val words = wordCount(line)
+                check(words <= Project.MAX_LINE_WORDS) { "an entry of $name is $words words, at most ${Project.MAX_LINE_WORDS}: \"$line\"" }
+            }
+        }
+        checkLines("impact", project.impact, Project.MAX_IMPACT)
+        checkLines("optimizations", project.optimizations, Project.MAX_OPTIMIZATIONS)
     }
 
     private fun validateCard(project: Project) {

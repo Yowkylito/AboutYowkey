@@ -16,7 +16,34 @@ data class Portfolio(
     val recognition: List<Award> = emptyList(),
     val skills: List<SkillGroup> = emptyList(),
     val links: List<Link> = emptyList(),
-)
+) {
+    /** The projects split into [ProjectGroup]s, in page order, each keeping the content's order. Empty groups are left out. */
+    val projectGroups: List<Pair<ProjectGroup, List<Project>>>
+        get() = ProjectGroup.entries
+            .map { group -> group to projects.filter { ProjectGroup.of(it) == group } }
+            .filter { (_, members) -> members.isNotEmpty() }
+}
+
+/**
+ * The two halves of the Projects section, in page order: the products I build at work, then my own projects. A
+ * project is work when it names its [company][Project.company].
+ */
+enum class ProjectGroup(val title: String) {
+    Work("Professional work"),
+    Personal("Personal projects"),
+    ;
+
+    /** The line under the group's title: why work entries show no code, or why some personal repos are private. */
+    fun note(members: List<Project>): String? = when (this) {
+        Work -> "Products I build at ${members.mapNotNull { it.company }.distinct().joinToString(" and ")}. Their code " +
+            "stays with the company, so each entry covers my part and what it changed."
+        Personal -> RepoVisibility.PRIVATE_NOTE.takeIf { members.any { it.visibility == RepoVisibility.Private } }
+    }
+
+    companion object {
+        fun of(project: Project): ProjectGroup = if (project.isWork) Work else Personal
+    }
+}
 
 @Immutable
 @Serializable
@@ -59,6 +86,18 @@ data class Project(
      */
     val tagline: String? = null,
     val role: String? = null,
+    /**
+     * Who it was built for, when it was built at a job. Setting it makes the project work ([ProjectGroup.Work]):
+     * listed first, on a card that leads with [figures] instead of media, and told through what I did and what it
+     * changed rather than through code the company owns. [figures], [impact] and [optimizations] are for work only.
+     */
+    val company: String? = null,
+    /** Up to [MAX_FIGURES] headline numbers for the card and the detail screen, strongest first. */
+    val figures: List<ProofPoint> = emptyList(),
+    /** What the work changed for the company, one line each. */
+    val impact: List<String> = emptyList(),
+    /** The optimizations and audits I made on the product: performance, security, release safety. One line each. */
+    val optimizations: List<String> = emptyList(),
     val highlights: List<String> = emptyList(),
     val stack: List<String> = emptyList(),
     val links: List<Link> = emptyList(),
@@ -116,8 +155,23 @@ data class Project(
     /** The id of the project's article in the static page (`#project-<id>`). */
     val anchor: String get() = "project-$id"
 
+    val isWork: Boolean get() = company != null
+
+    /** Company, role and period, the line under the title on the card, the detail screen and the static page. */
+    val meta: String get() = listOfNotNull(company, role, period).joinToString(" · ")
+
+    /** What the detail screen calls [highlights]: on work, my part in a product others built too. */
+    val highlightsTitle: String get() = if (isWork) "My contributions" else "Highlights"
+
     companion object {
         const val MAX_TAGLINE = 90
+        const val MAX_FIGURES = 3
+        /** A figure sits in a fixed-width column beside its label, so it stays a short number. */
+        const val MAX_FIGURE_VALUE = 7
+        const val MAX_FIGURE_LABEL = 60
+        const val MAX_IMPACT = 4
+        const val MAX_OPTIMIZATIONS = 6
+        const val MAX_LINE_WORDS = 40
     }
 }
 
