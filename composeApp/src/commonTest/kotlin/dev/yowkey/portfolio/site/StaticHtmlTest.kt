@@ -4,6 +4,7 @@ import dev.yowkey.portfolio.data.PortfolioParser
 import dev.yowkey.portfolio.model.Decision
 import dev.yowkey.portfolio.model.Engineering
 import dev.yowkey.portfolio.model.Module
+import dev.yowkey.portfolio.model.Project
 import dev.yowkey.portfolio.model.ProofPoint
 import dev.yowkey.portfolio.model.RepoVisibility
 import dev.yowkey.portfolio.model.Screenshot
@@ -61,6 +62,16 @@ class StaticHtmlTest {
         assertTrue("<span class=\"badge\">Private repo</span>" in html)
         assertTrue("<p class=\"note\">${StaticHtml.escape(RepoVisibility.PRIVATE_NOTE)}</p>" in html)
         assertTrue("isn&#39;t on my profile" in html, "the note's apostrophe is escaped")
+    }
+
+    @Test
+    fun disclaimerBadgesTheProjectAndFollowsItsSummaryEscaped() {
+        assertFalse("class=\"disclaimer\"" in StaticHtml.content(portfolio))
+
+        val project = portfolio.projects[1].copy(disclaimer = "Not <their> app", visibility = RepoVisibility.Private)
+        val article = StaticHtml.content(portfolio.copy(projects = listOf(project))).substringAfter("<article id=\"project-two\">")
+        assertTrue("<span class=\"badge\">Private repo</span> <span class=\"badge\">${Project.UNOFFICIAL_BADGE}</span>" in article)
+        assertTrue("<p>S</p>\n<p class=\"disclaimer\">Not &lt;their&gt; app</p>" in article, "right under the summary, escaped")
     }
 
     @Test
