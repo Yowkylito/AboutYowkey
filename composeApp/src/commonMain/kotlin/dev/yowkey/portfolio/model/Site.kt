@@ -81,10 +81,6 @@ data class PublicNote(
     /** The owner pinned it: it comes before the others, everywhere notes are listed. */
     val pinned: Boolean = false,
 ) {
-    /** "Ada · Oct 2026", or "A visitor · Oct 2026" for a note left without a name. */
-    val byLine: String
-        get() = listOfNotNull(displayName, date?.let(::monthAndYear)).joinToString(" · ")
-
     /** The name as the card's title: the one given, or "A visitor". */
     val displayName: String get() = name?.takeIf { it.isNotBlank() } ?: ANONYMOUS
 
@@ -244,7 +240,6 @@ object FeedbackCopy {
     const val NO_NOTES = "No notes yet. Be the first to leave one below."
     const val MORE = "Show more notes"
     const val LOADING_MORE = "Loading…"
-    const val ALL = "All notes"
     const val DASHBOARD = "Ratings"
 
     /** "from 12 ratings" under the average. */
@@ -255,12 +250,7 @@ object FeedbackCopy {
         if (count == 1) "Every rating counts. One came with a note sent privately, before notes were public: its stars are here, its words are not."
         else "Every rating counts. $count came with notes sent privately, before notes were public: their stars are here, their words are not."
 
-    /** The list's line while one star is picked: "4 notes with 5 stars". */
-    fun filtered(total: Int, stars: Int): String =
-        "$total ${if (total == 1) "note" else "notes"} with $stars ${if (stars == 1) "star" else "stars"}"
 
-    /** When a star has ratings but none with public words. */
-    fun noneShown(stars: Int): String = "No public notes with $stars ${if (stars == 1) "star" else "stars"} yet."
 
     /** A bar as one spoken line: "5 stars: 18 ratings, 75 percent". */
     fun barLabel(stars: Int, count: Int, percent: String): String =

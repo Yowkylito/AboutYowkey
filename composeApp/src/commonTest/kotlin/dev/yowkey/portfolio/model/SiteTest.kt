@@ -32,13 +32,6 @@ class SiteTest {
     }
 
     @Test
-    fun aPublicNoteNamesItsVisitorOrNotAndItsMonth() {
-        assertEquals("Ada · Oct 2026", PublicNote(1, "Ada", 5, "Great", "2026-10-24").byLine)
-        assertEquals("A visitor · Oct 2026", PublicNote(2, null, null, "Fine", "2026-10-24").byLine)
-        assertEquals("A visitor", PublicNote(3, "  ", 4, "Ok").byLine, "a blank name and no date")
-    }
-
-    @Test
     fun aNotesCardNamesItsWriterDatesItInFullAndBadgesOnlyAKnownRelation() {
         val note = PublicNote(1, "Akkram", 5, "Solid", "2026-10-23", relation = "colleague", pinned = true)
         assertEquals("Akkram", note.displayName)

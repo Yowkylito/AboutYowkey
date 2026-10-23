@@ -158,7 +158,6 @@ class StaticHtmlTest {
         assertEquals(5, Regex("aria-haspopup=\"dialog\"").findAll(html).count(), "only the five bars open the sheet")
         assertFalse("aria-pressed" in bars, "a bar is no longer a filter")
         assertFalse("filtering" in html)
-        assertFalse(FeedbackCopy.ALL in html, "no \"All notes\" button: the list is never filtered")
     }
 
     /**
