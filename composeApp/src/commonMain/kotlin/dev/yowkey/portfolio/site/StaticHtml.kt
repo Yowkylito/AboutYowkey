@@ -4,7 +4,6 @@ import dev.yowkey.portfolio.model.Engineering
 import dev.yowkey.portfolio.model.Link
 import dev.yowkey.portfolio.model.Portfolio
 import dev.yowkey.portfolio.model.Project
-import dev.yowkey.portfolio.model.RepoVisibility
 import dev.yowkey.portfolio.model.Screenshot
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
@@ -64,10 +63,13 @@ object StaticHtml {
 
         if (portfolio.projects.isNotEmpty()) {
             appendLine("<section id=\"projects\"><h2>Projects</h2>")
-            if (portfolio.projects.any { it.visibility == RepoVisibility.Private }) {
-                appendLine("<p class=\"note\">${escape(RepoVisibility.PRIVATE_NOTE)}</p>")
+            portfolio.projectGroups.forEach { (group, members) ->
+                appendLine("<div class=\"project-group\" id=\"projects-${group.name.lowercase()}\">")
+                appendLine("<h3 class=\"group\">${escape(group.title)}</h3>")
+                group.note(members)?.let { appendLine("<p class=\"note\">${escape(it)}</p>") }
+                members.forEach { project(it) }
+                appendLine("</div>")
             }
-            portfolio.projects.forEach { project(it) }
             appendLine("</section>")
         }
 
@@ -95,23 +97,35 @@ object StaticHtml {
 
     /**
      * One project, with everything the app splits between its card and its detail screen. The card's answers come
-     * first, in the card's order (media, title, meta, one line, summary, what it is built with and runs on), so a
-     * crawler or a skim reads the same summary; the detail follows (highlights, gallery, engineering, stack, links).
+     * first, in the card's order (media, title, meta, one line, summary, figures, what it is built with and runs on),
+     * so a crawler or a skim reads the same summary; the detail follows (impact, highlights, optimizations, gallery,
+     * engineering, stack, links). Headings sit under the group's `<h3>`: the title is `<h4>`, its parts `<h5>`.
      * The id is the app's deep link target too: `#/projects/<id>` scrolls here on this page.
      */
     private fun StringBuilder.project(project: Project) {
         appendLine("<article id=\"${escape(project.anchor)}\">")
         project.coverClip?.let { clip(it, "cover ${orientation(it)}") } ?: project.cover?.let { cover(it) }
-        appendLine("<h3>${escape(project.title)}</h3>")
+        appendLine("<h4>${escape(project.title)}</h4>")
         val meta = listOfNotNull(
-            listOfNotNull(project.role, project.period).takeIf { it.isNotEmpty() }?.joinToString(" · ") { escape(it) },
+            project.meta.takeIf { it.isNotEmpty() }?.let { escape(it) },
             project.visibility?.let { "<span class=\"badge\">${escape(it.badge)}</span>" },
         )
         if (meta.isNotEmpty()) appendLine("<p class=\"muted\">${meta.joinToString(" ")}</p>")
         project.tagline?.let { appendLine("<p class=\"tagline\">${escape(it)}</p>") }
         appendLine("<p>${escape(project.summary)}</p>")
+        if (project.figures.isNotEmpty()) {
+            appendLine("<ul class=\"figures\">")
+            project.figures.forEach { appendLine("<li><strong>${escape(it.value)}</strong> <span>${escape(it.label)}</span></li>") }
+            appendLine("</ul>")
+        }
         project.engineering?.let { facts(it) }
-        list(project.highlights)
+        if (project.isWork) {
+            titledList("Impact", project.impact)
+            titledList(project.highlightsTitle, project.highlights)
+            titledList("Optimizations and audits", project.optimizations)
+        } else {
+            list(project.highlights)
+        }
         // With a cover clip leading, the still cover joins the gallery, so every image the app shows is here.
         gallery(listOfNotNull(project.cover.takeIf { project.coverClip != null }), project.clips, project.screenshots)
         project.engineering?.let { engineering(it) }
@@ -142,10 +156,10 @@ object StaticHtml {
             engineering.decisions.isNotEmpty() || engineering.quality.isNotEmpty()
         if (!hasBody) return
         appendLine("<div class=\"engineering\">")
-        appendLine("<h4>How it&#39;s built</h4>")
+        appendLine("<h5>How it&#39;s built</h5>")
         engineering.architecture?.let { appendLine("<p>${escape(it)}</p>") }
         if (engineering.modules.isNotEmpty()) {
-            appendLine("<h5>Modules</h5>")
+            appendLine("<h6>Modules</h6>")
             appendLine("<ul class=\"modules\">")
             engineering.modules.forEach { module ->
                 append("<li><code>${escape(module.name)}</code> ${escape(module.role)}")
@@ -159,13 +173,13 @@ object StaticHtml {
             appendLine("</ul>")
         }
         if (engineering.decisions.isNotEmpty()) {
-            appendLine("<h5>Key decisions</h5>")
+            appendLine("<h6>Key decisions</h6>")
             appendLine("<dl class=\"decisions\">")
             engineering.decisions.forEach { appendLine("<dt>${escape(it.title)}</dt><dd>${escape(it.detail)}</dd>") }
             appendLine("</dl>")
         }
         if (engineering.quality.isNotEmpty()) {
-            appendLine("<h5>Quality</h5>")
+            appendLine("<h6>Quality</h6>")
             appendLine("<ul class=\"quality\">${engineering.quality.joinToString("") { "<li>${escape(it)}</li>" }}</ul>")
         }
         appendLine("</div>")
@@ -219,6 +233,13 @@ object StaticHtml {
     private fun StringBuilder.list(items: List<String>) {
         if (items.isEmpty()) return
         appendLine("<ul>${items.joinToString("") { "<li>${escape(it)}</li>" }}</ul>")
+    }
+
+    /** A work article's part, as the detail screen titles it. */
+    private fun StringBuilder.titledList(title: String, items: List<String>) {
+        if (items.isEmpty()) return
+        appendLine("<h5>${escape(title)}</h5>")
+        list(items)
     }
 
     private fun StringBuilder.links(links: List<Link>) {

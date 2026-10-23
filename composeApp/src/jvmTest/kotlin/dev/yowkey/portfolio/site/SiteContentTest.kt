@@ -48,6 +48,21 @@ class SiteContentTest {
         }
     }
 
+    /** Work leads the projects, and everything its detail screen says is in the crawlable page too. */
+    @Test
+    fun workLeadsTheProjectsAndIsCrawlable() {
+        val work = portfolio.projects.filter { it.isWork }
+        assertTrue(work.isNotEmpty(), "no work projects")
+        val section = page.substringAfter("<section id=\"projects\">").substringBefore("</section>")
+        val firstPersonal = section.indexOf("<article id=\"${portfolio.projects.first { !it.isWork }.anchor}\">")
+        work.forEach { project ->
+            assertTrue(section.indexOf("<article id=\"${project.anchor}\">") in 0 until firstPersonal, "${project.id} is not ahead of the personal projects")
+            val article = page.substringAfter("<article id=\"${project.anchor}\">").substringBefore("</article>")
+            (project.figures.flatMap { listOf(it.value, it.label) } + project.impact + project.highlights + project.optimizations + project.meta)
+                .forEach { assertTrue(StaticHtml.escape(it) in article, "${project.id}: missing \"$it\"") }
+        }
+    }
+
     /** The seven-second skim: every point is in the hero, ahead of the first section. */
     @Test
     fun heroShowsProofAvailabilityAndContact() {
@@ -177,7 +192,7 @@ class SiteContentTest {
             val lead = project.coverClip?.fullPath ?: project.cover?.thumbPath ?: return@forEach
             val article = page.substringAfter("<article id=\"${project.anchor}\">", missingDelimiterValue = "")
             assertTrue(article.isNotEmpty(), "${project.id}: no article with its id")
-            val title = article.indexOf("<h3>${StaticHtml.escape(project.title)}</h3>")
+            val title = article.indexOf("<h4>${StaticHtml.escape(project.title)}</h4>")
             assertTrue(article.indexOf(StaticHtml.resourceUrl(lead)) in 0 until title, "${project.id}: the cover is not before its title")
         }
     }
@@ -205,7 +220,7 @@ class SiteContentTest {
                 assertEquals(listOf(GalleryItem.Kind.Cover, GalleryItem.Kind.CoverClip), project.gallery.take(2).map { it.kind }, project.id)
             }
             val article = html.substringAfter("<article id=\"project-${project.id}\">").substringBefore("</article>")
-            assertTrue(article.indexOf(StaticHtml.resourceUrl(clip.fullPath)) < article.indexOf("<h3>"), "${project.id}: the clip leads the article")
+            assertTrue(article.indexOf(StaticHtml.resourceUrl(clip.fullPath)) < article.indexOf("<h4>"), "${project.id}: the clip leads the article")
             assertTrue(StaticHtml.resourceUrl(clip.posterPath) in article, "${project.id}: its poster for reduced motion")
 
             val player = AnimatedClip.decode(File(resources, clip.fullPath).readBytes())

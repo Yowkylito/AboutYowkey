@@ -73,6 +73,36 @@ The viewer pages through cover → cover clip → clips → screenshots, in that
 }
 ```
 
+### Work and personal projects
+
+The Projects section has two groups: **Professional work** first, then **Personal projects**. A project is work
+when it has a `company`. Work code belongs to the employer, so a work entry shows no repo badge or media and is told
+through what I did and what it changed instead:
+
+```json
+{
+  "id": "arenaplus",
+  "company": "DigiPlus",
+  "role": "Android developer",
+  "period": "Sep 2024 – Present",
+  "figures": [{ "value": "53%", "label": "of V2's code, written by me" }],
+  "impact": ["What it changed for the company, one line"],
+  "highlights": ["My contributions, one line each"],
+  "optimizations": ["Performance, security and release audits and optimizations, one line each"]
+}
+```
+
+The work card leads with the figures where a personal card has its cover; the detail screen reads figures, Impact,
+My contributions, Optimizations and audits, then How it's built. Name products and public libraries, never internal
+tools or systems: describe what a tool does instead.
+
+| Field | Rule |
+|---|---|
+| `company` | not blank; only work takes `figures`, `impact` and `optimizations` |
+| `figures` | at most 3; `value` at most 7 characters, `label` at most 60 |
+| `impact` | at most 4 lines, each at most 40 words |
+| `optimizations` | at most 6 lines, each at most 40 words |
+
 ### The card and the detail screen
 
 The card answers three questions at a glance: the cover, the title with its period and badge, one line
