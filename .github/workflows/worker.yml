@@ -47,7 +47,8 @@ jobs:
           node-version: 22
       - name: Explain the skip until the secrets exist
         if: env.CLOUDFLARE_API_TOKEN == ''
-        run: echo "Not deployed: the CLOUDFLARE_API_TOKEN secret is not set. See README.md, Visits and feedback." >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          echo "Not deployed: the CLOUDFLARE_API_TOKEN secret is not set. See README.md, Visits and feedback." >> "$GITHUB_STEP_SUMMARY"
       - name: Install wrangler
         if: env.CLOUDFLARE_API_TOKEN != ''
         run: npm ci
