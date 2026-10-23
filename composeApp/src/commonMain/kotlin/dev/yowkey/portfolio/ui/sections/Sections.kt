@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -38,7 +37,6 @@ import dev.yowkey.portfolio.model.GalleryItem
 import dev.yowkey.portfolio.model.Award
 import dev.yowkey.portfolio.model.Experience
 import dev.yowkey.portfolio.model.Link
-import dev.yowkey.portfolio.model.Profile
 import dev.yowkey.portfolio.model.Project
 import dev.yowkey.portfolio.model.Screenshot
 import dev.yowkey.portfolio.model.Service
@@ -77,7 +75,8 @@ fun ServiceCard(service: Service, modifier: Modifier = Modifier) {
 }
 
 /**
- * An even grid of thumbnails across the card's width: four per row for phone screens, two for desktop ones.
+ * An even grid of thumbnails across the card's width: up to five per row for phone screens, three for desktop or
+ * mixed ones, so a clip plus four screenshots fills one row instead of leaving one thumbnail alone on the next.
  * A grid rather than a sideways scroller, because a mouse wheel cannot reach a hidden horizontal row. Each slot
  * takes its height from the image's aspect ratio, so the layout is final before any image loads. Clips show
  * their poster with a play mark.
@@ -97,7 +96,7 @@ fun ScreenshotStrip(
 ) {
     val loader = LocalScreenshotImages.current?.thumbnails
     val outline = MaterialTheme.colorScheme.outlineVariant
-    val perRow = if (items.all { it.shot.aspectRatio < 1f }) 4 else 2
+    val perRow = minOf(items.size, if (items.all { it.shot.aspectRatio < 1f }) 5 else 3).coerceAtLeast(1)
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         items.chunked(perRow).forEachIndexed { row, chunk ->
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -327,7 +326,7 @@ fun SkillGroups(groups: List<SkillGroup>, columns: Int, modifier: Modifier = Mod
 fun ContactBlock(email: String?, links: List<Link>, modifier: Modifier = Modifier) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(20.dp)) {
         Text(
-            "Have a project in mind? Let's build it.",
+            "Hiring for Android, or have a project in mind? Let's talk.",
             style = MaterialTheme.typography.headlineSmall,
             color = MaterialTheme.colorScheme.onBackground,
         )

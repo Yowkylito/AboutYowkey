@@ -9,7 +9,10 @@
     "availability": "Open to relocation to Singapore",
     "proof": [
       { "value": "53%", "label": "of ArenaPlus V2's code written by me: 270K+ lines across 413 commits" },
-      { "value": "30 days", "label": "to ship the Arena Social app solo, rebuilt from web to native with ~100% of the code" },
+      {
+        "value": "30 days",
+        "label": "to ship the Arena Social app solo, rebuilt from web to native with ~100% of the code"
+      },
       { "value": "Rank #2", "label": "Top 9 Awardee, hand-picked by executive leadership in Sep 2026" }
     ]
   },
@@ -41,8 +44,70 @@
   ],
   "projects": [
     {
+      "id": "bubuprotect",
+      "visibility": "public",
+      "cover": {
+        "file": "bubuprotect-cover.webp",
+        "caption": "BubuProtect's launch screen with the Bubu mascot",
+        "width": 740,
+        "height": 1600
+      },
+      "title": "BubuProtect",
+      "summary": "An Android password vault that keeps logins, cards, notes, ID documents and Wi-Fi keys encrypted on the device, behind a master passphrase.",
+      "period": "Jan 2026 – Aug 2026",
+      "highlights": [
+        "Encrypted on-device vault (Room over SQLCipher) for five kinds of secret, with FLAG_SECURE and tap-jacking defences",
+        "Live TOTP codes with a countdown ring, and a breach check that sends only a 5-character hash prefix",
+        "Device check: 10 local probes, from debugging switches to network interception, each linked to its setting"
+      ],
+      "stack": ["Kotlin", "Jetpack Compose", "Room", "SQLCipher", "Koin", "AndroidX Biometric", "Bouncy Castle"],
+      "links": [
+        { "label": "Source on GitHub", "url": "https://github.com/Yowkylito/BubuProtect" }
+      ],
+      "clips": [
+        {
+          "file": "bubuprotect-totp-rollover.webp",
+          "caption": "Revealing a two-factor code and watching it roll over when its 30-second window ends (demo data)",
+          "width": 332,
+          "height": 720
+        }
+      ],
+      "screenshots": [
+        {
+          "file": "bubuprotect-vault.webp",
+          "caption": "The vault: five demo entries across logins, a payment card, a secure note and Wi-Fi",
+          "width": 739,
+          "height": 1600
+        },
+        {
+          "file": "bubuprotect-totp.webp",
+          "caption": "A demo login: live two-factor code, breach-check card, and fields masked until revealed",
+          "width": 739,
+          "height": 1600
+        },
+        {
+          "file": "bubuprotect-new-secret.webp",
+          "caption": "Adding a secret: pick its kind, generate a strong password and see it rated",
+          "width": 739,
+          "height": 1600
+        },
+        {
+          "file": "bubuprotect-device-check.webp",
+          "caption": "Device check: 10 on-device probes, here flagging USB debugging and no screen lock on the test emulator",
+          "width": 739,
+          "height": 1600
+        }
+      ]
+    },
+    {
       "id": "vistago",
       "visibility": "private",
+      "cover": {
+        "file": "vistago-cover.webp",
+        "caption": "Vistago's splash: \"Travel, beautifully planned\"",
+        "width": 740,
+        "height": 1600
+      },
       "title": "Vistago",
       "summary": "An offline-first AI travel companion for Android: plan trips, translate through the camera, and keep travel memories, with or without a connection.",
       "period": "Aug – Sep 2026",
@@ -51,12 +116,50 @@
         "OpenRouter model routing with live discovery, role-based pinning, cooldowns and availability tracking",
         "Falls back to on-device processing when LLM services fail"
       ],
-      "stack": ["Kotlin", "Jetpack Compose", "Clean Architecture", "Room", "Koin", "WorkManager", "CameraX", "MapLibre", "OpenRouter"],
+      "stack": [
+        "Kotlin",
+        "Jetpack Compose",
+        "Clean Architecture",
+        "Room",
+        "Koin",
+        "WorkManager",
+        "CameraX",
+        "MapLibre",
+        "OpenRouter"
+      ],
+      "clips": [
+        {
+          "file": "vistago-splash.webp",
+          "caption": "Vistago's launch: the system splash hands over to the animated compass, wordmark and tagline",
+          "width": 332,
+          "height": 720
+        }
+      ],
       "screenshots": [
-        { "file": "vistago-memory-map.webp", "caption": "The memory map: photo-hunt pins across Kansai, each with walking directions from where you are", "width": 739, "height": 1600 },
-        { "file": "vistago-ask.webp", "caption": "Ask Vistago: photo spots near you, sign translation and travel questions", "width": 739, "height": 1600 },
-        { "file": "vistago-trip.webp", "caption": "A planned trip with its countdown, nights, travelers and budget", "width": 739, "height": 1600 },
-        { "file": "vistago-smart-budget.webp", "caption": "Smart Budget splits the total by travel style, offline", "width": 739, "height": 1600 }
+        {
+          "file": "vistago-memory-map.webp",
+          "caption": "The memory map: photo-hunt pins across Kansai, each with walking directions from where you are",
+          "width": 739,
+          "height": 1600
+        },
+        {
+          "file": "vistago-ask.webp",
+          "caption": "Ask Vistago: photo spots near you, sign translation and travel questions",
+          "width": 739,
+          "height": 1600
+        },
+        {
+          "file": "vistago-trip.webp",
+          "caption": "A planned trip with its countdown, nights, travelers and budget",
+          "width": 739,
+          "height": 1600
+        },
+        {
+          "file": "vistago-smart-budget.webp",
+          "caption": "Smart Budget splits the total by travel style, offline",
+          "width": 739,
+          "height": 1600
+        }
       ]
     },
     {
@@ -74,14 +177,151 @@
         { "label": "Source on GitHub", "url": "https://github.com/Yowkylito/The-Eagle-s-Watch" }
       ],
       "screenshots": [
-        { "file": "eagles-explore.webp", "caption": "Explore: contract value, status filters and every project at a glance", "width": 720, "height": 1560 },
-        { "file": "eagles-project.webp", "caption": "A project page: money, work done and time used, each with its source", "width": 720, "height": 1560 },
-        { "file": "eagles-filters.webp", "caption": "Filters by type, level of government and province, with live counts", "width": 720, "height": 1560 },
-        { "file": "eagles-report.webp", "caption": "Reporting a problem, in six mostly-tap steps", "width": 720, "height": 1560 }
+        {
+          "file": "eagles-explore.webp",
+          "caption": "Explore: contract value, status filters and every project at a glance",
+          "width": 720,
+          "height": 1560
+        },
+        {
+          "file": "eagles-project.webp",
+          "caption": "A project page: money, work done and time used, each with its source",
+          "width": 720,
+          "height": 1560
+        },
+        {
+          "file": "eagles-filters.webp",
+          "caption": "Filters by type, level of government and province, with live counts",
+          "width": 720,
+          "height": 1560
+        },
+        {
+          "file": "eagles-report.webp",
+          "caption": "Reporting a problem, in six mostly-tap steps",
+          "width": 720,
+          "height": 1560
+        }
+      ]
+    },
+    {
+      "id": "calm-escape",
+      "visibility": "private",
+      "cover": {
+        "file": "calm-escape-cover.webp",
+        "caption": "Calm Escape Premier's Android splash: a gold lotus seal on deep green",
+        "width": 740,
+        "height": 1600
+      },
+      "title": "Calm Escape Premier",
+      "summary": "A multi-tenant booking platform for spas: each spa gets its own booking site and staff back office, customers book from iOS and Android apps, and all of them share one schedule.",
+      "period": "Oct 2026",
+      "highlights": [
+        "No double booking, even under races: Postgres exclusion constraints, covered by 184 pgTAP tests (plus 346 Vitest tests on the web)",
+        "One codebase serves every spa: its own subdomain or domain, server-rendered, in one of three designs",
+        "Staff back office with monthly sales, a menu and membership editor, and promo bundles with a live phone and web preview"
+      ],
+      "stack": [
+        "Supabase (Postgres, RLS)",
+        "pgTAP",
+        "Next.js 16",
+        "React 19",
+        "TypeScript",
+        "Tailwind CSS 4",
+        "Kotlin Multiplatform",
+        "Compose Multiplatform",
+        "supabase-kt"
+      ],
+      "clips": [
+        {
+          "file": "calm-escape-booking.webp",
+          "caption": "From a spa's page to the booking review in a few taps: today's first opening, then live times (demo data)",
+          "width": 324,
+          "height": 720
+        }
+      ],
+      "screenshots": [
+        {
+          "file": "calm-escape-spa-site.webp",
+          "caption": "A spa's own booking site on a phone: pick a day, see today's first opening and live promo bundles (demo data)",
+          "width": 720,
+          "height": 1600
+        },
+        {
+          "file": "calm-escape-live-times.webp",
+          "caption": "Live open times per therapist, computed in Postgres; booked stretches plus turnover simply don't appear",
+          "width": 720,
+          "height": 1600
+        },
+        {
+          "file": "calm-escape-dashboard.webp",
+          "caption": "The staff back office: every spa you own, with sales this month against the same days last month (demo data)",
+          "width": 1440,
+          "height": 900
+        },
+        {
+          "file": "calm-escape-bundle-preview.webp",
+          "caption": "Editing a promo bundle with a live iPhone, Android and web preview of what customers will see",
+          "width": 1440,
+          "height": 900
+        }
+      ]
+    },
+    {
+      "id": "seventhj",
+      "visibility": "private",
+      "cover": {
+        "file": "seventhj-cover.webp",
+        "caption": "Seventh J's splash: the SJ mark and wordmark on an obsidian ground",
+        "width": 720,
+        "height": 1600
+      },
+      "title": "Seventh J",
+      "summary": "An inventory and dealer-floor app for a Makati art gallery, built once in Compose Multiplatform for Android, iOS and the web. Runs on sample data while the data layer is built.",
+      "period": "Aug 2026",
+      "highlights": [
+        "Painterly splash: 900 strokes follow a flow field and converge onto the logo's own pixels (260 on the web)",
+        "Home tuned to the frame budget: figures and sparkline animate only in view; skeletons animate in the draw phase",
+        "One Compose UI on three targets, with a Navigation 3 back stack that iOS and Wasm can restore"
+      ],
+      "stack": ["Kotlin", "Compose Multiplatform", "Kotlin/Wasm", "Navigation 3", "Coroutines", "kotlinx.serialization"],
+      "clips": [
+        {
+          "file": "seventhj-splash-home.webp",
+          "caption": "First launch on the web build: strokes spin inward, settle into the SJ mark, then hand off to Home as the figures count up",
+          "width": 324,
+          "height": 720
+        }
+      ],
+      "screenshots": [
+        {
+          "file": "seventhj-home.webp",
+          "caption": "Home: the greeting, then the approvals waiting on you (sample data)",
+          "width": 720,
+          "height": 1600
+        },
+        {
+          "file": "seventhj-figures.webp",
+          "caption": "The month's figures, an eight-month sales sparkline and the floor alerts (sample data)",
+          "width": 720,
+          "height": 1600
+        },
+        {
+          "file": "seventhj-approval.webp",
+          "caption": "An approval opened from Home through a shared-element transition, with asking vs. sold price (sample data)",
+          "width": 720,
+          "height": 1600
+        },
+        {
+          "file": "seventhj-approvals.webp",
+          "caption": "Every open request, sortable by date, requester, location or amount (sample data)",
+          "width": 720,
+          "height": 1600
+        }
       ]
     },
     {
       "id": "workbuddy",
+      "visibility": "private",
       "title": "WorkBuddy",
       "summary": "An Android client for a self-hosted developer dashboard: follow builds live, control remote jobs, and retry failures with AI help.",
       "period": "Jul 2026",
@@ -95,6 +335,12 @@
     {
       "id": "pawffice",
       "visibility": "private",
+      "cover": {
+        "file": "pawffice-cover.webp",
+        "caption": "Pawffice's loading screen: \"Reading your staff record…\" over the town",
+        "width": 1600,
+        "height": 900
+      },
       "title": "Pawffice",
       "summary": "A local-first, multi-agent AI workspace for the desktop, presented as a 3D town where a crew of cats takes your prompts.",
       "period": "Aug 2026 – Present",
@@ -105,17 +351,43 @@
       ],
       "stack": ["Rust", "Tauri 2", "SQLite", "TypeScript", "JavaScript", "SVG"],
       "clips": [
-        { "file": "pawffice-ride.webp", "caption": "The crew rides along in your car while Pumpkin and Earl Whiskers answer in the crew thread", "width": 480, "height": 271 }
+        {
+          "file": "pawffice-ride.webp",
+          "caption": "The crew rides along in your car while Pumpkin and Earl Whiskers answer in the crew thread",
+          "width": 480,
+          "height": 271
+        }
       ],
       "screenshots": [
-        { "file": "pawffice-town.webp", "caption": "The town: walk your cat around while the crew thread on the right takes prompts", "width": 1600, "height": 900 },
-        { "file": "pawffice-crew-answer.webp", "caption": "Crew members answer in the thread, each in their own role", "width": 1600, "height": 900 },
-        { "file": "pawffice-hiring.webp", "caption": "Onboarding: the CEO cat \"hires\" you with four questions", "width": 1600, "height": 900 },
-        { "file": "pawffice-wardrobe.webp", "caption": "The wardrobe: breed, coat and outfit for your cat", "width": 1600, "height": 900 }
+        {
+          "file": "pawffice-town.webp",
+          "caption": "The town: walk your cat around while the crew thread on the right takes prompts",
+          "width": 1600,
+          "height": 900
+        },
+        {
+          "file": "pawffice-crew-answer.webp",
+          "caption": "Crew members answer in the thread, each in their own role",
+          "width": 1600,
+          "height": 900
+        },
+        {
+          "file": "pawffice-hiring.webp",
+          "caption": "Onboarding: the CEO cat \"hires\" you with four questions",
+          "width": 1600,
+          "height": 900
+        },
+        {
+          "file": "pawffice-wardrobe.webp",
+          "caption": "The wardrobe: breed, coat and outfit for your cat",
+          "width": 1600,
+          "height": 900
+        }
       ]
     },
     {
       "id": "myai",
+      "visibility": "private",
       "title": "MyAI",
       "summary": "A self-hosted control platform that runs development work on a local PC from chat: tickets in, Claude Code runs, reviewed Git changes out.",
       "period": "Jul 2026",
@@ -142,8 +414,18 @@
         { "label": "Source on GitHub", "url": "https://github.com/Yowkylito/AboutYowkey" }
       ],
       "screenshots": [
-        { "file": "portfolio-hero.webp", "caption": "The page you are on, rendered by Compose from WebAssembly", "width": 800, "height": 600 },
-        { "file": "portfolio-projects.webp", "caption": "Project cards with screenshot grids that open a full-screen viewer", "width": 800, "height": 600 }
+        {
+          "file": "portfolio-hero.webp",
+          "caption": "The page you are on, rendered by Compose from WebAssembly",
+          "width": 800,
+          "height": 600
+        },
+        {
+          "file": "portfolio-projects.webp",
+          "caption": "Project cards with screenshot grids that open a full-screen viewer",
+          "width": 800,
+          "height": 600
+        }
       ]
     }
   ],
@@ -199,7 +481,16 @@
   "skills": [
     {
       "name": "Android",
-      "items": ["Kotlin", "Jetpack Compose", "Android SDK", "Java", "Material 3", "Kotlin Multiplatform", "Compose Multiplatform", "Android Studio"]
+      "items": [
+        "Kotlin",
+        "Jetpack Compose",
+        "Android SDK",
+        "Java",
+        "Material 3",
+        "Kotlin Multiplatform",
+        "Compose Multiplatform",
+        "Android Studio"
+      ]
     },
     {
       "name": "Architecture",

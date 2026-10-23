@@ -168,7 +168,8 @@ object StaticHtml {
             put("@context", "https://schema.org")
             put("@type", "Person")
             put("name", p.name)
-            put("jobTitle", p.headline)
+            // The role alone ("Android Developer"), not the whole headline with employer and stack.
+            put("jobTitle", p.headline.substringBefore(" at ").substringBefore(" · ").trim())
             put("description", p.summary)
             put("url", portfolio.siteUrl)
             p.email?.let { put("email", "mailto:$it") }
