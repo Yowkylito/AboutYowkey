@@ -124,7 +124,8 @@ private fun ModuleCard(module: Module, modifier: Modifier = Modifier) {
             Text(
                 buildAnnotatedString {
                     withStyle(SpanStyle(color = muted)) { append("uses ") }
-                    withStyle(SpanStyle(color = named, fontFamily = FontFamily.Monospace)) { append(uses.joinToString(" · ")) }
+                    // A no-break space before each dot keeps it on the line of the name it follows.
+                    withStyle(SpanStyle(color = named, fontFamily = FontFamily.Monospace)) { append(uses.joinToString(" · ")) }
                 },
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(top = 4.dp),
