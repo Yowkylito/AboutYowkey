@@ -1,17 +1,23 @@
 package dev.yowkey.portfolio.site
 
 import dev.yowkey.portfolio.data.PortfolioParser
+import dev.yowkey.portfolio.model.Award
 import dev.yowkey.portfolio.model.Decision
 import dev.yowkey.portfolio.model.Engineering
+import dev.yowkey.portfolio.model.Experience
 import dev.yowkey.portfolio.model.FeedbackCopy
 import dev.yowkey.portfolio.model.Link
 import dev.yowkey.portfolio.model.MessageCopy
 import dev.yowkey.portfolio.model.Module
+import dev.yowkey.portfolio.model.Portfolio
 import dev.yowkey.portfolio.model.Project
 import dev.yowkey.portfolio.model.ProofPoint
 import dev.yowkey.portfolio.model.Relation
 import dev.yowkey.portfolio.model.RepoVisibility
 import dev.yowkey.portfolio.model.Screenshot
+import dev.yowkey.portfolio.model.Service
+import dev.yowkey.portfolio.model.SkillGroup
+import dev.yowkey.portfolio.ui.Section
 import dev.yowkey.portfolio.validJson
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -38,6 +44,93 @@ class StaticHtmlTest {
         assertFalse("{{" in page)
         assertTrue("\"@type\":\"Person\"" in page)
         assertTrue("script.src = \"composeApp.js?v=949ee26\";" in page)
+    }
+
+    @Test
+    fun pageFillsTheBarAndTheButtonAroundTheContent() {
+        val page = StaticHtml.page(portfolio, "{{bar}}<main>{{content}}</main>{{toTop}}", "949ee26")
+        assertTrue(page.startsWith(StaticHtml.bar(portfolio)), "the bar leads")
+        assertTrue(page.endsWith("</main>${StaticHtml.backToTop()}"), "the button follows the content")
+    }
+
+    private val everySection = portfolio.copy(
+        profile = portfolio.profile.copy(
+            name = "Ada <King>  Lovelace",
+            headline = "Engineer at \"Acme\" · Kotlin · Compose",
+            availability = "Open to <work>",
+        ),
+        experience = listOf(Experience("R", "C", "2024")),
+        recognition = listOf(Award("A", "D")),
+        skills = listOf(SkillGroup("G", listOf("K"))),
+        services = listOf(Service("S", "D")),
+    )
+
+    /**
+     * The bar, as the app's: the monogram is the Home link, named for screen readers, its letters the name's first
+     * and last initials; the brand slot holds the availability pill and the name over the role (the headline up to
+     * its first " · "); then the switch, named and stated like the app's, the menu button that owns the links, and
+     * the progress line. The `#top` it links to is the page's very first element.
+     */
+    @Test
+    fun theBarCarriesTheMarkThePillTheNameAndTheProgress() {
+        val bar = StaticHtml.bar(everySection)
+        assertTrue(bar.startsWith("<div id=\"top\"></div>\n<header class=\"bar\">"), bar.take(80))
+        listOf(
+            "<a class=\"mark\" href=\"#top\" aria-label=\"Ada &lt;King&gt;  Lovelace, back to top\"><span aria-hidden=\"true\">AL</span></a>",
+            "<div class=\"brand\"><span class=\"pill\"><span class=\"dot\" aria-hidden=\"true\"></span><span class=\"text\">Open to &lt;work&gt;</span></span>" +
+                "<span class=\"who\"><strong>Ada &lt;King&gt;  Lovelace</strong><span>Engineer at &quot;Acme&quot;</span></span></div>",
+            "<nav class=\"sections\" id=\"sections\" aria-label=\"Sections\"><ul>",
+            "<button class=\"theme\" type=\"button\" role=\"switch\" aria-checked=\"false\" aria-label=\"Dark theme\"><span class=\"knob\"></span><svg class=\"sun\"",
+            "<button class=\"menu\" type=\"button\" aria-expanded=\"false\" aria-controls=\"sections\" aria-label=\"Open navigation menu\"><svg",
+            "<span class=\"progress\" aria-hidden=\"true\"></span>\n</header>",
+        ).forEach { assertTrue(it in bar, "the bar lacks $it") }
+        val order = listOf("class=\"mark\"", "class=\"brand\"", "<nav", "class=\"theme\"", "class=\"menu\"", "class=\"progress\"").map { bar.indexOf(it) }
+        assertEquals(order.sorted(), order, "mark, slot, links, switch, menu, then the progress on the edge")
+        assertFalse("<header class=\"hero\"" in bar || "<h1" in bar, "the hero is the content's")
+    }
+
+    /** One link per section the page has, to its id, in its order, under the app's names for them. */
+    @Test
+    fun theBarLinksEverySectionOnThePageUnderTheAppsNames() {
+        fun linked(p: Portfolio) = Regex("<li><a href=\"#(\\w+)\">([^<]+)</a></li>").findAll(StaticHtml.bar(p)).map { it.groupValues[1] to it.groupValues[2] }.toList()
+        fun sectionIds(p: Portfolio) = Regex("<section id=\"(\\w+)\"").findAll(StaticHtml.content(p)).map { it.groupValues[1] }.toList()
+
+        val all = linked(everySection)
+        assertEquals(sectionIds(everySection), all.map { it.first }, "every section, in page order")
+        assertEquals((Section.entries - Section.Home).map { it.title }, all.map { it.second }, "the app's names")
+        assertEquals(listOf("projects" to "Projects", "contact" to "Contact"), linked(portfolio), "only the sections there are")
+        assertEquals(sectionIds(portfolio), linked(portfolio).map { it.first })
+    }
+
+    @Test
+    fun theMonogramTakesTheFirstAndLastInitials() {
+        fun mark(name: String) = StaticHtml.bar(portfolio.copy(profile = portfolio.profile.copy(name = name)))
+            .substringAfter("<span aria-hidden=\"true\">").substringBefore("</span>")
+        assertEquals("RT", mark("Rodelito Tangonan"))
+        assertEquals("A", mark("Ada"))
+        assertEquals("MS", mark("  mary ann   smith "))
+    }
+
+    /** Without an availability there is no pill: the slot waits, empty, for the name to scroll under the bar. */
+    @Test
+    fun withoutAvailabilityTheSlotHasNoPill() {
+        val bar = StaticHtml.bar(portfolio)
+        assertFalse("class=\"pill\"" in bar)
+        assertTrue("<div class=\"brand\"><span class=\"who\"><strong>Ada</strong><span>Engineer</span></span></div>" in bar)
+    }
+
+    /** The bar and the button are the page's own: the same with a backend or without, and never talking to one. */
+    @Test
+    fun theBarAndTheButtonNeedNoBackend() {
+        val withApi = everySection.copy(api = "https://api.example")
+        assertEquals(StaticHtml.bar(everySection), StaticHtml.bar(withApi))
+        listOf(StaticHtml.bar(withApi), StaticHtml.backToTop()).forEach {
+            assertFalse("data-api" in it || "api.example" in it || "<form" in it, it)
+        }
+        assertEquals(
+            "<button class=\"to-top\" type=\"button\" aria-label=\"Back to top\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 20 20\" aria-hidden=\"true\" focusable=\"false\">",
+            StaticHtml.backToTop().substringBefore("<path"),
+        )
     }
 
     @Test
