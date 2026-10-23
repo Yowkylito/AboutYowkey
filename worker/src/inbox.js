@@ -7,9 +7,15 @@
 /** The names the owner reads, on this page and in the alerts on the phone. */
 const TOPIC_LABELS = { job: "Job", freelance: "Freelance", collaboration: "Collaboration", other: "Other" };
 const LINK_LABELS = { linkedin: "LinkedIn", github: "GitHub" };
+/** The app's `Relation` labels, so the inbox, the alert and the note card say it the same way. */
+const RELATION_LABELS = { colleague: "Colleague", friend: "Friend", special: "Special someone", other: "Other" };
 
 export function topicLabel(topic) {
   return TOPIC_LABELS[topic] || "Other";
+}
+
+export function relationLabel(relation) {
+  return RELATION_LABELS[relation] || "Other";
 }
 
 export function linkLabel(link) {
@@ -17,14 +23,14 @@ export function linkLabel(link) {
 }
 
 export function renderInbox({ visits, items, days, today, timeZone, messages = [], clicks = {} }) {
-  const shown = items.filter((item) => item.consent && !item.hidden_at).length;
+  const shown = items.filter(onTheSite).length;
   const unread = messages.filter((item) => !item.read_at && !item.archived_at).length;
   const rows = items
     .map(
       (item) => `<tr${item.hidden_at ? ' class="hidden"' : ""}>
   <td class="when">${escape(when(item.created_at))}</td>
   <td class="rating">${stars(item.rating)}</td>
-  <td>${escape(item.name || "")}${contactLine(item.contact)}</td>
+  <td>${escape(item.name || "")}${relationTag(item.relation)}${contactLine(item.contact)}</td>
   <td class="message">${escape(item.message)}</td>
   <td class="status">${status(item)}</td>
   <td class="actions"><form method="post" action="/inbox/notes/${Number(item.id)}">${buttons(item)}</form></td>
@@ -52,7 +58,7 @@ export function renderInbox({ visits, items, days, today, timeZone, messages = [
     "Inbox",
     `<h1>Inbox</h1>
 <p class="muted">${Number(visits.total)} visits${since} · ${Number(visits.today)} today (${escape(today)}, ${escape(timeZone)}) · ${items.length} notes, ${shown} on the site · ${messages.length} messages, ${unread} unread</p>
-<p class="muted">A note is on the site as soon as it arrives, with the name, the stars and the words, never the contact. Hide takes it down without deleting it (its stars stop counting too). Notes marked Private came before notes were public, without the visitor's tick: only their stars count. Messages are private: they are never on the site.</p>
+<p class="muted">A note is on the site as soon as it arrives, with the name, the stars and the words, never the contact. Hide takes it down without deleting it (its stars stop counting too). Pin puts a note on the site before the others, the latest pin first; hiding a note unpins it. Notes marked Private came before notes were public, without the visitor's tick: only their stars count. Messages are private: they are never on the site.</p>
 ${days.length ? `<h2>Visitors by day</h2>\n<ul class="days">${series}</ul>` : ""}
 ${clickSeries ? `<h2>Link clicks today</h2>\n<ul class="days">${clickSeries}</ul>` : ""}
 <h2>Messages</h2>
@@ -87,16 +93,33 @@ export function renderNotice(title, sentence, backUrl) {
   return page(title, `<h1>${escape(title)}</h1>\n<p>${escape(sentence)}</p>${back}`);
 }
 
-/** Hidden by the owner, on the site, or private (sent before notes were public, without the visitor's tick). */
-function status(item) {
-  if (item.hidden_at) return `Hidden<br><span class="dim">${escape(when(item.hidden_at))}</span>`;
-  return item.consent ? "<strong>On the site</strong>" : '<span class="dim">Private</span>';
+/** Sent as public and not hidden: the notes the site shows, and the only ones that can be pinned. */
+function onTheSite(item) {
+  return Boolean(item.consent) && !item.hidden_at;
 }
 
+/**
+ * Hidden by the owner, on the site (and pinned, since when), or private (sent before notes were public, without
+ * the visitor's tick).
+ */
+function status(item) {
+  if (item.hidden_at) return `Hidden<br><span class="dim">${escape(when(item.hidden_at))}</span>`;
+  if (!item.consent) return '<span class="dim">Private</span>';
+  const pinned = item.pinned_at ? `<br>Pinned<br><span class="dim">${escape(when(item.pinned_at))}</span>` : "";
+  return `<strong>On the site</strong>${pinned}`;
+}
+
+/** Hide or Unhide, then Pin for a note on the site or Unpin for a pinned one, then Delete. */
 function buttons(item) {
   const button = (action, label, extra = "") => `<button name="action" value="${action}"${extra}>${label}</button>`;
   const remove = button("delete", "Delete", ' class="danger" onclick="return confirm(\'Delete this note for good?\')"');
-  return (item.hidden_at ? button("unhide", "Unhide") : button("hide", "Hide")) + remove;
+  const pin = item.pinned_at ? button("unpin", "Unpin") : onTheSite(item) ? button("pin", "Pin") : "";
+  return (item.hidden_at ? button("unhide", "Unhide") : button("hide", "Hide")) + pin + remove;
+}
+
+/** How the writer knows the owner, beside their name; nothing when they did not say. */
+function relationTag(relation) {
+  return relation ? ` <span class="relation">${escape(relationLabel(relation))}</span>` : "";
 }
 
 /** Archived, read, or unread (waiting for the owner). */
@@ -162,6 +185,7 @@ function page(title, body) {
   td.status strong { color: var(--accent); }
   td.rating { white-space: nowrap; color: var(--accent); letter-spacing: .05em; }
   td.topic { white-space: nowrap; font-weight: 600; }
+  .relation { font-size: 12px; font-weight: 600; color: var(--accent); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; white-space: nowrap; }
   td.message { white-space: pre-wrap; overflow-wrap: anywhere; width: 45%; }
   td.actions form { display: flex; flex-direction: column; gap: 6px; }
   button { font: inherit; font-size: 13px; font-weight: 600; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; cursor: pointer; }
