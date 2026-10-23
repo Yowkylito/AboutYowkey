@@ -12,7 +12,7 @@
     "test": "node --disable-warning=ExperimentalWarning --test \"test/**/*.test.js\"",
     "db:init": "wrangler d1 migrations apply aboutyowkey --remote",
     "db:init:local": "wrangler d1 migrations apply aboutyowkey --local",
-    "inbox": "wrangler d1 execute aboutyowkey --remote --command \"SELECT id, created_at, rating, name, contact, consent, published_at, hidden_at, message FROM feedback ORDER BY id DESC LIMIT 50\"",
+    "inbox": "wrangler d1 execute aboutyowkey --remote --command \"SELECT id, created_at, rating, name, contact, relation, consent, published_at, hidden_at, pinned_at, message FROM feedback ORDER BY id DESC LIMIT 50\"",
     "tail": "wrangler tail"
   },
   "devDependencies": {

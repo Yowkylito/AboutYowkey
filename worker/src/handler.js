@@ -9,27 +9,29 @@
  *   GET  /visits             { total, today, since }    reads the counts without adding to them
  *   POST /visits             { total, today, since }    counts one visit per visitor per day, then answers as GET
  *   POST /clicks             { ok, counted }            one click per visitor per day on a tracked link (JSON, or sendBeacon's text/plain)
- *   GET  /notes              { visits, ratings, notes, total, more }  the public notes, newest first, a page at a time
- *                            (?before=<id>, ?stars=1..5, ?limit=1..50), and every rating counted star by star
+ *   GET  /notes              { visits, ratings, notes, total, more, relations }  the public notes, pinned first, then
+ *                            newest first, a page at a time (?stars=1..5, ?relation=colleague|friend|special|other,
+ *                            ?offset=0..100000, ?limit=1..50; the 1.1 app's ?before=<id>), and every rating counted
  *   POST /feedback           { ok }                     JSON from the page's script, or a plain HTML form post
  *   POST /messages           { ok }                     a private message to the owner: JSON, or a plain HTML form post
  *   GET  /feedback           { visits, items }          owner only: `Authorization: Bearer <ADMIN_TOKEN>`
  *   GET  /inbox              HTML                       owner only: HTTP Basic auth, any user name, password ADMIN_TOKEN
- *   POST /inbox/notes/:id    303 → /inbox               owner only, from the inbox page: publish, unpublish, hide, unhide, delete
+ *   POST /inbox/notes/:id    303 → /inbox               owner only, from the inbox page: hide, unhide, pin, unpin, delete
+ *                                                       (and the 1.0 app's publish, unpublish)
  *   POST /inbox/messages/:id 303 → /inbox               owner only, from the inbox page: read, unread, archive, unarchive, delete
  *   /admin/*                 JSON                       the owner's app, Bearer ADMIN_TOKEN: listed at "The owner's app" below
  *
  * A note is public as soon as it arrives: the form says so, and sends `consent`. Notes left before that, without the
  * visitor's tick, keep their words private; their stars still count in the rating, which says how many. The owner
- * takes a note down by hiding it (it then counts nowhere) or deleting it. The visitor's contact is never public. A
- * message is never public at all.
+ * takes a note down by hiding it (it then counts nowhere) or deleting it, and may pin a public one so it comes first.
+ * The visitor's contact is never public. A message is never public at all.
  *
  * Everything is counted by the owner's local day (TIME_ZONE), and the cron writes that day's report at 23:59.
  *
  * Bindings and settings (wrangler.toml): DB (D1), ALLOWED_ORIGINS, SITE_URL, TIME_ZONE, TRACKED_LINKS. Secrets:
  * ADMIN_TOKEN, VISITOR_SALT, and FCM_SERVICE_ACCOUNT for push (optional: without it alerts are records the app polls).
  */
-import { linkLabel, renderInbox, renderNotice, topicLabel } from "./inbox.js";
+import { linkLabel, relationLabel, renderInbox, renderNotice, topicLabel } from "./inbox.js";
 import { notify } from "./push.js";
 
 export const LIMITS = Object.freeze({
@@ -45,6 +47,8 @@ export const LIMITS = Object.freeze({
   /** Public notes a page of `GET /notes` holds, newest first, unless it asks for up to `notesPageMax`. */
   notesPage: 12,
   notesPageMax: 50,
+  /** How far into the public notes `GET /notes?offset=` may start: far past any real count, short of a heavy scan. */
+  notesOffsetMax: 100_000,
   /** Characters of an FCM token; real ones are under 200. */
   token: 4096,
   /** Characters of a message or note an alert quotes. */
@@ -55,6 +59,13 @@ export const DEFAULT_TIME_ZONE = "Asia/Manila";
 const DEFAULT_LINKS = "linkedin,github";
 /** What a message may be about. An empty topic is "other". */
 export const TOPICS = Object.freeze(["job", "freelance", "collaboration", "other"]);
+/**
+ * How a note's writer knows the owner, as the note form asks: optional, and null when they did not say, which the
+ * star sheets count as "other". The app's `Relation` has the same wire values, in this order.
+ */
+export const RELATIONS = Object.freeze(["colleague", "friend", "special", "other"]);
+/** The relations a note card shows as a badge, and the owner's alert names: "other" says nothing worth a badge. */
+const BADGED = Object.freeze(["colleague", "friend", "special"]);
 
 /**
  * Crawlers, link previews, monitors and CI's Lighthouse run the page's script too. They may read the count, but
@@ -239,45 +250,96 @@ function clickCounts(links, rows) {
 
 // ---- Public notes ----
 
+/** What a public note shows: never the contact, nor when it was pinned, only that it is. */
+const NOTE_COLUMNS = "id, name, rating, message, COALESCE(day, substr(created_at, 1, 10)) AS date, relation, pinned_at IS NOT NULL AS pinned";
+/** The order notes are listed in: the pinned first, the newest pin first, then the newest note first. */
+const PINNED_FIRST = "pinned_at IS NULL, pinned_at DESC, id DESC";
+
 /**
  * What the page shows: the visits; the rating, star by star, from every note the owner has not hidden; and a page
- * of the public notes, newest first, all of them or those with [stars] stars. `private` says how many of the counted
- * ratings came with words the visitor kept private, so the page can say why it shows fewer notes than ratings.
- * `before` pages on: the notes older than that id. Never a contact.
+ * of the public notes, pinned first, then newest first: all of them, or those of [stars] and of [relation]. The
+ * rating is always the whole site's, whatever the list asks for; `private` (and `privateStars`, star by star) says
+ * how many of its ratings came with words the visitor kept private, so the page can say why it shows fewer notes
+ * than ratings. `total` is how many notes match, so `offset` can page on; `relations` is how many of the star's
+ * notes each relation has, for the star sheet's sorter. The 1.1 app pages with `before` instead: the notes older
+ * than that id, newest first, pins or not, as it always has. Never a contact.
  */
 async function publicNotes(db, today, url) {
-  const stars = wholeNumber(url.searchParams.get("stars"), 1, 5);
-  const before = wholeNumber(url.searchParams.get("before"), 1, Number.MAX_SAFE_INTEGER);
-  const limit = wholeNumber(url.searchParams.get("limit"), 1, LIMITS.notesPageMax) ?? LIMITS.notesPage;
-  const filter = stars ? `${PUBLIC} AND rating = ${stars}` : PUBLIC;
-  const [visits, { results: counted }, { n: total }, { results: page }] = await Promise.all([
+  const params = url.searchParams;
+  const stars = wholeNumber(params.get("stars"), 1, 5);
+  const relation = relationParam(params.get("relation"));
+  const before = wholeNumber(params.get("before"), 1, Number.MAX_SAFE_INTEGER);
+  const offset = wholeNumber(params.get("offset"), 0, LIMITS.notesOffsetMax) ?? 0;
+  const limit = wholeNumber(params.get("limit"), 1, LIMITS.notesPageMax) ?? LIMITS.notesPage;
+  const ofStar = noteFilter({ stars });
+  const matching = noteFilter({ stars, relation });
+  const next = matching.values.length + 1;
+  const page = before
+    ? db
+        .prepare(`SELECT ${NOTE_COLUMNS} FROM feedback WHERE ${matching.where} AND id < ?${next} ORDER BY id DESC LIMIT ?${next + 1}`)
+        .bind(...matching.values, before, limit + 1)
+    : db
+        .prepare(`SELECT ${NOTE_COLUMNS} FROM feedback WHERE ${matching.where} ORDER BY ${PINNED_FIRST} LIMIT ?${next} OFFSET ?${next + 1}`)
+        .bind(...matching.values, limit, offset);
+  const [visits, { results: counted }, { n: total }, { results: said }, { results: rows }] = await Promise.all([
     visitCounts(db, today),
     db.prepare(`SELECT rating, COUNT(*) AS n, SUM(consent = 0) AS private FROM feedback WHERE ${COUNTED} GROUP BY rating`).all(),
-    db.prepare(`SELECT COUNT(*) AS n FROM feedback WHERE ${filter}`).first(),
+    db.prepare(`SELECT COUNT(*) AS n FROM feedback WHERE ${matching.where}`).bind(...matching.values).first(),
     db
-      .prepare(
-        `SELECT id, name, rating, message, COALESCE(day, substr(created_at, 1, 10)) AS date FROM feedback ` +
-          `WHERE ${filter} AND id < ?1 ORDER BY id DESC LIMIT ?2`,
-      )
-      .bind(before ?? Number.MAX_SAFE_INTEGER, limit + 1)
+      .prepare(`SELECT COALESCE(relation, 'other') AS relation, COUNT(*) AS n FROM feedback WHERE ${ofStar.where} GROUP BY COALESCE(relation, 'other')`)
+      .bind(...ofStar.values)
       .all(),
+    page.all(),
   ]);
-  return { visits, ratings: ratingSummary(counted), notes: page.slice(0, limit), total, more: page.length > limit };
+  const notes = rows.slice(0, limit).map((row) => ({ ...row, pinned: Boolean(row.pinned) }));
+  // `before` reads one row more than it shows, to know; by offset, the count says.
+  const more = before ? rows.length > limit : offset + notes.length < total;
+  return { visits, ratings: ratingSummary(counted), notes, total, more, relations: relationCounts(said) };
 }
 
-/** `{ count, average, stars: { "1": n … "5": n }, private }` from the counted ratings grouped by star. */
+/**
+ * The public notes of [stars] and of [relation] (null for any), as SQL and the values it binds, ?1 on, in order:
+ * nothing from the request is written into the SQL itself. A note that did not say how they know the owner is "other".
+ */
+function noteFilter({ stars = null, relation = null }) {
+  const clauses = [PUBLIC];
+  const values = [];
+  if (stars) clauses.push(`rating = ?${values.push(stars)}`);
+  if (relation) clauses.push(`COALESCE(relation, 'other') = ?${values.push(relation)}`);
+  return { where: clauses.join(" AND "), values };
+}
+
+/** `{ colleague, friend, special, other }`, 0 for a relation no note has. */
+function relationCounts(rows) {
+  const counts = Object.fromEntries(RELATIONS.map((relation) => [relation, 0]));
+  for (const row of rows) if (Object.hasOwn(counts, row.relation)) counts[row.relation] = row.n;
+  return counts;
+}
+
+/**
+ * `{ count, average, stars: { "1": n … "5": n }, private, privateStars: { "1": n … "5": n } }` from the counted
+ * ratings grouped by star: `privateStars` is `private` star by star, what each star's sheet cannot show.
+ */
 function ratingSummary(rows) {
   const stars = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  const privateStars = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
   let count = 0;
   let sum = 0;
   let kept = 0;
   for (const row of rows) {
     stars[row.rating] = row.n;
+    privateStars[row.rating] = row.private;
     count += row.n;
     sum += row.rating * row.n;
     kept += row.private;
   }
-  return { count, average: count ? Math.round((sum / count) * 10) / 10 : null, stars, private: kept };
+  return { count, average: count ? Math.round((sum / count) * 10) / 10 : null, stars, private: kept, privateStars };
+}
+
+/** A `relation` query parameter: one of RELATIONS, whatever its case; null when it is missing or anything else. */
+function relationParam(value) {
+  const relation = String(value ?? "").trim().toLowerCase();
+  return RELATIONS.includes(relation) ? relation : null;
 }
 
 /** A query parameter as a whole number from [min] to [max]; null when it is missing or anything else. */
@@ -307,18 +369,25 @@ async function submitFeedback(request, env, now, cors, alerts) {
   const note = normalizeFeedback(fields);
   const { meta } = await env.DB
     .prepare(
-      "INSERT INTO feedback (created_at, day, name, contact, rating, message, visitor, consent) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+      "INSERT INTO feedback (created_at, day, name, contact, rating, message, visitor, consent, relation) " +
+        "VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
     )
-    .bind(now.toISOString(), today, note.name, note.contact, note.rating, note.message, visitor, note.consent ? 1 : 0)
+    .bind(now.toISOString(), today, note.name, note.contact, note.rating, note.message, visitor, note.consent ? 1 : 0, note.relation)
     .run();
   // The owner's alert names the visitor (or "Someone"), never their contact.
   await alertOwner(env, alerts, {
     kind: "feedback",
-    title: note.rating ? `New note (★${note.rating})` : "New note",
+    title: noteTitle(note),
     body: `${note.name || "Someone"}: ${preview(note.message)}`,
     refId: Number(meta.last_row_id),
   });
   return reply(body.form, { ok: true }, 201, cors, env);
+}
+
+/** "New note (★5) · Colleague": the stars when given, and who it is from when that is worth a badge. */
+function noteTitle({ rating, relation }) {
+  const title = rating ? `New note (★${rating})` : "New note";
+  return BADGED.includes(relation) ? `${title} · ${relationLabel(relation)}` : title;
 }
 
 /**
@@ -366,16 +435,21 @@ export function validateFeedback(fields) {
   const name = text(fields.name);
   const contact = text(fields.contact);
   const rating = text(fields.rating);
-  if ([message, name, contact, rating].includes(null)) return ["Each field is text."];
+  const relation = text(fields.relation);
+  if ([message, name, contact, rating, relation].includes(null)) return ["Each field is text."];
   if (!message) problems.push("Write a message first.");
   else if (message.length > LIMITS.message) problems.push(`Keep the message under ${LIMITS.message} characters.`);
   if (name.length > LIMITS.name) problems.push(`Keep the name under ${LIMITS.name} characters.`);
   if (contact.length > LIMITS.contact) problems.push(`Keep the email under ${LIMITS.contact} characters.`);
   if (rating !== "" && !/^[1-5]$/.test(rating)) problems.push("The rating is 1 to 5.");
+  if (relation && !RELATIONS.includes(relation.toLowerCase())) problems.push("Pick one of the ways you know me.");
   return problems;
 }
 
-/** The note as stored: trimmed, the optional fields null when empty, the rating a number, the consent a boolean. */
+/**
+ * The note as stored: trimmed, the optional fields null when empty, the rating a number, the consent a boolean,
+ * the relation lowercase.
+ */
 export function normalizeFeedback(fields) {
   const rating = text(fields.rating);
   return {
@@ -384,6 +458,7 @@ export function normalizeFeedback(fields) {
     rating: rating ? Number(rating) : null,
     message: text(fields.message),
     consent: isYes(fields.consent),
+    relation: text(fields.relation).toLowerCase() || null,
   };
 }
 
@@ -515,11 +590,13 @@ async function inboxAction(request, env, kind, id, now, url) {
 /**
  * What the owner may do to a note, from the inbox's buttons or the app: one set of rules for both. A note is public
  * on arrival, so the owner's levers are hide and unhide (and delete). "publish" and "unpublish" are the 1.0 app's
- * names for the same two, kept so its buttons still work; publishing a note sent without the visitor's tick is
- * refused, as before. Returns `{ status: 200 }`, or a status with a title and the sentence saying why not.
+ * names for those two, kept so its buttons still work; publishing a note sent without the visitor's tick is
+ * refused, as before. Pin puts a note first on the site, so only a note on the site can be pinned; hiding one
+ * unpins it, and unhiding leaves it unpinned: the owner pins it again if it should still come first. A second pin
+ * keeps the first time. Returns `{ status: 200 }`, or a status with a title and the sentence saying why not.
  */
 async function noteAction(db, id, action, now) {
-  const note = await db.prepare("SELECT id, consent FROM feedback WHERE id = ?1").bind(id).first();
+  const note = await db.prepare("SELECT id, consent, hidden_at FROM feedback WHERE id = ?1").bind(id).first();
   if (!note) return refusal(404, "Not found", `There is no note ${id}.`);
   const stamp = now.toISOString();
   let statement;
@@ -530,10 +607,17 @@ async function noteAction(db, id, action, now) {
       break;
     case "unpublish":
     case "hide":
-      statement = db.prepare("UPDATE feedback SET hidden_at = ?1 WHERE id = ?2").bind(stamp, id);
+      statement = db.prepare("UPDATE feedback SET hidden_at = ?1, pinned_at = NULL WHERE id = ?2").bind(stamp, id);
       break;
     case "unhide":
       statement = db.prepare("UPDATE feedback SET hidden_at = NULL WHERE id = ?1").bind(id);
+      break;
+    case "pin":
+      if (!note.consent || note.hidden_at) return refusal(409, "Not pinned", "Only a note on the site can be pinned.");
+      statement = db.prepare("UPDATE feedback SET pinned_at = COALESCE(pinned_at, ?1) WHERE id = ?2").bind(stamp, id);
+      break;
+    case "unpin":
+      statement = db.prepare("UPDATE feedback SET pinned_at = NULL WHERE id = ?1").bind(id);
       break;
     case "delete":
       statement = db.prepare("DELETE FROM feedback WHERE id = ?1").bind(id);
@@ -576,11 +660,15 @@ function fromThisOrigin(request, url) {
   return request.headers.get("Origin") === url.origin;
 }
 
+/**
+ * The owner's list of notes, for the app and the inbox: in the site's order, pinned first, so a pinned note older
+ * than the newest [limit] is still on it.
+ */
 async function feedbackItems(db, limit) {
   const { results } = await db
     .prepare(
-      "SELECT id, created_at, name, contact, rating, message, consent, published_at, hidden_at FROM feedback " +
-        "ORDER BY id DESC LIMIT ?1",
+      "SELECT id, created_at, name, contact, rating, message, consent, published_at, hidden_at, relation, pinned_at FROM feedback " +
+        `ORDER BY ${PINNED_FIRST} LIMIT ?1`,
     )
     .bind(limit)
     .all();
@@ -656,8 +744,8 @@ async function sha256Hex(input) {
 //
 //   GET    /admin/summary                 today's and all-time numbers, and whether push is set up
 //   GET    /admin/days?limit=30           one item per local day with any data, newest first, with its countries
-//   GET    /admin/feedback?limit=100      the notes, newest first
-//   POST   /admin/feedback/:id            { action: publish | unpublish | hide | unhide | delete }
+//   GET    /admin/feedback?limit=100      the notes, pinned first, then newest first, with their relation and pinned_at
+//   POST   /admin/feedback/:id            { action: hide | unhide | pin | unpin | delete, or the 1.0 app's publish | unpublish }
 //   GET    /admin/messages?limit=100      the messages, newest first
 //   POST   /admin/messages/:id            { action: read | unread | archive | unarchive | delete }
 //   GET    /admin/notifications?after=<id>&limit=50   the alerts' records: newest first, or after an id oldest first
