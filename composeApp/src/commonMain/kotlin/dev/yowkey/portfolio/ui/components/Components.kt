@@ -29,7 +29,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,11 +41,18 @@ import androidx.compose.ui.geometry.center
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
@@ -265,7 +274,8 @@ fun MenuGlyph(modifier: Modifier = Modifier) {
 /**
  * The light/dark switch in the page's bars: a pill with the sun on the left and the moon on the right, and a knob
  * in the accent colour over whichever is on, showing it. A press slides the knob across (it snaps under reduced
- * motion); the theme changes at once. To the accessibility tree it is a switch named "Dark theme", on or off.
+ * motion) and the new theme spreads over the page from the pill. To the accessibility tree it is a switch named
+ * "Dark theme", on or off.
  */
 @Composable
 fun ThemeToggle(modifier: Modifier = Modifier) {
@@ -277,13 +287,24 @@ fun ThemeToggle(modifier: Modifier = Modifier) {
         animationSpec = if (reducedMotion) snap() else tween(220, easing = EaseOutCubic),
         label = "theme knob",
     )
+    // Read only when pressed, so moving the pill never recomposes it.
+    var center by remember { mutableStateOf(Offset.Zero) }
     Box(
         modifier
             .minimumInteractiveComponentSize()
             .semantics { contentDescription = "Dark theme" }
             .size(SwitchWidth, SwitchHeight)
+            .onGloballyPositioned { center = it.boundsInRoot().center }
             .clip(CircleShape)
-            .toggleable(value = theme.dark, role = Role.Switch, onValueChange = { theme.toggle() })
+            // Watches without consuming, ahead of the toggle's own handling of the same press.
+            .pointerInput(theme) {
+                awaitEachGesture {
+                    awaitFirstDown(pass = PointerEventPass.Initial)
+                    theme.pressed()
+                    if (waitForUpOrCancellation(PointerEventPass.Initial) == null) theme.pressCancelled()
+                }
+            }
+            .toggleable(value = theme.dark, role = Role.Switch, onValueChange = { theme.toggle(center) })
             .background(scheme.surfaceVariant)
             .border(1.dp, scheme.outline, CircleShape),
     ) {

@@ -7,6 +7,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
@@ -81,10 +82,18 @@ val LocalReducedMotion = staticCompositionLocalOf { false }
 
 /**
  * Which theme the page is in and how to switch it. The page is light until the visitor asks for dark; [App]
- * owns the choice and keeps it for the next visit through [savedDarkTheme] and [saveDarkTheme].
+ * owns the choice and keeps it for the next visit through [savedDarkTheme] and [saveDarkTheme]. [toggle] takes
+ * where the switch is, in the page's coordinates: the new theme spreads from there (see [ThemeReveal]).
+ * [pressed] runs as a pointer goes down on the switch and [pressCancelled] if it then leaves without a switch, so
+ * the reveal can get ready during the press.
  */
 @Immutable
-class ThemeSwitch(val dark: Boolean, val toggle: () -> Unit)
+class ThemeSwitch(
+    val dark: Boolean,
+    val toggle: (from: Offset) -> Unit,
+    val pressed: () -> Unit = {},
+    val pressCancelled: () -> Unit = {},
+)
 
 val LocalThemeSwitch = staticCompositionLocalOf { ThemeSwitch(dark = false, toggle = {}) }
 
