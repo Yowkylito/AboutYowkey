@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The way into the admin view without touching the guest UI: long-press the app icon, "Owner". The targetPackage is
+  the applicationId, the same for debug and release builds.
+-->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_owner"
+        android:shortcutId="owner"
+        android:shortcutLongLabel="@string/shortcut_owner_long"
+        android:shortcutShortLabel="@string/shortcut_owner_short">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="yowkey-owner://dashboard"
+            android:targetClass="dev.yowkey.portfolio.app.MainActivity"
+            android:targetPackage="dev.yowkey.portfolio" />
+    </shortcut>
+</shortcuts>

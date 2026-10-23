@@ -197,6 +197,58 @@ JDK 17+ (Android Studio's bundled JBR works).
 `main`, then runs Lighthouse against the live URL. Pull requests get the same build and tests without the deploy.
 One-time setup: **Settings → Pages → Source: GitHub Actions**.
 
+## Android app
+
+`androidApp/` builds **Yowkey**, an APK for my own phone. It opens on the portfolio exactly as the site shows it,
+running natively. Long-press its icon and pick **Owner** to sign in (the password is the worker's `ADMIN_TOKEN`, see
+below): a dashboard of today's visits, LinkedIn and GitHub clicks, unread messages and who wants to hire me, the 30
+days of visits and their countries; the private messages (reply by email, archive, delete), the notes to publish or
+hide, and the history of every alert and daily report. A new message, a new note and the 23:59 summary arrive as
+notifications. Once signed in, the app opens there, with **Portfolio** to go back to the site.
+
+The SDK needs platform 37 (Compose 1.12 compiles against it; the app targets 36 and runs on Android 8.0+).
+
+```bash
+./gradlew :androidApp:assembleDebug     # androidApp/build/outputs/apk/debug/androidApp-debug.apk
+adb install -r androidApp/build/outputs/apk/debug/androidApp-debug.apk
+./gradlew :androidApp:assembleRelease   # shrunk with R8; signed only with keystore.properties, below
+```
+
+Every CI run of `pages.yml` builds the debug APK and keeps it for two weeks as the `yowkey-debug-apk` artifact.
+
+**Push, once.** Without it the app still gets every alert, by asking the worker every 15 minutes; with it they
+arrive as they happen.
+
+1. In the [Firebase console](https://console.firebase.google.com/), create a project (Analytics is not needed).
+2. Add an Android app with the package name `dev.yowkey.portfolio`, download its `google-services.json` and put it
+   at `androidApp/google-services.json`. It is gitignored; never commit it. The build applies the Google services
+   plugin only when the file is there, so without it everything builds the same with push off.
+3. Give the worker its key, `FCM_SERVICE_ACCOUNT` (step 3 and 4 under "Visits and feedback" below).
+4. Rebuild, install, sign in once and allow notifications. **Settings** in the app then says this phone is
+   registered and the server has push set up.
+
+**A signed release, once.** Create a key and keep it safe (every update must be signed with the same one):
+
+```bash
+keytool -genkeypair -v -keystore ~/keys/yowkey-release.jks -keyalg RSA -keysize 4096 -validity 10000 -alias yowkey
+```
+
+then `keystore.properties` at the repo root (gitignored), and `assembleRelease` signs with it:
+
+```properties
+storeFile=/Users/you/keys/yowkey-release.jks
+storePassword=…
+keyAlias=yowkey
+keyPassword=…
+```
+
+Without the file the release APK is unsigned and Android will not install it; use the debug one. A debug install
+must be uninstalled before a release one goes on (they are signed with different keys).
+
+**Trying it against a local worker** (debug builds only): with `npx wrangler dev` running in `worker/`,
+`adb shell am start -n dev.yowkey.portfolio/.app.MainActivity --es debug_api http://10.0.2.2:8787` sends the
+app's requests there instead (the emulator reaches the computer at 10.0.2.2), and `--es debug_api ""` undoes it.
+
 ## Visits and feedback
 
 The live line under the hero's headline (the published notes' rating, the visit count), the "Notes from visitors"

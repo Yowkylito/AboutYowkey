@@ -10,6 +10,7 @@ import javax.inject.Inject
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
+    alias(libs.plugins.androidKotlinMultiplatformLibrary)
     alias(libs.plugins.kotlinSerialization)
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
@@ -70,7 +71,28 @@ val generateStaticSite = tasks.register<JavaExec>("generateStaticSite") {
 }
 
 kotlin {
+    // skikoMain: what the desktop and the web share and Android has not, Skia (Compose draws with it there).
+    applyDefaultHierarchyTemplate {
+        common {
+            group("skiko") {
+                withJvm()
+                withWasmJs()
+            }
+        }
+    }
+
     jvm()
+
+    // The shared UI as an Android library; the APK itself is :androidApp (AGP 9 keeps the application apart).
+    android {
+        namespace = "dev.yowkey.portfolio.shared"
+        compileSdk = libs.versions.androidCompileSdk.get().toInt()
+        minSdk = libs.versions.androidMinSdk.get().toInt()
+        // Compose resources (portfolio.json, the screenshots, the clips) ship as the library's assets.
+        androidResources {
+            enable = true
+        }
+    }
 
     @OptIn(ExperimentalWasmDsl::class)
     wasmJs {
@@ -106,6 +128,11 @@ kotlin {
         jvmMain.dependencies {
             implementation(compose.desktop.currentOs)
             implementation(libs.kotlinx.coroutines.swing)
+        }
+        androidMain.dependencies {
+            implementation(libs.kotlinx.coroutines.android)
+            // The clips' 60 fps .mp4 twins, hardware-decoded off the UI thread (see ClipVideo.android.kt).
+            implementation(libs.androidx.media3.exoplayer)
         }
         wasmJsMain {
             resources.srcDir(generateStaticSite)
