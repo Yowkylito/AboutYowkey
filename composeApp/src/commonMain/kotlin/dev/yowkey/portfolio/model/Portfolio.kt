@@ -60,9 +60,21 @@ data class Profile(
     val location: String? = null,
     val email: String? = null,
     val availability: String? = null,
+    /**
+     * The hero's portrait: a WebP in `files/profile/`, cut out of its background (transparent around the person) and
+     * cropped at the bottom where the photo ends, so the figure can stand on the hero's stage. Leave it out for none.
+     */
+    val photo: String? = null,
     /** The hero's few headline numbers, strongest first. The parser caps the count so they stay above the fold. */
     val proof: List<ProofPoint> = emptyList(),
-)
+) {
+    /** [photo]'s path relative to composeResources, or null when there is none. */
+    val photoPath: String? get() = photo?.let { "$PHOTO_DIR/$it" }
+
+    companion object {
+        const val PHOTO_DIR = "files/profile"
+    }
+}
 
 /** One hero proof point: a short figure ([value], e.g. "53%") and the plain sentence that backs it. */
 @Immutable

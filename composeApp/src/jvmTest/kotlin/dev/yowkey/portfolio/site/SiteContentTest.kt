@@ -5,6 +5,7 @@ import dev.yowkey.portfolio.model.FeedbackCopy
 import dev.yowkey.portfolio.model.GalleryItem
 import dev.yowkey.portfolio.model.MessageCopy
 import dev.yowkey.portfolio.model.Portfolio
+import dev.yowkey.portfolio.model.Profile
 import dev.yowkey.portfolio.model.Project
 import dev.yowkey.portfolio.model.PublicNote
 import dev.yowkey.portfolio.model.Relation
@@ -14,8 +15,10 @@ import dev.yowkey.portfolio.ui.image.AnimatedClip
 import dev.yowkey.portfolio.ui.image.ClipFrames
 import dev.yowkey.portfolio.ui.image.ScreenshotImages
 import kotlinx.serialization.json.Json
+import org.jetbrains.skia.Bitmap
 import org.jetbrains.skia.Codec
 import org.jetbrains.skia.Data
+import org.jetbrains.skia.Image
 import java.io.File
 import kotlin.math.abs
 import kotlin.test.Test
@@ -257,6 +260,26 @@ class SiteContentTest {
             val icon = article.indexOf(StaticHtml.resourceUrl(project.iconPath!!))
             assertTrue(icon in 0 until article.indexOf("<h4>${StaticHtml.escape(project.title)}</h4>"), "${project.id}: the icon is not before its title")
         }
+    }
+
+    /**
+     * The portrait ships small and cut out (its top corners clear, so the stage shows through) and leads the static
+     * hero, ahead of the name, as in the app's narrow layout. Nothing else sits in its folder unlisted.
+     */
+    @Test
+    fun portraitShipsCutOutWithinBudgetAndLeadsTheHero() {
+        val path = assertNotNull(portfolio.profile.photoPath, "the profile has no photo")
+        val file = File(resources, path)
+        assertTrue(file.isFile, "missing ${file.path}")
+        assertTrue(file.length() <= 48 * 1024, "${file.name} is ${file.length() / 1024} KB, budget 48 KB")
+        val bitmap = Bitmap.makeFromImage(Image.makeFromEncoded(file.readBytes()))
+        listOf(0 to 0, bitmap.width - 1 to 0).forEach { (x, y) ->
+            assertEquals(0, bitmap.getColor(x, y) ushr 24, "${file.name} is not cut out: its corner ($x, $y) is opaque")
+        }
+        val hero = page.substringAfter("<header class=\"hero\">").substringBefore("</header>")
+        assertTrue(hero.indexOf(StaticHtml.resourceUrl(path)) in 0 until hero.indexOf("<h1>"), "the portrait does not lead the hero")
+        val shipped = File(resources, Profile.PHOTO_DIR).listFiles().orEmpty().map { it.name }.toSet()
+        assertEquals(setOf(portfolio.profile.photo), shipped, "shipped but unused, remove them")
     }
 
     @Test

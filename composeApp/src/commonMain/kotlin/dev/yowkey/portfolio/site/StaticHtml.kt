@@ -169,6 +169,32 @@ object StaticHtml {
     private const val MOON_ICON = "<svg class=\"moon\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" aria-hidden=\"true\" focusable=\"false\">" +
         "<path d=\"M13.6 10.1A5.9 5.9 0 0 1 5.9 2.4a5.9 5.9 0 1 0 7.7 7.7z\" fill=\"currentColor\"/></svg>"
 
+    /** The hero portrait's trail, as the app's: seven echoes, farthest first. */
+    private const val PORTRAIT_ECHOES = 7
+
+    /**
+     * Noise that varies only down the page, pushing each row of an echo sideways (its vertical push is zeroed), so the
+     * outline ripples as the app's waves do; three strengths for the trail's middle, far and farthest echoes. A single
+     * octave of noise stays near its middle, hence scales several times the app's wave depths. In sRGB, so the zeroed
+     * channel's 0.5 stays the no-push middle.
+     */
+    private val MELT_FILTERS = "<svg class=\"melt\" width=\"0\" height=\"0\" aria-hidden=\"true\" focusable=\"false\">" +
+        listOf(1 to 80, 2 to 150, 3 to 220).joinToString("") { (n, scale) ->
+            "<filter id=\"melt-$n\" color-interpolation-filters=\"sRGB\" x=\"-20%\" y=\"0\" width=\"140%\" height=\"100%\">" +
+                "<feTurbulence type=\"fractalNoise\" baseFrequency=\"0 0.012\" numOctaves=\"1\" seed=\"$n\" result=\"noise\"/>" +
+                "<feColorMatrix in=\"noise\" result=\"rows\" type=\"matrix\" values=\"1 0 0 0 0 0 0 0 0 0.5 0 0 0 0 0 0 0 0 0 1\"/>" +
+                "<feDisplacementMap in=\"SourceGraphic\" in2=\"rows\" scale=\"$scale\" xChannelSelector=\"R\" yChannelSelector=\"G\"/></filter>"
+        } + "</svg>"
+
+    /**
+     * The shout's three sound lines left of the face, as the app's, drawn for a 224px-tall portrait (the CSS scales
+     * them to the others): nearest first, radius 49, 72 and 95, sweeping 50°, 64° and 78°.
+     */
+    private const val SHOUT_LINES = "<svg class=\"shout\" width=\"1\" height=\"1\" aria-hidden=\"true\" focusable=\"false\">" +
+        "<path d=\"M-44.4-20.7A49 49 0 0 0-44.4 20.7\" stroke-width=\"3\" opacity=\".85\"/>" +
+        "<path d=\"M-61.1-38.2A72 72 0 0 0-61.1 38.2\" stroke-width=\"2.5\" opacity=\".6\"/>" +
+        "<path d=\"M-73.8-59.8A95 95 0 0 0-73.8 59.8\" stroke-width=\"2\" opacity=\".38\"/></svg>"
+
     /** Three lines, as the app's MenuGlyph; its name is the button's label. */
     private const val MENU_ICON = "<svg width=\"20\" height=\"20\" viewBox=\"0 0 20 20\" aria-hidden=\"true\" focusable=\"false\">" +
         "<path d=\"M2 5h16M2 10h16M2 15h16\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/></svg>"
@@ -181,6 +207,16 @@ object StaticHtml {
     fun content(portfolio: Portfolio): String = buildString {
         val p = portfolio.profile
         appendLine("<header class=\"hero\">")
+        // The app's still picture: the echoes are the cut-out again, as CSS masks filled with the accent, the far ones
+        // melted by the SVG filters; the sound lines sit under the figure, which covers their ends.
+        p.photoPath?.let { photo ->
+            val url = resourceUrl(photo)
+            appendLine("<figure class=\"portrait\" style=\"--photo: url('$url')\">")
+            appendLine(MELT_FILTERS)
+            repeat(PORTRAIT_ECHOES) { appendLine("<span class=\"echo\"><i></i></span>") }
+            appendLine("<span class=\"person\">$SHOUT_LINES<img src=\"$url\" alt=\"Portrait of ${escape(p.name)}\" decoding=\"async\"></span>")
+            appendLine("</figure>")
+        }
         val eyebrow = listOfNotNull(p.location, p.availability)
         if (eyebrow.isNotEmpty()) appendLine("<p class=\"eyebrow\">${eyebrow.joinToString(" · ") { escape(it) }}</p>")
         appendLine("<h1>${escape(p.name)}</h1>")
