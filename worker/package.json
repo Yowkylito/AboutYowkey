@@ -2,7 +2,7 @@
   "name": "aboutyowkey-api",
   "private": true,
   "type": "module",
-  "description": "The portfolio's backend: a visit counter and a feedback inbox on a Cloudflare Worker with a D1 database.",
+  "description": "The portfolio's backend: visit and link-click counts, a feedback inbox, private messages and the owner's alerts, on a Cloudflare Worker with a D1 database.",
   "engines": {
     "node": ">=22.13"
   },
