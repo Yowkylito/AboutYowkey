@@ -78,7 +78,8 @@
     article + article { margin-top: 16px; }
     a { color: var(--accent); font-weight: 600; }
     .shots { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0; }
-    .shots img { display: block; height: 200px; width: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--line); }
+    /* Never wider than the page: a wide shot on a phone is cropped to fit rather than pushing the page sideways. */
+    .shots img { display: block; height: 200px; width: auto; max-width: 100%; object-fit: cover; border: 1px solid var(--line); border-radius: 10px; background: var(--line); }
     .shots picture { display: block; }
     img.cover { display: block; margin: 0 auto 16px; border: 1px solid var(--line); background: var(--line); }
     img.cover.landscape { width: 100%; height: auto; border-radius: 12px; }
