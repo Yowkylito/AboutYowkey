@@ -936,7 +936,6 @@
       "period": "2024 – Present",
       "location": "Taguig, Philippines",
       "highlights": [
-        "Android developer on ArenaPlus, Arena Social and GameZone",
         "Wrote 53% of ArenaPlus V2's code (270K+ lines, 413 commits), co-building it from day one: architecture, UI foundations, navigation",
         "Shipped Arena Social solo in 30 days (~100% of the code): a web product turned into a native app",
         "Led the move from a hybrid WebView app to a native-only app, without stopping releases",
