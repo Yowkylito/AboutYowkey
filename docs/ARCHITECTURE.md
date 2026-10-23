@@ -40,6 +40,24 @@ Arrows point one way: UI → ViewModel → repository → parser → model. Noth
 | `worker/` | The backend itself: one Cloudflare Worker over one D1 database (`migrations/`), plain JavaScript with no dependencies, tested in Node against SQLite. Routes, limits and rules in `worker/src/handler.js`; the owner's inbox page, with its publish/hide/delete buttons, in `inbox.js`. |
 | `di/AppModule` | Koin wiring: dispatcher, repository, ViewModel. |
 
+## The bar, scrolling and reading
+
+The hero already shows the name in large type, so the bar does not repeat it while the hero is on screen. It
+carries the monogram (`ui/components/Brand.kt`, the Home button) and the availability pill, and swaps the pill for
+the name over the role once half the hero has scrolled under it (`rememberHeroPassed`, a `derivedStateOf`, so the bar
+recomposes only when that flips). The 2dp reading-progress line and the hairline are drawn in the draw phase from
+`listState.layoutInfo`, so scrolling never recomposes the bar. On a narrow bar the pill and the role shorten at
+whole words (`shorterForms`), and the static page uses the same helpers for its phone bar.
+
+Scrolling lives in `ui/navigation/PageScroll.kt` and `ScrollRules.kt`: Back to top (after 1.5 screens, hidden again
+under 1), keyboard reading (Space, Page Up/Down, Home/End, the arrows; a focused field keeps its keys, and on wasm the
+page frame takes focus back when a field lets go), and section jumps whose glide grows with the square root of the
+distance. Reduced motion makes every one of them instant.
+
+Long text uses `Modifier.readingMeasure(style)` (`ui/sections/Reading.kt`): 40 times the text size, never over
+680dp, so about 75–85 characters a line; paragraphs are `ParagraphGap` apart. The project page is a 720dp article
+column, two columns only on wide windows with media.
+
 ## Link clicks and private messages
 
 A click on the profile's LinkedIn or GitHub link opens the link first; only then does `LinkButton` tell the
