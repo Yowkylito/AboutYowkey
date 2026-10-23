@@ -48,7 +48,7 @@
         { "value": "20", "label": "Gradle modules on the architecture I set up" }
       ],
       "impact": [
-        "ArenaPlus runs native-only: V2 replaced the hybrid WebView app inside the shipping app, with no stop in releases",
+        "Took ArenaPlus from a hybrid WebView app to a native-only runtime, with V2 running inside the original app as decoupled modules",
         "Players deposit, withdraw and link bank accounts through flows I built end to end",
         "Attribution and first-deposit bonuses run automatically from the campaign triggers I built",
         "Recognised for it: Rank #2 of the Top 9 awardees chosen by executive leadership, #1 story-point owner of about 40 engineers, and the ArenaPlus team's Rockstar of the Month"
@@ -109,7 +109,7 @@
       ],
       "impact": [
         "DigiPlus got a native Android app for a web-only product in one month, built by one developer",
-        "Fans get native navigation, loading and a pinned video player instead of a website in a frame"
+        "Fans get native navigation, loading and a pinned video player around the web content"
       ],
       "highlights": [
         "Architected the app on Clean Architecture with MVI: Compose screens, use cases and repositories, wired with Koin",
