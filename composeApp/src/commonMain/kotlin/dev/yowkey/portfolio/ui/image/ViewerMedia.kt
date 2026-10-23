@@ -18,7 +18,9 @@ import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asComposeImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.dp
 import dev.yowkey.portfolio.model.GalleryItem
 import dev.yowkey.portfolio.model.Screenshot
 import kotlinx.coroutines.CancellationException
@@ -160,9 +162,37 @@ private const val STALL_MS = 250L
 /**
  * One viewer page: a still at full size, or a clip that plays while [playing]. A clip shows its poster (already
  * cached from the card) until it has loaded, so the page is never blank.
+ *
+ * Where the platform plays video ([playsClipVideo]) and the clip has a 60 fps twin, that video plays instead of the
+ * WebP, which is then never downloaded; if the video fails to load, the WebP takes over. The video is drawn above
+ * everything Compose draws, so it is only put up while [videoShown] (until then the page is the WebP's still, as
+ * without a video), and its corners are rounded to [cornerRadius] to match the clip the caller gives this
+ * composable.
  */
 @Composable
-fun ViewerMediaImage(item: GalleryItem, playing: Boolean, modifier: Modifier = Modifier) {
+fun ViewerMediaImage(
+    item: GalleryItem,
+    playing: Boolean,
+    modifier: Modifier = Modifier,
+    videoShown: Boolean = true,
+    cornerRadius: Dp = 0.dp,
+) {
+    var videoFailed by remember(item) { mutableStateOf(false) }
+    if (playsClipVideo && item.shot.video && videoShown && !videoFailed) {
+        val images = LocalScreenshotImages.current
+        Box(modifier) {
+            // The poster shows until the video's first frame covers it.
+            ScreenshotImage(item.cardPath, item.shot.caption, images?.thumbnails, Modifier.fillMaxSize(), ContentScale.Fit)
+            ClipVideo(item.shot.videoPath, playing, cornerRadius, onError = { videoFailed = true }, modifier = Modifier.fillMaxSize())
+        }
+    } else {
+        DecodedMedia(item, playing, modifier)
+    }
+}
+
+/** A still, or a clip's WebP decoded frame by frame by [ClipPlayer]. */
+@Composable
+private fun DecodedMedia(item: GalleryItem, playing: Boolean, modifier: Modifier) {
     val images = LocalScreenshotImages.current
     val media by produceState<ViewerMedia?>(null, item, images) {
         value = try {

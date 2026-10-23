@@ -11,6 +11,7 @@ import kotlinx.serialization.json.Json
 import org.jetbrains.skia.Codec
 import org.jetbrains.skia.Data
 import java.io.File
+import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -124,10 +125,37 @@ class SiteContentTest {
         }
     }
 
+    /**
+     * The web viewer's 60 fps twins, held to `prepare_screenshots.py --video`: H.264 (every browser decodes it), the
+     * clip's shape (the viewer sizes the box from the JSON), silent, index first so it plays while it downloads.
+     */
+    @Test
+    fun everyClipVideoIsA60FpsH264WithinBudget() {
+        clips.filter { it.shot.video }.forEach { item ->
+            val shot = item.shot
+            val file = File(resources, shot.videoPath)
+            assertTrue(file.isFile, "missing ${file.path}")
+            assertTrue(file.length() <= 1536L * 1024, "${file.name} is ${file.length() / 1024} KB, budget 1536 KB")
+            val video = Mp4Info.read(file.readBytes())
+            assertEquals("avc1", video.codec, "${file.name} is not H.264")
+            assertEquals(60.0, video.framesPerSecond, 0.5, "${file.name}'s frame rate")
+            assertTrue(video.seconds <= 6.05, "${file.name} runs ${video.seconds} s, at most 6 s")
+            assertTrue(maxOf(video.width, video.height) <= 1440, "${file.name} is over 1440 px on its long edge")
+            val ratio = video.width.toFloat() / video.height
+            assertTrue(abs(ratio / shot.aspectRatio - 1) < 0.02, "${file.name} is not the shape of ${shot.file}")
+            assertFalse(video.hasAudio, "${file.name} has a sound track")
+            assertTrue(video.indexFirst, "${file.name} has its index after its frames, so it cannot play until fully loaded")
+        }
+    }
+
     @Test
     fun noScreenshotIsLeftUnlisted() {
         val listed = gallery.flatMap { item ->
-            listOf(File(item.shot.fullPath).name, File(item.cardPath).name)
+            listOfNotNull(
+                File(item.shot.fullPath).name,
+                File(item.cardPath).name,
+                File(item.shot.videoPath).name.takeIf { item.shot.video },
+            )
         }.toSet()
         val shipped = File(resources, "files/screens").listFiles().orEmpty().map { it.name }.toSet()
         assertTrue((shipped - listed).isEmpty(), "shipped but unused, remove them: ${shipped - listed}")

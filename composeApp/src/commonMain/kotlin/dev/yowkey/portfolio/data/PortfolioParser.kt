@@ -55,6 +55,9 @@ object PortfolioParser {
             // The viewer's pager keys its pages by file, and one file cannot be both a still and a clip.
             val repeated = gallery.groupBy { it.shot.file }.filterValues { it.size > 1 }.keys
             require(repeated.isEmpty()) { "project ${project.id} lists the same file twice: $repeated" }
+            // A still or a cover has nothing to play, so a video twin there would ship unused.
+            val stray = gallery.filter { it.shot.video && !it.isClip }.map { it.shot.file }
+            require(stray.isEmpty()) { "project ${project.id}: only clips and the cover clip take \"video\", not $stray" }
             validateCard(project)
             project.engineering?.let { validateEngineering(project.id, it) }
         }
