@@ -81,7 +81,7 @@ fun FigureList(figures: List<ProofPoint>, large: Boolean, modifier: Modifier = M
                 )
                 Text(
                     figure.label,
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = if (large) MaterialTheme.typography.bodyLarge else MaterialTheme.typography.bodyMedium,
                     color = scheme.onSurface,
                     modifier = Modifier.weight(1f).alignByBaseline(),
                 )
