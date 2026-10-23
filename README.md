@@ -251,7 +251,7 @@ app's requests there instead (the emulator reaches the computer at 10.0.2.2), an
 
 ## Visits and feedback
 
-The live line under the hero's headline (the notes' rating, the visit count), the "Notes from visitors" dashboard
+The bar's proof chip (the notes' rating and the visit count, while the hero is on screen), the "Notes from visitors" dashboard
 and cards and the "Leave a note" form under Contact are real data, kept by a small backend of the site's own: a
 Cloudflare Worker with a D1 (SQLite) database, in [`worker/`](worker/). GitHub Pages serves files only, so this is
 the one piece that runs on a server. Cloudflare's free plan covers it many times over (100,000 requests a day), and
@@ -319,8 +319,8 @@ ten minutes, once:
    "api": "https://aboutyowkey-api.<account>.workers.dev"
    ```
 
-   The build checks it is `https://` with no trailing slash. The next deploy of the site shows the live line under
-   the headline and the form under Contact; a note appears as soon as it is sent.
+   The build checks it is `https://` with no trailing slash. The next deploy of the site shows the rating and visits in
+   the bar and the form under Contact; a note appears as soon as it is sent.
 
 **Reading the notes, and taking one down**: open `https://aboutyowkey-api.<account>.workers.dev/inbox` in a browser;
 any user name, the password is `ADMIN_TOKEN`. It lists the notes newest first, with the visit totals and the last two

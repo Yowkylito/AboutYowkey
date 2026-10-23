@@ -58,12 +58,15 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import dev.yowkey.portfolio.model.LiveStats
 import dev.yowkey.portfolio.model.Profile
-import dev.yowkey.portfolio.ui.components.AvailabilityPill
 import dev.yowkey.portfolio.ui.components.BrandName
 import dev.yowkey.portfolio.ui.components.MenuGlyph
 import dev.yowkey.portfolio.ui.components.Monogram
+import dev.yowkey.portfolio.ui.components.ProofChip
+import dev.yowkey.portfolio.ui.components.ProofReveal
 import dev.yowkey.portfolio.ui.components.ThemeToggle
+import dev.yowkey.portfolio.ui.components.rememberProofReveal
 import dev.yowkey.portfolio.ui.components.roleOf
 import dev.yowkey.portfolio.ui.theme.LocalReducedMotion
 import kotlinx.coroutines.coroutineScope
@@ -71,14 +74,16 @@ import kotlinx.coroutines.launch
 
 /**
  * The sticky navigation bar. The hero already says the name in huge type, so the bar starts with a monogram (the
- * Home button) and, while the hero's name is on screen, the availability pill; once [heroPassed], the pill gives way
- * to the name and role. Wide windows list the sections with an accent line that slides to the [active] one; compact
- * ones put them in a menu. The theme switch sits at the end.
+ * Home button) and, while the hero's name is on screen, the proof: the notes' rating and the visits ([stats], see
+ * [ProofChip]), which [onOpenNotes] takes the visitor to; once [heroPassed], the proof gives way to the name and
+ * role. Wide windows list the sections with an accent line that slides to the [active] one; compact ones put them in
+ * a menu. The theme switch sits at the end. [proofReveal] holds the proof's entrance, so a caller that outlives the
+ * bar keeps it from playing twice.
  *
  * At the top the bar is flat. Once [scrolled], a hairline fades in along its bottom edge, and over it a 2 dp accent
  * line as long as [progress] says (0..1, how far down the page the reader is). Both are read from lambdas in the draw
  * phase, so scrolling never recomposes the bar: only [active] changes do, and the brand slot alone when [heroPassed]
- * flips.
+ * flips or [stats] change.
  */
 @Composable
 fun TopBar(
@@ -91,8 +96,11 @@ fun TopBar(
     scrolled: () -> Boolean,
     heroPassed: () -> Boolean,
     progress: () -> Float,
+    stats: LiveStats,
+    onOpenNotes: () -> Unit,
     onNavigate: (Section) -> Unit,
     modifier: Modifier = Modifier,
+    proofReveal: ProofReveal = rememberProofReveal(),
 ) {
     val background = MaterialTheme.colorScheme.background
     val divider = MaterialTheme.colorScheme.outlineVariant
@@ -128,8 +136,8 @@ fun TopBar(
         ) {
             Monogram(profile.name, onClick = { onNavigate(Section.Home) })
             Spacer(Modifier.width(6.dp))
-            // Its end padding keeps a filled pill or a long role from running into what follows.
-            BrandSlot(profile, heroPassed, Modifier.weight(1f).padding(end = 8.dp))
+            // Its end padding keeps the proof or a long role from running into what follows.
+            BrandSlot(profile, heroPassed, stats, proofReveal, onOpenNotes, Modifier.weight(1f).padding(end = 8.dp))
             if (compact) {
                 ThemeToggle()
                 CompactMenu(sections, active, onNavigate)
@@ -164,13 +172,20 @@ private fun rememberEdgeAlpha(scrolled: () -> Boolean): Animatable<Float, *> {
 }
 
 /**
- * The pill or the name, crossfading as [heroPassed] flips. It is the only part of the bar that reads [heroPassed],
- * so only it recomposes then. Going down the page the name rises into place as the hero's own slides under the bar;
- * going back up it drops away. Under reduced motion the swap is instant. Neither state is a live region: the
- * swap follows scrolling, and announcing it would only talk over what the reader is reading.
+ * The proof or the name, crossfading as [heroPassed] flips. It is the only part of the bar that reads [heroPassed],
+ * so only it recomposes then (and when [stats] change). Going down the page the name rises into place as the hero's
+ * own slides under the bar; going back up it drops away. Under reduced motion the swap is instant. Neither state is a
+ * live region: the swap follows scrolling, and announcing it would only talk over what the reader is reading.
  */
 @Composable
-private fun BrandSlot(profile: Profile, heroPassed: () -> Boolean, modifier: Modifier = Modifier) {
+private fun BrandSlot(
+    profile: Profile,
+    heroPassed: () -> Boolean,
+    stats: LiveStats,
+    proofReveal: ProofReveal,
+    onOpenNotes: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val reducedMotion = LocalReducedMotion.current
     val role = remember(profile.headline) { roleOf(profile.headline) }
     AnimatedContent(
@@ -193,7 +208,7 @@ private fun BrandSlot(profile: Profile, heroPassed: () -> Boolean, modifier: Mod
             if (passed) {
                 BrandName(profile.name, role)
             } else {
-                profile.availability?.let { AvailabilityPill(it) }
+                ProofChip(stats, proofReveal, onClick = onOpenNotes)
             }
         }
     }
@@ -391,5 +406,5 @@ private val IndicatorHeight = 2.dp
 // From the link's middle down to the line: half the label's 20 dp line, then a 4 dp gap.
 private val IndicatorDrop = 14.dp
 // The links' horizontal padding, so the line spans the label, not the button. A little under TextButton's 12 dp, and
-// no gap between links, so that at the narrowest wide window (840 dp) the pill still has room for "Open to relocation".
+// no gap between links, so that at the narrowest wide window (840 dp) the proof still has room for its short form.
 private val LinkPadding = 10.dp

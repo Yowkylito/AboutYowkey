@@ -307,14 +307,57 @@ class SiteContentTest {
         }
     }
 
-    /** Once the content names the backend, the page carries the note form, the notes' place and the hero's live line. */
+    /**
+     * Once the content names the backend, the page carries the note form, the notes' place (`#notes`) and the bar's
+     * proof chip, which jumps there; the hero no longer has a live line of its own.
+     */
     @Test
-    fun theNoteFormTheNotesAndTheLiveLineFollowTheContentsBackend() {
+    fun theNoteFormTheNotesAndTheChipFollowTheContentsBackend() {
         val api = portfolio.api
         assertEquals(api != null, "<form class=\"feedback\"" in page)
-        assertEquals(api != null, "class=\"visitor-notes\"" in page)
-        assertEquals(api != null, "class=\"live-stats muted\"" in page)
-        api?.let { assertTrue("action=\"${StaticHtml.escape(it)}/feedback\"" in page) }
+        assertEquals(api != null, "<div class=\"visitor-notes\" id=\"notes\"" in page)
+        assertEquals(api != null, "<a class=\"proof\" href=\"#notes\"" in page)
+        assertFalse("live-stats" in page, "the hero does not repeat the chip's numbers")
+        api?.let {
+            assertTrue("action=\"${StaticHtml.escape(it)}/feedback\"" in page)
+            assertTrue("<a class=\"proof\" href=\"#notes\" data-api=\"${StaticHtml.escape(it)}\" hidden>" in page)
+        }
+    }
+
+    /**
+     * The chip's script speaks the contract's words, the app's chip's: the average to one decimal and "· 1 rating"
+     * (or "· 14 ratings"), the visits grouped ("1,234") and "visits", and the label that puts them together. The
+     * words are read out of the script itself and spelled as it spells them. The numbers count up once, over 900ms,
+     * easing out, and not at all with reduced motion, where nothing in the chip moves.
+     */
+    @Test
+    fun theChipsScriptSpeaksTheContractsWords() {
+        val script = page.substringAfter("var proof = document.querySelector(\".bar .proof[data-api]\")").substringBefore("</script>")
+        fun words(what: String, pattern: String) = assertNotNull(Regex(pattern).find(script), "the chip's script lacks $what").groupValues
+        // The notes' plural, which the chip shares: "1 rating", "14 ratings".
+        assertTrue("function plural(n, one, many) { return n + \" \" + (n === 1 ? one : many); }" in page)
+        val rated = words("the rating's part", """parts\.push\("([^"]*)" \+ chip\.average\.toFixed\(1\) \+ "([^"]*)" \+ plural\(count, "([^"]*)", "([^"]*)"\)\)""")
+        val seen = words("the visits' part", """parts\.push\(chip\.visits\.toLocaleString\("en"\) \+ \(chip\.visits === 1 \? "([^"]*)" : "([^"]*)"\)\)""")
+        val label = words("the label", """parts\.join\("([^"]*)"\) \+ "([^"]*)"\)""")
+        val shownRated = words("the rating's words", """\.rate \.words"\)\.textContent = "([^"]*)" \+ plural\(count, "([^"]*)", "([^"]*)"\)""")
+        val shownSeen = words("the visits' word", """\.seen \.words"\)\.textContent = chip\.visits === 1 \? "([^"]*)" : "([^"]*)"""")
+        fun labelOf(average: String, ratings: Int, visits: String, one: Boolean) = listOf(
+            rated[1] + average + rated[2] + ratings + " " + (if (ratings == 1) rated[3] else rated[4]),
+            visits + (if (one) seen[1] else seen[2]),
+        ).joinToString(label[1]) + label[2]
+        assertEquals("Rated 5.0 out of 5 from 1 rating, 35 visits. Read the reviews.", labelOf("5.0", 1, "35", one = false))
+        assertEquals("Rated 4.6 out of 5 from 14 ratings, 1,234 visits. Read the reviews.", labelOf("4.6", 14, "1,234", one = false))
+        assertEquals(listOf("· ", "rating", "ratings"), shownRated.drop(1))
+        assertEquals(listOf("visit", "visits"), shownSeen.drop(1))
+        assertEquals(listOf(" visit", " visits"), seen.drop(1))
+        listOf("average.toFixed(1)", "Math.round(chip.visits * k).toLocaleString(\"en\")")
+            .forEach { assertTrue(it in script, "the count-up's numbers are the label's: $it") }
+        assertTrue("(now - start) / 900" in script && "drawChip(1 - Math.pow(1 - t, 3))" in script, "900ms, easing out")
+        assertTrue("window.matchMedia(\"(prefers-reduced-motion: reduce)\").matches" in script)
+        assertTrue("if (chip.started || stillness()) { chip.started = true; proof.classList.add(\"on\"); return; }" in script, "once, and never with reduced motion")
+        val css = page.substringAfter("<style>").substringBefore("</style>")
+        assertTrue(Regex("@media \\(prefers-reduced-motion: reduce\\) \\{\\s*\\.brand > \\*, \\.bar \\.proof,").containsMatchIn(css), "the chip fades only with motion")
+        assertFalse("visibility: visible" in css, "the bar hidden at hand-off hides the chip too")
     }
 
     /**

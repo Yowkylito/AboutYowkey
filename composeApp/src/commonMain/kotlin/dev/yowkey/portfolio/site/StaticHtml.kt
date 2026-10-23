@@ -64,15 +64,16 @@ object StaticHtml {
     /**
      * The sticky bar over the page, as the app's: the monogram, which is the Home link; the brand slot; a link to each
      * section the page has, with the app's names; the theme switch and the menu; and the reading progress along its
-     * bottom edge. The hero already shows the name in huge type, so while it is on screen the slot shows the
-     * availability pill, and only once the hero's name has scrolled under the bar the name over the role. Nothing in
-     * it needs the backend.
+     * bottom edge. The hero already shows the name in huge type, so while it is on screen the slot shows the proof
+     * chip ([proofChip]: the notes' rating and the visit count, a link to the notes), and only once the hero's name
+     * has scrolled under the bar the name over the role. The chip is the only part of the bar that needs the
+     * backend, so without an `api` there is none.
      *
      * Without the page's script it still works as plain HTML: the links and the monogram are anchors (`#top` is the
-     * empty element ahead of the bar, so the jump lands on the page's very top), the slot keeps the pill, and the
-     * switch and the menu, which only the script can work, are not drawn. The script adds the rest: the swap, the
-     * link to the section being read, the switch, the menu on narrow screens, and the progress where CSS cannot
-     * draw it alone.
+     * empty element ahead of the bar, so the jump lands on the page's very top), the slot stays empty (the chip has
+     * nothing to show until the script has the backend's numbers), and the switch and the menu, which only the
+     * script can work, are not drawn. The script adds the rest: the chip, the swap, the link to the section being
+     * read, the switch, the menu on narrow screens, and the progress where CSS cannot draw it alone.
      */
     fun bar(portfolio: Portfolio): String = buildString {
         val p = portfolio.profile
@@ -84,10 +85,7 @@ object StaticHtml {
                 "<span aria-hidden=\"true\">${escape(initialsOf(p.name))}</span></a>",
         )
         append("<div class=\"brand\">")
-        p.availability?.let {
-            append("<span class=\"pill\" role=\"img\" aria-label=\"${escape(it)}\"><span class=\"dot\" aria-hidden=\"true\"></span>")
-            append("${fitted(it, PILL_SHORT)}</span>")
-        }
+        portfolio.api?.let { proofChip(it) }
         val role = roleOf(p.headline)
         append("<span class=\"who\"><strong>${escape(p.name)}</strong><span aria-label=\"${escape(role)}\">${fitted(role, ROLE_SHORT)}</span></span>")
         appendLine("</div>")
@@ -127,9 +125,26 @@ object StaticHtml {
     )
 
     /**
-     * [text] whole, and for a phone's bar its longest whole-word form of at most [shortChars] characters ("Open to
-     * relocation"), the same cut the app's bar makes (`shorterForms`); CSS shows one or the other. Both are hidden
-     * from screen readers, which hear the whole text from the element's label.
+     * The proof chip, as the app's: on the left the notes' rating (five small stars lit to the fraction, the average
+     * in bold, then "· 1 rating" in muted type), a hairline divider, on the right an eye and the visit total ("1,234",
+     * bold, then "visits"). It links to the notes' dashboard (`#notes`, [visitorNotes]). Here it is only the empty
+     * structure, hidden: the page's script fetches the numbers from the backend at [api], fills the words and the
+     * label ("Rated 5.0 out of 5 from 1 rating, 35 visits. Read the reviews."), hides a part that has nothing to
+     * show, fades the chip in and counts its numbers up once. Without the script, or until the backend answers, the
+     * slot stays empty; with nothing rated and nothing counted, too.
+     */
+    private fun StringBuilder.proofChip(api: String) {
+        append("<a class=\"proof\" href=\"#notes\" data-api=\"${escape(api)}\" hidden>")
+        append("<span class=\"rate\"><span class=\"meter\" aria-hidden=\"true\"></span><b class=\"avg\"></b><span class=\"words\"></span></span>")
+        append("<span class=\"sep\" aria-hidden=\"true\"></span>")
+        append("<span class=\"seen\">$EYE_ICON<b class=\"visits\"></b><span class=\"words\"></span></span>")
+        append("</a>")
+    }
+
+    /**
+     * [text] whole, and for a phone's bar its longest whole-word form of at most [shortChars] characters (the role
+     * without its "since 2024"), the same cut the app's bar makes (`shorterForms`); CSS shows one or the other. Both
+     * are hidden from screen readers, which hear the whole text from the element's label.
      */
     private fun fitted(text: String, shortChars: Int): String {
         val short = shorterForms(text).firstOrNull { it.length <= shortChars } ?: text
@@ -137,9 +152,13 @@ object StaticHtml {
             "<span class=\"short\" aria-hidden=\"true\">${escape(short)}</span>"
     }
 
-    /** The phone bar's room, in characters, for the availability and for the role. */
-    private const val PILL_SHORT = 22
+    /** The phone bar's room, in characters, for the role. */
     private const val ROLE_SHORT = 30
+
+    /** The chip's eye, for the visits: an almond and its pupil, drawn in the text's colour. */
+    private const val EYE_ICON = "<svg class=\"eye\" width=\"15\" height=\"15\" viewBox=\"0 0 16 16\" aria-hidden=\"true\" focusable=\"false\">" +
+        "<path d=\"M1.3 8C2.9 5.1 5.3 3.6 8 3.6s5.1 1.5 6.7 4.4c-1.6 2.9-4 4.4-6.7 4.4S2.9 10.9 1.3 8z\" fill=\"none\" " +
+        "stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linejoin=\"round\"/><circle cx=\"8\" cy=\"8\" r=\"2.2\" fill=\"currentColor\"/></svg>"
 
     /** The switch's two ends, as the app's: the sun on the left, the moon on the right; the knob covers the one that is on. */
     private const val SUN_ICON = "<svg class=\"sun\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" aria-hidden=\"true\" focusable=\"false\">" +
@@ -202,8 +221,7 @@ object StaticHtml {
         if (eyebrow.isNotEmpty()) appendLine("<p class=\"eyebrow\">${eyebrow.joinToString(" · ") { escape(it) }}</p>")
         appendLine("<h1>${escape(p.name)}</h1>")
         appendLine("<p class=\"headline\">${escape(p.headline)}</p>")
-        // The live line (the published notes' rating, the visit count), filled by the page's script from the backend.
-        portfolio.api?.let { appendLine("<p class=\"live-stats muted\" data-api=\"${escape(it)}\" hidden></p>") }
+        // The rating and the visit count are the bar's (its proof chip), so the hero does not repeat them.
         if (p.proof.isNotEmpty()) {
             appendLine("<ul class=\"proof\">")
             p.proof.forEach { appendLine("<li><strong>${escape(it.value)}</strong> ${escape(it.label)}</li>") }
@@ -295,10 +313,11 @@ object StaticHtml {
      * Where the page's script shows the notes, from the backend; hidden until it answers. The ratings dashboard is
      * here already, empty, for the script to fill: the average and its stars, and a bar per number of stars, each a
      * button that opens that star's sheet. Then the line saying what the list shows, the list (pinned notes first,
-     * as the backend orders it), and "Show more"; last, the sheet itself.
+     * as the backend orders it), and "Show more"; last, the sheet itself. Its id, `notes`, is where the bar's proof
+     * chip jumps to; like every id in the content, the jump stops below the bar.
      */
     private fun StringBuilder.visitorNotes(api: String) {
-        appendLine("<div class=\"visitor-notes\" data-api=\"${escape(api)}\" hidden>")
+        appendLine("<div class=\"visitor-notes\" id=\"notes\" data-api=\"${escape(api)}\" hidden>")
         appendLine("<h3>${escape(FeedbackCopy.NOTES_TITLE)}</h3>")
         appendLine("<div class=\"ratings\" role=\"group\" aria-label=\"${escape(FeedbackCopy.DASHBOARD)}\" hidden>")
         appendLine("<div class=\"average\"><p class=\"score\"><strong></strong><span>/ 5</span></p><p class=\"meter\" role=\"img\"></p><p class=\"count\"></p></div>")

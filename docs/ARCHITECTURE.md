@@ -29,7 +29,7 @@ Arrows point one way: UI → ViewModel → repository → parser → model. Noth
 | `data/SiteApi` | The site's backend as the app sees it: count this visit, read the rating and a page of the public notes (all, or one star's), send a note. `HttpSiteApi` speaks the worker's JSON over an `HttpTransport` each platform provides (`fetch` on the web; `java.net.http` on the desktop, which only reads the count). Called only when `Portfolio.api` is set. |
 | `ui/PortfolioViewModel` | `Loading → Ready | Error`, with a retry that ignores double taps; once ready, counts the visit and loads the notes (each once; then the dashboard's star filter and "Show more" page through them, and a sent note reloads them past the cache), runs the note form's and the message form's `Idle → Sending → Sent | Failed`, and counts a LinkedIn or GitHub click once per link per page load. |
 | `ui/PageItems` | Flattens the portfolio into keyed lazy-list rows for the current column count, the projects split into their two groups (work first, each group's first row carrying its title and note). Pure, unit-tested. |
-| `ui/sections` | The page's rows. Projects use `WorkCard` (figures, no media: the code is the employer's) or `ProjectCard` (cover or clip). The hero carries the live line (`LiveStats`); the Contact section the private `MessageForm`, then the `RatingsDashboard` (the average with a `StarMeter` lit to the fraction, a bar per star that opens that star's `StarSheet`, a Material bottom sheet of its notes with a relation sorter and its own "Show more", the bars growing in unless motion is reduced), the public `NoteCards` (name and stars, then the date and the Pinned and relation badges, then the words) with "Show more", and the public `FeedbackForm`, which asks how the writer knows me. |
+| `ui/sections` | The page's rows. Projects use `WorkCard` (figures, no media: the code is the employer's) or `ProjectCard` (cover or clip). The hero's numbers are the proof cards; the live rating and visits are in the bar; the Contact section the private `MessageForm`, then the `RatingsDashboard` (the average with a `StarMeter` lit to the fraction, a bar per star that opens that star's `StarSheet`, a Material bottom sheet of its notes with a relation sorter and its own "Show more", the bars growing in unless motion is reduced), the public `NoteCards` (name and stars, then the date and the Pinned and relation badges, then the words) with "Show more", and the public `FeedbackForm`, which asks how the writer knows me. |
 | `ui/PortfolioScreen` | Stateless page: adaptive layout from `WindowSizeClass`, nav, reveal animation, list ↔ detail switch. |
 | `ui/navigation` | `Route` (`Home` / `Project(id)`, parsed from and written to `#/projects/<id>`) and the `Navigator` interface. The web's `HashNavigator` (wasmJsMain) keeps it in browser history; the desktop uses `InMemoryNavigator`. Provided per platform by `di/platformModule` (expect/actual). |
 | `ui/detail` | `ProjectDetailScreen` (two columns on expanded, one below) and `ModuleDiagram`, bands of cards from `ModuleGraph.layers` that wrap to the width instead of scrolling. |
@@ -43,10 +43,12 @@ Arrows point one way: UI → ViewModel → repository → parser → model. Noth
 ## The bar, scrolling and reading
 
 The hero already shows the name in large type, so the bar does not repeat it while the hero is on screen. It
-carries the monogram (`ui/components/Brand.kt`, the Home button) and the availability pill, and swaps the pill for
-the name over the role once half the hero has scrolled under it (`rememberHeroPassed`, a `derivedStateOf`, so the bar
+carries the monogram (`ui/components/Brand.kt`, the Home button) and the proof chip (`ui/components/ProofChip.kt`:
+the rating drawn to the fraction and the visit total, from `LiveStats`, counting up once on first appearance, a tap
+away from the notes dashboard; the availability stays in the hero's eyebrow, so nothing is said twice), and swaps the
+chip for the name over the role once half the hero has scrolled under it (`rememberHeroPassed`, a `derivedStateOf`, so the bar
 recomposes only when that flips). The 2dp reading-progress line and the hairline are drawn in the draw phase from
-`listState.layoutInfo`, so scrolling never recomposes the bar. On a narrow bar the pill and the role shorten at
+`listState.layoutInfo`, so scrolling never recomposes the bar, and the count-up is drawn too. On a narrow bar the chip drops its words (`ProofFit`) and the role shortens at
 whole words (`shorterForms`), and the static page uses the same helpers for its phone bar.
 
 Scrolling lives in `ui/navigation/PageScroll.kt` and `ScrollRules.kt`: Back to top (after 1.5 screens, hidden again

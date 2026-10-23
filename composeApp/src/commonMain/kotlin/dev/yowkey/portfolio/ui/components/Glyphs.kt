@@ -220,6 +220,31 @@ fun PinGlyph(color: Color, modifier: Modifier = Modifier, glyphSize: Dp = 12.dp)
     )
 }
 
+/**
+ * An eye, for the bar's visit count: an almond outline, its two lids meeting in points at the corners, round a solid
+ * pupil, so it still reads at 14 dp.
+ */
+@Composable
+fun EyeGlyph(color: Color, modifier: Modifier = Modifier, glyphSize: Dp = 14.dp) {
+    Spacer(
+        modifier.size(glyphSize).drawWithCache {
+            val w = size.width
+            val h = size.height
+            val lids = Path().apply {
+                moveTo(w * 0.04f, h * 0.5f)
+                cubicTo(w * 0.28f, h * 0.14f, w * 0.72f, h * 0.14f, w * 0.96f, h * 0.5f)
+                cubicTo(w * 0.72f, h * 0.86f, w * 0.28f, h * 0.86f, w * 0.04f, h * 0.5f)
+                close()
+            }
+            val stroke = Stroke(width = 1.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+            onDrawBehind {
+                drawPath(lids, color, style = stroke)
+                drawCircle(color, w * 0.15f, Offset(w / 2, h / 2))
+            }
+        },
+    )
+}
+
 /** A cross, for the star sheet's close button. */
 @Composable
 fun CloseGlyph(color: Color, modifier: Modifier = Modifier, glyphSize: Dp = 18.dp) {
