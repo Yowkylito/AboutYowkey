@@ -381,7 +381,7 @@ fun PortfolioPage(
 
     Column(modifier.fillMaxSize()) {
         TopBar(
-            name = portfolio.profile.name,
+            profile = portfolio.profile,
             sections = numbered,
             active = activeSection,
             // Six links need the expanded width; below it they move into the menu.
@@ -389,6 +389,9 @@ fun PortfolioPage(
             gutter = layout.gutter,
             maxWidth = PageLayout.MaxWidth,
             scrolled = { listState.canScrollBackward },
+            // A derived state: the bar hears of it only when it flips. The progress is read in the bar's draw phase.
+            heroPassed = rememberHeroPassed(listState),
+            progress = { listState.layoutInfo.readingProgress() },
             onNavigate = navigate,
         )
         LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
