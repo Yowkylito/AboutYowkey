@@ -2,8 +2,6 @@ package dev.yowkey.portfolio.ui.sections
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -18,16 +16,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
@@ -43,14 +38,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
-import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -60,7 +53,6 @@ import dev.yowkey.portfolio.model.FeedbackCopy
 import dev.yowkey.portfolio.model.RatingSummary
 import dev.yowkey.portfolio.model.SiteNotes
 import dev.yowkey.portfolio.model.oneDecimal
-import dev.yowkey.portfolio.ui.NotesBrowse
 import dev.yowkey.portfolio.ui.components.StarGlyph
 import dev.yowkey.portfolio.ui.components.StarMeter
 import dev.yowkey.portfolio.ui.theme.LocalReducedMotion
@@ -68,15 +60,16 @@ import kotlin.math.max
 
 /**
  * The notes' dashboard, above them in the Contact section: the average to one decimal with its stars drawn to the
- * fraction, how many rated, and a bar for each number of stars with its count and share. Each bar is also the
- * filter: picking one shows only those notes, picking it again (or "All notes") shows them all. Under it, why there
- * are fewer notes than ratings when some were sent privately, and what the list is showing.
+ * fraction, how many rated, and a bar for each number of stars with its count and share. Each bar also opens that
+ * star's sheet ([onOpenSheet]), its notes sorted by how their writers know the owner. Under it, why there are fewer
+ * notes than ratings when some were sent privately, or that there are none yet ([loading]: not while the list is
+ * on its way again).
  */
 @Composable
 fun RatingsDashboard(
     notes: SiteNotes,
-    browse: NotesBrowse,
-    onPick: (Int?) -> Unit,
+    loading: Boolean,
+    onOpenSheet: (Int) -> Unit,
     wide: Boolean,
     modifier: Modifier = Modifier,
 ) {
@@ -95,13 +88,13 @@ fun RatingsDashboard(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Average(average, ratings.count, Modifier.weight(0.36f), centered = true)
                         VerticalDivider(Modifier.height(168.dp).padding(horizontal = 8.dp), color = MaterialTheme.colorScheme.outlineVariant)
-                        StarBars(ratings, browse.stars, onPick, Modifier.weight(0.64f).padding(start = 16.dp))
+                        StarBars(ratings, onOpenSheet, Modifier.weight(0.64f).padding(start = 16.dp))
                     }
                 } else {
                     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
                         Average(average, ratings.count, Modifier.fillMaxWidth(), centered = false)
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                        StarBars(ratings, browse.stars, onPick, Modifier.fillMaxWidth())
+                        StarBars(ratings, onOpenSheet, Modifier.fillMaxWidth())
                     }
                 }
             }
@@ -113,7 +106,14 @@ fun RatingsDashboard(
                 )
             }
         }
-        ListLine(notes, browse, onPick)
+        if (notes.notes.isEmpty() && ratings.count == 0 && !loading) {
+            Text(
+                FeedbackCopy.NO_NOTES,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+            )
+        }
     }
 }
 
@@ -168,9 +168,9 @@ private fun Average(average: Double, count: Int, modifier: Modifier, centered: B
     }
 }
 
-/** Five down to one star, each a bar and a filter; while one is picked the others step back. */
+/** Five down to one star, each a bar and the way into its sheet. */
 @Composable
-private fun StarBars(ratings: RatingSummary, picked: Int?, onPick: (Int?) -> Unit, modifier: Modifier) {
+private fun StarBars(ratings: RatingSummary, onOpenSheet: (Int) -> Unit, modifier: Modifier) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
         (5 downTo 1).forEachIndexed { index, stars ->
             StarBar(
@@ -178,10 +178,8 @@ private fun StarBars(ratings: RatingSummary, picked: Int?, onPick: (Int?) -> Uni
                 count = ratings.countOf(stars),
                 share = ratings.shareOf(stars),
                 percent = ratings.percentOf(stars),
-                selected = picked == stars,
-                dimmed = picked != null && picked != stars,
                 delayMillis = index * 70,
-                onClick = { onPick(if (picked == stars) null else stars) },
+                onClick = { onOpenSheet(stars) },
             )
         }
     }
@@ -190,7 +188,8 @@ private fun StarBars(ratings: RatingSummary, picked: Int?, onPick: (Int?) -> Uni
 /**
  * One bar: "5 ★", the share drawn as a rounded fill over its track, the count and the percentage. The fill grows in
  * from the left the first time the row is shown, one bar after the other (at once with reduced motion), and only
- * the drawing is redone while it grows.
+ * the drawing is redone while it grows. A button, read as its numbers ("5 stars: 18 ratings, 75 percent") with its
+ * action, "Show the 5-star notes".
  */
 @Composable
 private fun StarBar(
@@ -198,8 +197,6 @@ private fun StarBar(
     count: Int,
     share: Float,
     percent: String,
-    selected: Boolean,
-    dimmed: Boolean,
     delayMillis: Int,
     onClick: () -> Unit,
 ) {
@@ -212,34 +209,22 @@ private fun StarBar(
     val colors = MaterialTheme.colorScheme
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
-    val alpha by animateFloatAsState(if (dimmed) 0.45f else 1f, if (reducedMotion) snap() else tween(200), label = "bar-alpha")
     val track = colors.surfaceContainerHighest
     val accent = colors.primary
     Row(
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(
-                // A tint of the accent, not its container colour: as light in the dark theme as in the light one.
-                when {
-                    selected -> colors.primary.copy(alpha = 0.14f)
-                    hovered -> colors.onSurface.copy(alpha = 0.05f)
-                    else -> Color.Transparent
-                },
-            )
+            .background(if (hovered) colors.onSurface.copy(alpha = 0.05f) else Color.Transparent)
             .clickable(
                 interactionSource = interaction,
                 indication = ripple(),
                 role = Role.Button,
-                onClickLabel = if (selected) "Show all notes" else "Show these notes",
+                onClickLabel = FeedbackCopy.openSheet(stars),
                 onClick = onClick,
             )
-            .semantics {
-                contentDescription = FeedbackCopy.barLabel(stars, count, percent)
-                this.selected = selected
-            }
-            .padding(horizontal = 12.dp, vertical = 9.dp)
-            .graphicsLayer { this.alpha = alpha },
+            .semantics { contentDescription = FeedbackCopy.barLabel(stars, count, percent) }
+            .padding(horizontal = 12.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -285,34 +270,6 @@ private fun StarBar(
             textAlign = TextAlign.End,
             modifier = Modifier.width(40.dp).clearAndSetSemantics {},
         )
-    }
-}
-
-/**
- * What the list under the dashboard is showing: one star's notes with the way back to all of them, nothing yet for
- * that star, or no notes at all; and a small spinner while a page is on its way. Announced when it changes.
- */
-@Composable
-private fun ListLine(notes: SiteNotes, browse: NotesBrowse, onPick: (Int?) -> Unit) {
-    val stars = browse.stars
-    val line = when {
-        stars != null && notes.notes.isEmpty() && !browse.loading -> FeedbackCopy.noneShown(stars)
-        stars != null -> FeedbackCopy.filtered(notes.total, stars)
-        notes.notes.isEmpty() && notes.ratings.count == 0 && !browse.loading -> FeedbackCopy.NO_NOTES
-        else -> null
-    }
-    if (line == null && !browse.loading) return
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        if (line != null) {
-            Text(
-                line,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-            )
-        }
-        if (browse.loading) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-        if (stars != null) TextButton(onClick = { onPick(null) }) { Text(FeedbackCopy.ALL) }
     }
 }
 

@@ -3,6 +3,8 @@ package dev.yowkey.portfolio.ui.sections
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -14,6 +16,7 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -32,20 +35,23 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import dev.yowkey.portfolio.model.FeedbackCopy
 import dev.yowkey.portfolio.model.FeedbackDraft
+import dev.yowkey.portfolio.model.Relation
 import dev.yowkey.portfolio.ui.FeedbackUiState
 import dev.yowkey.portfolio.ui.components.StarGlyph
 import dev.yowkey.portfolio.ui.components.StatusBadge
 
 /**
  * The public note form, after the notes it joins as soon as it is sent: name and email (both optional, the email
- * never shown), an overall impression out of five, the message, Send. [state] is the ViewModel's: while a note is on its way the button waits; a failure's sentence
- * shows beside it; once sent, the form gives way to a thank-you and a way to write another. The draft is saveable,
- * so scrolling the row off the screen and back keeps it; the thank-you need not be.
+ * never shown), how the writer knows the owner (optional, shown on the note as a badge), an overall impression out
+ * of five, the message, Send. [state] is the ViewModel's: while a note is on its way the button waits; a failure's
+ * sentence shows beside it; once sent, the form gives way to a thank-you and a way to write another. The draft is
+ * saveable, so scrolling the row off the screen and back keeps it; the thank-you need not be.
  */
 @Composable
 fun FeedbackForm(
@@ -83,6 +89,8 @@ private fun DraftForm(state: FeedbackUiState, onSend: (FeedbackDraft) -> Unit, w
     var name by rememberSaveable { mutableStateOf("") }
     var contact by rememberSaveable { mutableStateOf("") }
     var rating by rememberSaveable { mutableStateOf(0) }
+    // The relation's wire value, so it saves as a plain string; empty for not saying.
+    var relation by rememberSaveable { mutableStateOf("") }
     var message by rememberSaveable { mutableStateOf("") }
     // The form's own objection, raised at Send and dropped at the next keystroke; the server's comes in [state].
     var problem by remember { mutableStateOf<String?>(null) }
@@ -121,6 +129,7 @@ private fun DraftForm(state: FeedbackUiState, onSend: (FeedbackDraft) -> Unit, w
             nameField(Modifier.fillMaxWidth())
             contactField(Modifier.fillMaxWidth())
         }
+        RelationChips(relation, onPick = { relation = if (it.wire == relation) "" else it.wire }, enabled = !sending)
         RatingRow(rating, onRate = { rating = if (it == rating) 0 else it }, enabled = !sending)
         OutlinedTextField(
             value = message,
@@ -138,7 +147,7 @@ private fun DraftForm(state: FeedbackUiState, onSend: (FeedbackDraft) -> Unit, w
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             Button(
                 onClick = {
-                    val draft = FeedbackDraft(name, contact, rating.takeIf { it in 1..5 }, message)
+                    val draft = FeedbackDraft(name, contact, rating.takeIf { it in 1..5 }, message, relation = relation)
                     problem = draft.problems.firstOrNull()
                     if (problem == null) onSend(draft)
                 },
@@ -150,6 +159,35 @@ private fun DraftForm(state: FeedbackUiState, onSend: (FeedbackDraft) -> Unit, w
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.weight(1f).semantics { liveRegion = LiveRegionMode.Polite },
+                )
+            }
+        }
+    }
+}
+
+/**
+ * "How do you know me?": the four relations as chips, one choice at a time, wrapping on a phone, as the message
+ * form's topics. A radio group, so a screen reader hears "Colleague, selected"; tapping the chosen one again clears
+ * it, since saying is optional.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun RelationChips(relation: String, onPick: (Relation) -> Unit, enabled: Boolean) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(FeedbackCopy.RELATION, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        FlowRow(
+            Modifier.selectableGroup(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Relation.entries.forEach { choice ->
+                FilterChip(
+                    selected = choice.wire == relation,
+                    onClick = { onPick(choice) },
+                    label = { Text(choice.label) },
+                    // Outermost, so it wins over the chip's own checkbox role.
+                    modifier = Modifier.semantics { role = Role.RadioButton },
+                    enabled = enabled,
                 )
             }
         }

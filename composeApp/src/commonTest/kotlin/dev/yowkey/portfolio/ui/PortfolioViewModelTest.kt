@@ -9,6 +9,7 @@ import dev.yowkey.portfolio.model.MessageDraft
 import dev.yowkey.portfolio.model.Portfolio
 import dev.yowkey.portfolio.model.PublicNote
 import dev.yowkey.portfolio.model.RatingSummary
+import dev.yowkey.portfolio.model.Relation
 import dev.yowkey.portfolio.model.SiteNotes
 import dev.yowkey.portfolio.model.VisitCount
 import dev.yowkey.portfolio.samplePortfolio
@@ -26,6 +27,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class PortfolioViewModelTest {
@@ -48,26 +50,32 @@ class PortfolioViewModelTest {
         }
     }
 
+    /** What one `loadNotes` asked for. */
+    private data class NotesQuery(val stars: Int? = null, val relation: String? = null, val offset: Int = 0, val fresh: Boolean = false)
+
     private class FakeSiteApi : SiteApi {
         var visitResult: () -> VisitCount = { VisitCount(7, 1, "2026-10-24") }
-        var notesResult: () -> SiteNotes = { SiteNotes(VisitCount(7), RatingSummary(1, 5.0), listOf(PublicNote(1, "Ada", 5, "Great", "2026-10-24"))) }
+        var notesResult: (NotesQuery) -> SiteNotes = { SiteNotes(VisitCount(7), RatingSummary(1, 5.0), listOf(PublicNote(1, "Ada", 5, "Great", "2026-10-24"))) }
         var sendResult: () -> Unit = {}
         val visitCalls = mutableListOf<String>()
         val notesCalls = mutableListOf<String>()
-        /** Each `loadNotes`'s star, `before` and `fresh`. */
-        val notesQueries = mutableListOf<Triple<Int?, Long?, Boolean>>()
+        val notesQueries = mutableListOf<NotesQuery>()
         val sent = mutableListOf<Pair<String, FeedbackDraft>>()
         var gate: CompletableDeferred<Unit>? = null
+        /** Holds every `loadNotes` until completed, for an answer that comes late. */
+        var notesGate: CompletableDeferred<Unit>? = null
 
         override suspend fun recordVisit(api: String): VisitCount {
             visitCalls += api
             return visitResult()
         }
 
-        override suspend fun loadNotes(api: String, stars: Int?, before: Long?, fresh: Boolean): SiteNotes {
+        override suspend fun loadNotes(api: String, stars: Int?, relation: String?, offset: Int, fresh: Boolean): SiteNotes {
             notesCalls += api
-            notesQueries += Triple(stars, before, fresh)
-            return notesResult()
+            val query = NotesQuery(stars, relation, offset, fresh)
+            notesQueries += query
+            notesGate?.await()
+            return notesResult(query)
         }
 
         override suspend fun sendFeedback(api: String, draft: FeedbackDraft) {
@@ -169,38 +177,204 @@ class PortfolioViewModelTest {
         assertEquals(VisitCount(7, 1, "2026-10-24"), offline.visits.value, "the count does not depend on the notes")
     }
 
+    private fun page(ids: List<Long>, more: Boolean = false, relations: Map<String, Int> = emptyMap()) =
+        SiteNotes(VisitCount(7), RatingSummary(3, 4.7), ids.map { PublicNote(it, null, 5, "M$it") }, total = ids.size, more = more, relations = relations)
+
     @Test
-    fun aStarPicksItsNotesMoreAddsTheNextPageAndANewNoteBringsAllBackFresh() = runTest(dispatcher) {
+    fun moreAddsTheNextPageByOffsetAndANewNoteBringsTheFirstBackFresh() = runTest(dispatcher) {
         val siteApi = FakeSiteApi()
-        fun page(ids: List<Long>, more: Boolean) =
-            SiteNotes(VisitCount(7), RatingSummary(3, 4.7), ids.map { PublicNote(it, null, 5, "M$it") }, total = 3, more = more)
         siteApi.notesResult = { page(listOf(3, 2), more = true) }
         val viewModel = PortfolioViewModel(FakeRepository { withApi }, siteApi)
         advanceUntilIdle()
-        assertEquals(Triple(null, null, false), siteApi.notesQueries.single(), "the first page: all of them")
+        assertEquals(NotesQuery(), siteApi.notesQueries.single(), "the first page: all of them, pinned first as the backend orders them")
 
-        viewModel.showNotes(5)
-        assertEquals(NotesBrowse(5, loading = true), viewModel.notesBrowse.value)
+        // A note sent in between pushes the others down: the page 2 in begins with the last one shown.
+        siteApi.notesResult = { page(listOf(2, 1), more = false) }
+        viewModel.showMoreNotes()
+        assertEquals(true, viewModel.notesLoading.value)
         advanceUntilIdle()
-        assertEquals(NotesBrowse(5), viewModel.notesBrowse.value)
-        assertEquals(Triple(5, null, false), siteApi.notesQueries.last())
-        viewModel.showNotes(5)
-        advanceUntilIdle()
-        assertEquals(2, siteApi.notesQueries.size, "the pick already showing is not asked for again")
-
-        siteApi.notesResult = { page(listOf(1), more = false) }
+        assertEquals(false, viewModel.notesLoading.value)
+        assertEquals(NotesQuery(offset = 2), siteApi.notesQueries.last(), "the page as many notes in as are shown")
+        assertEquals(listOf(3L, 2L, 1L), viewModel.notes.value?.notes?.map { it.id }, "and none twice")
         viewModel.showMoreNotes()
         advanceUntilIdle()
-        assertEquals(Triple(5, 2L, false), siteApi.notesQueries.last(), "the page after the last note shown, same star")
-        assertEquals(listOf(3L, 2L, 1L), viewModel.notes.value?.notes?.map { it.id })
-        viewModel.showMoreNotes()
-        advanceUntilIdle()
-        assertEquals(3, siteApi.notesQueries.size, "nothing is left to load")
+        assertEquals(2, siteApi.notesQueries.size, "nothing is left to load")
 
+        siteApi.notesResult = { page(listOf(4, 3), more = true) }
         viewModel.sendFeedback(FeedbackDraft(message = "Hi"))
         advanceUntilIdle()
-        assertEquals(Triple(null, null, true), siteApi.notesQueries.last(), "a new note: all of them again, past the browser's copy")
-        assertEquals(NotesBrowse(), viewModel.notesBrowse.value)
+        assertEquals(NotesQuery(fresh = true), siteApi.notesQueries.last(), "a new note: the first page again, past the browser's copy")
+        assertEquals(listOf(4L, 3L), viewModel.notes.value?.notes?.map { it.id })
+        viewModel.showMoreNotes()
+        advanceUntilIdle()
+        assertEquals(NotesQuery(offset = 2, fresh = true), siteApi.notesQueries.last(), "and every page after it")
+    }
+
+    @Test
+    fun aFailedPageLeavesTheListAsItWas() = runTest(dispatcher) {
+        val siteApi = FakeSiteApi().apply { notesResult = { page(listOf(3, 2), more = true) } }
+        val viewModel = PortfolioViewModel(FakeRepository { withApi }, siteApi)
+        advanceUntilIdle()
+        siteApi.notesResult = { throw SiteApiException("No connection") }
+        viewModel.showMoreNotes()
+        advanceUntilIdle()
+        assertEquals(listOf(3L, 2L), viewModel.notes.value?.notes?.map { it.id })
+        assertEquals(false, viewModel.notesLoading.value)
+    }
+
+    @Test
+    fun aBarOpensItsSheetWhichSortsByRelationAndPagesOnItsOwn() = runTest(dispatcher) {
+        val siteApi = FakeSiteApi()
+        val counts = mapOf("colleague" to 3, "friend" to 0, "special" to 0, "other" to 1)
+        val viewModel = PortfolioViewModel(FakeRepository { withApi }, siteApi)
+        advanceUntilIdle()
+        val main = viewModel.notes.value
+        assertNull(viewModel.sheet.value, "no sheet until a bar is tapped")
+
+        siteApi.notesResult = { page(listOf(9, 8), more = true, relations = counts) }
+        viewModel.openSheet(5)
+        assertEquals(StarSheet(5, loading = true), viewModel.sheet.value)
+        advanceUntilIdle()
+        assertEquals(NotesQuery(stars = 5), siteApi.notesQueries.last(), "the star's first page, every relation")
+        assertEquals(StarSheet(5, page = page(listOf(9, 8), more = true, relations = counts)), viewModel.sheet.value)
+        assertEquals(4, viewModel.sheet.value?.readable)
+
+        siteApi.notesResult = { page(listOf(9, 7), more = true, relations = counts) }
+        viewModel.pickRelation(Relation.Colleague)
+        assertEquals(Relation.Colleague, viewModel.sheet.value?.relation)
+        assertEquals(listOf(9L, 8L), viewModel.sheet.value?.page?.notes?.map { it.id }, "the last pick's page stays while the new one loads")
+        assertEquals(true, viewModel.sheet.value?.loading)
+        advanceUntilIdle()
+        assertEquals(NotesQuery(stars = 5, relation = "colleague"), siteApi.notesQueries.last())
+        assertEquals(listOf(9L, 7L), viewModel.sheet.value?.page?.notes?.map { it.id })
+        assertEquals(false, viewModel.sheet.value?.loading)
+        viewModel.pickRelation(Relation.Colleague)
+        advanceUntilIdle()
+        assertEquals(3, siteApi.notesQueries.size, "the pick already showing is not asked for again")
+
+        siteApi.notesResult = { page(listOf(7, 6), more = false, relations = counts) }
+        viewModel.showMoreInSheet()
+        assertEquals(true, viewModel.sheet.value?.loadingMore)
+        advanceUntilIdle()
+        assertEquals(NotesQuery(stars = 5, relation = "colleague", offset = 2), siteApi.notesQueries.last(), "the pick's next page")
+        assertEquals(listOf(9L, 7L, 6L), viewModel.sheet.value?.page?.notes?.map { it.id }, "and none twice")
+        assertEquals(false, viewModel.sheet.value?.loadingMore)
+        viewModel.showMoreInSheet()
+        advanceUntilIdle()
+        assertEquals(4, siteApi.notesQueries.size, "nothing is left to load")
+
+        viewModel.pickRelation(null)
+        advanceUntilIdle()
+        assertEquals(NotesQuery(stars = 5), siteApi.notesQueries.last(), "All again")
+        assertEquals(main, viewModel.notes.value, "the list under the dashboard is untouched by the sheet")
+        viewModel.closeSheet()
+        assertNull(viewModel.sheet.value)
+    }
+
+    @Test
+    fun aPageForASheetSinceClosedOrAPickSinceChangedIsDropped() = runTest(dispatcher) {
+        val siteApi = FakeSiteApi()
+        val viewModel = PortfolioViewModel(FakeRepository { withApi }, siteApi)
+        advanceUntilIdle()
+
+        siteApi.notesGate = CompletableDeferred()
+        viewModel.openSheet(4)
+        advanceUntilIdle()
+        viewModel.closeSheet()
+        siteApi.notesGate?.complete(Unit)
+        advanceUntilIdle()
+        assertNull(viewModel.sheet.value, "a late answer does not open it again")
+
+        siteApi.notesGate = null
+        siteApi.notesResult = { query -> page(listOf(if (query.relation == "friend") 2 else 1)) }
+        viewModel.openSheet(4)
+        advanceUntilIdle()
+        siteApi.notesGate = CompletableDeferred()
+        viewModel.pickRelation(Relation.Friend)
+        advanceUntilIdle()
+        viewModel.pickRelation(Relation.Other)
+        siteApi.notesGate?.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(Relation.Other, viewModel.sheet.value?.relation)
+        assertEquals(listOf(1L), viewModel.sheet.value?.page?.notes?.map { it.id }, "the friends' page, asked for before, is dropped")
+    }
+
+    @Test
+    fun aFailedPickGoesBackToThePickShowingAndAFailedFirstPageCanBeAskedAgain() = runTest(dispatcher) {
+        val siteApi = FakeSiteApi()
+        val viewModel = PortfolioViewModel(FakeRepository { withApi }, siteApi)
+        advanceUntilIdle()
+
+        siteApi.notesResult = { throw SiteApiException("No connection") }
+        viewModel.openSheet(5)
+        advanceUntilIdle()
+        assertEquals(StarSheet(5), viewModel.sheet.value, "open, with nothing to show and nothing on its way")
+
+        siteApi.notesResult = { page(listOf(3)) }
+        viewModel.pickRelation(null)
+        advanceUntilIdle()
+        assertEquals(NotesQuery(stars = 5), siteApi.notesQueries.last(), "the same pick, asked again")
+        assertEquals(listOf(3L), viewModel.sheet.value?.page?.notes?.map { it.id })
+
+        siteApi.notesResult = { throw SiteApiException("No connection") }
+        viewModel.pickRelation(Relation.Friend)
+        viewModel.pickRelation(Relation.Special)
+        advanceUntilIdle()
+        assertEquals(StarSheet(5, relation = null, page = page(listOf(3))), viewModel.sheet.value, "back to the pick its page is for")
+    }
+
+    @Test
+    fun aSentNoteReloadsTheOpenSheetFreshAndEverySheetAfter() = runTest(dispatcher) {
+        val siteApi = FakeSiteApi()
+        val viewModel = PortfolioViewModel(FakeRepository { withApi }, siteApi)
+        advanceUntilIdle()
+        viewModel.openSheet(5)
+        viewModel.pickRelation(Relation.Friend)
+        advanceUntilIdle()
+
+        viewModel.sendFeedback(FeedbackDraft(message = "Hi", rating = 5, relation = "friend"))
+        advanceUntilIdle()
+        assertTrue(NotesQuery(fresh = true) in siteApi.notesQueries, "the list under the dashboard")
+        assertEquals(NotesQuery(stars = 5, relation = "friend", fresh = true), siteApi.notesQueries.last(), "and the sheet, as it is sorted")
+        assertEquals(false, viewModel.sheet.value?.loading)
+
+        viewModel.closeSheet()
+        viewModel.openSheet(3)
+        advanceUntilIdle()
+        assertEquals(NotesQuery(stars = 3, fresh = true), siteApi.notesQueries.last(), "a sheet opened later has the note too")
+    }
+
+    @Test
+    fun noSheetWithoutABackendOrForAStarThatHasNoBar() = runTest(dispatcher) {
+        val quiet = FakeSiteApi()
+        val offline = PortfolioViewModel(FakeRepository { samplePortfolio() }, quiet)
+        advanceUntilIdle()
+        offline.openSheet(5)
+        offline.pickRelation(Relation.Friend)
+        offline.showMoreInSheet()
+        advanceUntilIdle()
+        assertNull(offline.sheet.value)
+        assertEquals(emptyList(), quiet.notesQueries)
+
+        val siteApi = FakeSiteApi()
+        val viewModel = PortfolioViewModel(FakeRepository { withApi }, siteApi)
+        advanceUntilIdle()
+        viewModel.openSheet(0)
+        viewModel.openSheet(6)
+        advanceUntilIdle()
+        assertNull(viewModel.sheet.value)
+        assertEquals(1, siteApi.notesQueries.size, "only the page load's")
+    }
+
+    /** The sorter's counts: All's is every relation's together, a reply without counts falls back on its total. */
+    @Test
+    fun aSheetCountsItsNotesByRelation() {
+        val sheet = StarSheet(5, page = page(listOf(1, 2), relations = mapOf("colleague" to 1, "friend" to 0, "special" to 2, "other" to 3)))
+        assertEquals(6, sheet.readable)
+        assertEquals(listOf(6, 1, 0, 2, 3), (listOf(null) + Relation.entries).map(sheet::countOf))
+        assertEquals(2, StarSheet(5, page = page(listOf(1, 2))).readable)
+        assertEquals(0, StarSheet(5).readable, "nothing known yet")
+        assertEquals(0, StarSheet(5).countOf(Relation.Friend))
     }
 
     @Test

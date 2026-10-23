@@ -100,8 +100,9 @@ data class PublicNote(
 }
 
 /**
- * What `GET /notes` answers: the visits so far, the rating, and a page of the public notes, newest first: all of
- * them, or one star's. [total] is how many public notes there are (of that star); [more] says another page follows.
+ * What `GET /notes` answers: the visits so far, the rating (always the whole site's), and a page of the public
+ * notes, pinned first, then newest first: all of them, or one star's, and of those one relation's. [total] is how
+ * many public notes match; [more] says another page follows.
  */
 @Immutable
 @Serializable
@@ -269,6 +270,9 @@ object FeedbackCopy {
 
     const val ALL_RELATIONS = "All"
     const val CLOSE = "Close"
+    /** When the sheet's first page could not be loaded; [TRY_AGAIN] beside it asks again. */
+    const val SHEET_FAILED = "These notes could not be loaded."
+    const val TRY_AGAIN = "Try again"
 
     /** A bar's action, for screen readers: "Show the 5-star notes". */
     fun openSheet(stars: Int): String = "Show the $stars-star notes"

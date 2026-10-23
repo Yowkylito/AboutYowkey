@@ -62,6 +62,7 @@ import dev.yowkey.portfolio.model.Link
 import dev.yowkey.portfolio.model.LiveStats
 import dev.yowkey.portfolio.model.MessageDraft
 import dev.yowkey.portfolio.model.Portfolio
+import dev.yowkey.portfolio.model.Relation
 import dev.yowkey.portfolio.model.SiteNotes
 import dev.yowkey.portfolio.model.VisitCount
 import dev.yowkey.portfolio.ui.components.SectionHeader
@@ -81,6 +82,7 @@ import dev.yowkey.portfolio.ui.sections.ProjectCard
 import dev.yowkey.portfolio.ui.sections.RatingsDashboard
 import dev.yowkey.portfolio.ui.sections.ServiceCard
 import dev.yowkey.portfolio.ui.sections.SkillGroups
+import dev.yowkey.portfolio.ui.sections.StarNotesSheet
 import dev.yowkey.portfolio.ui.sections.WorkCard
 import dev.yowkey.portfolio.ui.detail.ProjectDetailScreen
 import dev.yowkey.portfolio.ui.navigation.Navigator
@@ -129,12 +131,19 @@ data class FeedbackControls(
     val onReset: () -> Unit = {},
 )
 
-/** How the visitor browses the notes (the dashboard's star filter, "Show more") and the two actions that change it. */
+/**
+ * How the visitor reads the notes: "Show more" under the list ([loading] while a page is on its way), and the star
+ * sheet a dashboard bar opens ([sheet], null while closed), with what its sorter and its own "Show more" do.
+ */
 @Immutable
 data class NotesControls(
-    val browse: NotesBrowse = NotesBrowse(),
-    val onPick: (Int?) -> Unit = {},
+    val loading: Boolean = false,
     val onMore: () -> Unit = {},
+    val sheet: StarSheet? = null,
+    val onOpenSheet: (Int) -> Unit = {},
+    val onCloseSheet: () -> Unit = {},
+    val onPickRelation: (Relation?) -> Unit = {},
+    val onMoreInSheet: () -> Unit = {},
 )
 
 /** The private message form's state and its two actions, as [FeedbackControls] are the note form's. */
@@ -158,9 +167,13 @@ fun PortfolioRoute(
     val route by navigator.route.collectAsState()
     val visits by viewModel.visits.collectAsState()
     val notes by viewModel.notes.collectAsState()
-    val notesBrowse by viewModel.notesBrowse.collectAsState()
-    val onPickNotes: (Int?) -> Unit = remember(viewModel) { viewModel::showNotes }
+    val notesLoading by viewModel.notesLoading.collectAsState()
+    val sheet by viewModel.sheet.collectAsState()
     val onMoreNotes: () -> Unit = remember(viewModel) { viewModel::showMoreNotes }
+    val onOpenSheet: (Int) -> Unit = remember(viewModel) { viewModel::openSheet }
+    val onCloseSheet: () -> Unit = remember(viewModel) { viewModel::closeSheet }
+    val onPickRelation: (Relation?) -> Unit = remember(viewModel) { viewModel::pickRelation }
+    val onMoreInSheet: () -> Unit = remember(viewModel) { viewModel::showMoreInSheet }
     val feedbackState by viewModel.feedback.collectAsState()
     val onSendFeedback: (FeedbackDraft) -> Unit = remember(viewModel) { viewModel::sendFeedback }
     val onResetFeedback: () -> Unit = remember(viewModel) { viewModel::resetFeedback }
@@ -186,7 +199,7 @@ fun PortfolioRoute(
         feedback = FeedbackControls(feedbackState, onSendFeedback, onResetFeedback),
         message = MessageControls(messageState, onSendMessage, onResetMessage),
         onOpenLink = onOpenLink,
-        notesControls = NotesControls(notesBrowse, onPickNotes, onMoreNotes),
+        notesControls = NotesControls(notesLoading, onMoreNotes, sheet, onOpenSheet, onCloseSheet, onPickRelation, onMoreInSheet),
     )
 }
 
@@ -196,7 +209,7 @@ fun PortfolioRoute(
  * @param visits the hero's count, once the site's backend has answered; null until then, or without a backend
  * @param notes the rating and the public notes shown so far, for the hero's line, the dashboard and the cards above
  *   the form; null likewise
- * @param notesControls the dashboard's star filter and "Show more", with what they are showing
+ * @param notesControls "Show more" and the star sheet the dashboard's bars open, with what they are showing
  * @param feedback the note form's state and actions; the form only exists when the content names a backend
  * @param message the private message form's state and actions; likewise only with a backend
  * @param onOpenLink called once a profile link in the Contact section has opened, to count LinkedIn and GitHub
@@ -406,6 +419,16 @@ fun PortfolioPage(
             }
         }
     }
+    // Over the page, not in the dashboard's row: the sheet stays whatever the list does underneath.
+    notesControls.sheet?.let { sheet ->
+        StarNotesSheet(
+            sheet = sheet,
+            ratings = sheet.page?.ratings ?: notes?.ratings,
+            onPick = notesControls.onPickRelation,
+            onMore = notesControls.onMoreInSheet,
+            onClose = notesControls.onCloseSheet,
+        )
+    }
 }
 
 private fun PageItem.topSpacing(layout: PageLayout): Dp = when {
@@ -486,13 +509,13 @@ private fun PageRow(
             MessageForm(message.state, message.onSend, message.onReset, wide = !layout.compact)
         }
         PageItem.Ratings -> SectionFrame(item, number, layout) {
-            if (notes != null) RatingsDashboard(notes, notesControls.browse, notesControls.onPick, wide = !layout.compact)
+            if (notes != null) RatingsDashboard(notes, notesControls.loading, notesControls.onOpenSheet, wide = !layout.compact)
         }
         is PageItem.Notes -> SectionFrame(item, number, layout) {
             NoteCards(item.notes, item.columns)
         }
         PageItem.MoreNotes -> SectionFrame(item, number, layout) {
-            MoreNotesButton(notesControls.browse.loading, notesControls.onMore)
+            MoreNotesButton(notesControls.loading, notesControls.onMore)
         }
         PageItem.Feedback -> SectionFrame(item, number, layout) {
             FeedbackForm(feedback.state, feedback.onSend, feedback.onReset, wide = !layout.compact)
