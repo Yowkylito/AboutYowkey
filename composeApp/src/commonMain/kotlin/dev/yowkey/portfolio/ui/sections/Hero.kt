@@ -21,12 +21,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.yowkey.portfolio.model.Link
-import dev.yowkey.portfolio.model.LiveStats
 import dev.yowkey.portfolio.model.Profile
 import dev.yowkey.portfolio.model.ProofPoint
 import dev.yowkey.portfolio.ui.components.LinkButton
 import dev.yowkey.portfolio.ui.components.OutlinedCard
-import dev.yowkey.portfolio.ui.components.StarGlyph
 import dev.yowkey.portfolio.ui.theme.PortfolioTheme
 
 /**
@@ -35,9 +33,8 @@ import dev.yowkey.portfolio.ui.theme.PortfolioTheme
  * buttons so it can never push them down.
  *
  * [wide] puts the proof in a card beside the intro; otherwise it sits between headline and buttons. The primary
- * button mails [Profile.email] directly; without an email it falls back to [onContact] (the Contact section).
- * [stats], from the site's backend, is the live line under the headline: the published notes' rating and the
- * visit count; nothing is drawn for it until there is something to say.
+ * button mails [Profile.email] directly; without an email it falls back to [onContact] (the Contact section). The
+ * notes' rating and the visit count are not repeated here: the bar shows them while this is on screen.
  */
 @Composable
 fun Hero(
@@ -47,13 +44,11 @@ fun Hero(
     onSeeProjects: () -> Unit,
     onContact: () -> Unit,
     modifier: Modifier = Modifier,
-    stats: LiveStats? = null,
 ) {
     if (wide && profile.proof.isNotEmpty()) {
         Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1.5f), verticalArrangement = Arrangement.spacedBy(20.dp)) {
                 HeroIntro(profile, compact)
-                stats?.takeUnless { it.isEmpty }?.let { HeroStats(it) }
                 HeroActions(profile.email, onSeeProjects, onContact)
                 HeroSummary(profile.summary)
             }
@@ -65,7 +60,6 @@ fun Hero(
     } else {
         Column(modifier, verticalArrangement = Arrangement.spacedBy(20.dp)) {
             HeroIntro(profile, compact)
-            stats?.takeUnless { it.isEmpty }?.let { HeroStats(it) }
             if (profile.proof.isNotEmpty()) ProofPoints(profile.proof, Modifier.padding(vertical = 4.dp))
             HeroActions(profile.email, onSeeProjects, onContact)
             HeroSummary(profile.summary)
@@ -92,26 +86,6 @@ private fun HeroIntro(profile: Profile, compact: Boolean) {
             color = MaterialTheme.colorScheme.onBackground,
             modifier = Modifier.readingMeasure(MaterialTheme.typography.headlineSmall),
         )
-    }
-}
-
-/** The rating with a drawn star, then the visit count; each only when it exists, each read as one node. */
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun HeroStats(stats: LiveStats) {
-    val color = MaterialTheme.colorScheme.onSurfaceVariant
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        stats.ratingLine?.let { line ->
-            Row(
-                Modifier.semantics(mergeDescendants = true) {},
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                StarGlyph(filled = true, color = MaterialTheme.colorScheme.primary, glyphSize = 16.dp)
-                Text(line, style = MaterialTheme.typography.labelLarge, color = color)
-            }
-        }
-        stats.visitsLine?.let { Text(it, style = MaterialTheme.typography.labelLarge, color = color) }
     }
 }
 
