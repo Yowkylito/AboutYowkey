@@ -36,6 +36,7 @@
   "projects": [
     {
       "id": "arenaplus",
+      "icon": "arenaplus.webp",
       "company": "DigiPlus",
       "role": "Android developer",
       "period": "Sep 2024 – Present",
@@ -184,6 +185,7 @@
     },
     {
       "id": "pawffice",
+      "icon": "pawffice.webp",
       "visibility": "private",
       "cover": {
         "file": "pawffice-cover.webp",
@@ -292,6 +294,7 @@
     },
     {
       "id": "bubuprotect",
+      "icon": "bubuprotect.webp",
       "visibility": "public",
       "cover": { "file": "bubuprotect-cover.webp", "caption": "BubuProtect's launch screen with the Bubu mascot", "width": 740, "height": 1600 },
       "title": "BubuProtect",
@@ -431,6 +434,7 @@
     },
     {
       "id": "vistago",
+      "icon": "vistago.webp",
       "visibility": "private",
       "cover": { "file": "vistago-cover.webp", "caption": "Vistago's splash: \"Travel, beautifully planned\"", "width": 740, "height": 1600 },
       "coverClip": { "file": "vistago-splash.webp", "caption": "Vistago's launch: the compass, wordmark and tagline animate in", "width": 332, "height": 720, "video": true },
@@ -534,6 +538,7 @@
     },
     {
       "id": "eagles-watch",
+      "icon": "eagles-watch.webp",
       "visibility": "public",
       "cover": { "file": "eagles-watch-cover.webp", "caption": "The Eagle's Watch web app's boot screen on night jade", "width": 720, "height": 1600 },
       "coverClip": {
@@ -624,6 +629,7 @@
     },
     {
       "id": "calm-escape",
+      "icon": "calm-escape.webp",
       "visibility": "private",
       "cover": {
         "file": "calm-escape-cover.webp",
@@ -752,6 +758,7 @@
     },
     {
       "id": "seventhj",
+      "icon": "seventhj.webp",
       "visibility": "private",
       "cover": { "file": "seventhj-cover.webp", "caption": "Seventh J's splash: the SJ mark and wordmark on an obsidian ground", "width": 720, "height": 1600 },
       "coverClip": {
@@ -850,6 +857,7 @@
     },
     {
       "id": "about-yowkey",
+      "icon": "about-yowkey.webp",
       "visibility": "public",
       "title": "This portfolio",
       "tagline": "One Compose UI compiled to WebAssembly, with crawlable HTML built from the same JSON",

@@ -207,7 +207,11 @@ private fun DetailText(project: Project, compact: Boolean, onBack: () -> Unit, g
 @Composable
 private fun DetailHeader(project: Project, compact: Boolean) {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        ProjectHeading(project, if (compact) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.displayMedium)
+        ProjectHeading(
+            project,
+            if (compact) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.displayMedium,
+            iconSize = if (compact) 48.dp else 64.dp,
+        )
         project.tagline?.let {
             Text(it, style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurface)
         }

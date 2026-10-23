@@ -99,13 +99,24 @@ object StaticHtml {
      * One project, with everything the app splits between its card and its detail screen. The card's answers come
      * first, in the card's order (media, title, meta, one line, summary, figures, what it is built with and runs on),
      * so a crawler or a skim reads the same summary; the detail follows (impact, highlights, optimizations, gallery,
-     * engineering, stack, links). Headings sit under the group's `<h3>`: the title is `<h4>`, its parts `<h5>`.
+     * engineering, stack, links). Headings sit under the group's `<h3>`: the title is `<h4>`, after the app's icon
+     * when it has one, and its parts `<h5>`.
      * The id is the app's deep link target too: `#/projects/<id>` scrolls here on this page.
      */
     private fun StringBuilder.project(project: Project) {
         appendLine("<article id=\"${escape(project.anchor)}\">")
         project.coverClip?.let { clip(it, "cover ${orientation(it)}") } ?: project.cover?.let { cover(it) }
-        appendLine("<h4>${escape(project.title)}</h4>")
+        val title = "<h4>${escape(project.title)}</h4>"
+        val icon = project.iconPath
+        if (icon == null) {
+            appendLine(title)
+        } else {
+            // Decorative (empty alt): the title beside it names the app.
+            appendLine(
+                "<div class=\"heading\"><img class=\"app-icon\" src=\"${resourceUrl(icon)}\" alt=\"\" width=\"40\" " +
+                    "height=\"40\" loading=\"lazy\" decoding=\"async\">$title</div>",
+            )
+        }
         val meta = listOfNotNull(
             project.meta.takeIf { it.isNotEmpty() }?.let { escape(it) },
             project.visibility?.let { "<span class=\"badge\">${escape(it.badge)}</span>" },

@@ -1,12 +1,16 @@
 package dev.yowkey.portfolio.ui.sections
 
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -19,6 +23,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
@@ -27,7 +32,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -48,6 +55,7 @@ import dev.yowkey.portfolio.ui.image.CoverClip
 import dev.yowkey.portfolio.ui.image.LocalScreenshotImages
 import dev.yowkey.portfolio.ui.image.ScreenshotImage
 import dev.yowkey.portfolio.ui.theme.PortfolioTheme
+import kotlinx.coroutines.CancellationException
 
 /**
  * A project at a glance, for the recruiter's three questions: what is it (cover, title, one line), what was it
@@ -90,8 +98,10 @@ fun ProjectCard(
 }
 
 /**
- * Title, then company · role · period and the repository badge. Shared by the cards and the detail screen.
+ * The app's icon and title, then company · role · period and the repository badge. Shared by the cards and the
+ * detail screen.
  *
+ * @param iconSize the icon's side, sized to the title beside it
  * @param showCompany false on a work card, whose group header already names the company
  */
 @Composable
@@ -100,16 +110,23 @@ fun ProjectHeading(
     titleStyle: TextStyle,
     modifier: Modifier = Modifier,
     maxTitleLines: Int = Int.MAX_VALUE,
+    iconSize: Dp = 40.dp,
     showCompany: Boolean = true,
 ) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(
-            project.title,
-            style = titleStyle,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = maxTitleLines,
-            overflow = TextOverflow.Ellipsis,
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            project.iconPath?.let { path ->
+                AppIcon(path, Modifier.size(iconSize))
+                Spacer(Modifier.width(iconSize * 0.3f))
+            }
+            Text(
+                project.title,
+                style = titleStyle,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = maxTitleLines,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
         val meta = if (showCompany) project.meta else project.roleAndPeriod
         if (meta.isNotEmpty() || project.visibility != null) {
             WrapRow(horizontalSpacing = 10.dp, verticalSpacing = 6.dp) {
@@ -119,6 +136,33 @@ fun ProjectHeading(
                 project.visibility?.let { StatusBadge(it.badge) }
             }
         }
+    }
+}
+
+/**
+ * A launcher icon, rounded as a home screen rounds it, with a hairline so a white or near-black icon keeps its edge
+ * on either theme. Decorative: the title beside it names the app. The tile stays empty until the icon loads.
+ */
+@Composable
+private fun AppIcon(path: String, modifier: Modifier = Modifier) {
+    val loader = LocalScreenshotImages.current?.thumbnails
+    val icon by produceState<ImageBitmap?>(null, path, loader) {
+        value = try {
+            loader?.get(path)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null // the tests guard that every listed icon ships
+        }
+    }
+    val shape = RoundedCornerShape(percent = 22)
+    Box(
+        modifier
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape),
+    ) {
+        icon?.let { Image(it, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
     }
 }
 
@@ -224,6 +268,7 @@ private val CardStageHeight = 280.dp
 private val previewProject = Project(
     id = "vistago",
     title = "Vistago",
+    icon = "vistago.webp",
     summary = "An offline-first AI travel companion for Android: plan trips, translate through the camera, and keep travel memories.",
     tagline = "An offline-first AI travel companion: plan, translate and remember trips",
     period = "Aug – Sep 2026",

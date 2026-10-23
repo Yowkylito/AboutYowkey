@@ -73,6 +73,19 @@ The viewer pages through cover → cover clip → clips → screenshots, in that
 }
 ```
 
+### The app icon
+
+```bash
+cwebp -q 88 -resize 192 192 path/to/icon-512.png -o composeApp/src/commonMain/composeResources/files/icons/my-app.webp
+```
+
+`"icon": "my-app.webp"` puts the app's launcher icon before its title on the card, the detail screen and the static
+page, rounded, with a hairline so a white or near-black icon keeps its edge on either theme. Use the icon the app
+really ships, square and full bleed (the page rounds the corners); for an Android adaptive icon, that is its
+background and foreground layers cropped to the inner 72 of 108 dp. Leave it out when the app has no icon of its own
+(Android Studio's default robot doesn't count): the title then stands alone. Tests fail if an icon is missing, not
+square, under 120 px, over 16 KB, or in `files/icons/` but not listed.
+
 ### Work and personal projects
 
 The Projects section has two groups: **Professional work** first, then **Personal projects**. A project is work

@@ -3,6 +3,7 @@ package dev.yowkey.portfolio.site
 import dev.yowkey.portfolio.data.PortfolioParser
 import dev.yowkey.portfolio.model.GalleryItem
 import dev.yowkey.portfolio.model.Portfolio
+import dev.yowkey.portfolio.model.Project
 import dev.yowkey.portfolio.model.RepoVisibility
 import dev.yowkey.portfolio.ui.image.AnimatedClip
 import dev.yowkey.portfolio.ui.image.ClipFrames
@@ -173,6 +174,34 @@ class SiteContentTest {
             )
         }.toSet()
         val shipped = File(resources, "files/screens").listFiles().orEmpty().map { it.name }.toSet()
+        assertTrue((shipped - listed).isEmpty(), "shipped but unused, remove them: ${shipped - listed}")
+    }
+
+    /**
+     * Each app icon ships square and small (the page draws it at 40 to 64 dp), sharp enough for a 3x phone at the
+     * card's size, and sits right before its title in the static article.
+     */
+    @Test
+    fun everyIconShipsSquareWithinBudgetBeforeItsTitle() {
+        val withIcon = portfolio.projects.filter { it.iconPath != null }
+        assertTrue(withIcon.isNotEmpty(), "no project has an icon")
+        withIcon.forEach { project ->
+            val file = File(resources, project.iconPath!!)
+            assertTrue(file.isFile, "missing ${file.path}")
+            assertTrue(file.length() <= 16 * 1024, "${file.name} is ${file.length() / 1024} KB, budget 16 KB")
+            val codec = Codec.makeFromData(Data.makeFromBytes(file.readBytes()))
+            assertEquals(codec.width, codec.height, "${file.name} is not square")
+            assertTrue(codec.width >= 120, "${file.name} is ${codec.width} px, at least 120 for a 40 dp icon at 3x")
+            val article = page.substringAfter("<article id=\"${project.anchor}\">").substringBefore("</article>")
+            val icon = article.indexOf(StaticHtml.resourceUrl(project.iconPath!!))
+            assertTrue(icon in 0 until article.indexOf("<h4>${StaticHtml.escape(project.title)}</h4>"), "${project.id}: the icon is not before its title")
+        }
+    }
+
+    @Test
+    fun noIconIsLeftUnlisted() {
+        val listed = portfolio.projects.mapNotNull { it.icon }.toSet()
+        val shipped = File(resources, Project.ICONS_DIR).listFiles().orEmpty().map { it.name }.toSet()
         assertTrue((shipped - listed).isEmpty(), "shipped but unused, remove them: ${shipped - listed}")
     }
 
