@@ -75,6 +75,17 @@ class SiteContentTest {
             .forEach { assertTrue(StaticHtml.escape(it) in hero, "hero lacks $it") }
     }
 
+    /** The page is light unless the visitor switched; a saved choice is applied before the styles, so it never flashes. */
+    @Test
+    fun themeIsLightUnlessTheVisitorSwitched() {
+        assertFalse("prefers-color-scheme: dark" in page, "the theme must not follow the OS")
+        assertTrue("<meta name=\"color-scheme\" content=\"light\">" in page)
+        assertTrue(":root[data-theme=\"dark\"]" in page, "dark is keyed on the html element's data-theme")
+        val head = page.substringBefore("<style>")
+        assertTrue("localStorage.getItem(\"theme\")" in head, "the saved theme is applied before the styles")
+        assertTrue("window.applyTheme = function" in head, "the app switches through the page's applyTheme")
+    }
+
     /** The CV carries a personal phone number; the site must never. */
     @Test
     fun noPhoneNumberIsPublished() {

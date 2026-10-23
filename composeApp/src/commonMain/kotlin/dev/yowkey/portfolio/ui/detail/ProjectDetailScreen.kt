@@ -71,8 +71,10 @@ import dev.yowkey.portfolio.ui.components.Bullet
 import dev.yowkey.portfolio.ui.components.CheckGlyph
 import dev.yowkey.portfolio.ui.components.LinkButton
 import dev.yowkey.portfolio.ui.components.PlatformChip
+import dev.yowkey.portfolio.ui.components.PlayPauseButton
 import dev.yowkey.portfolio.ui.components.Tag
 import dev.yowkey.portfolio.ui.components.TechChip
+import dev.yowkey.portfolio.ui.components.ThemeToggle
 import dev.yowkey.portfolio.ui.image.CoverClip
 import dev.yowkey.portfolio.ui.image.ScreenshotViewer
 import dev.yowkey.portfolio.ui.image.ViewerMediaImage
@@ -82,7 +84,6 @@ import dev.yowkey.portfolio.ui.sections.MediaFrame
 import dev.yowkey.portfolio.ui.sections.mediaFrameCorner
 import dev.yowkey.portfolio.ui.sections.ProjectHeading
 import dev.yowkey.portfolio.ui.sections.ScreenshotStrip
-import dev.yowkey.portfolio.ui.components.PlayPauseButton
 import dev.yowkey.portfolio.ui.theme.LocalReducedMotion
 import dev.yowkey.portfolio.ui.theme.PortfolioTheme
 
@@ -430,8 +431,8 @@ private fun DetailMedia(
 }
 
 /**
- * The detail screen's bar: back, and the project's title so a visitor deep in the page knows where they are. Its
- * divider is decided in the draw phase from [scrolled], like the page's own bar.
+ * The detail screen's bar: back, the project's title so a visitor deep in the page knows where they are, and the
+ * theme switch. Its divider is decided in the draw phase from [scrolled], like the page's own bar.
  */
 @Composable
 private fun DetailTopBar(title: String, onBack: () -> Unit, gutter: Dp, scrolled: () -> Boolean) {
@@ -460,7 +461,9 @@ private fun DetailTopBar(title: String, onBack: () -> Unit, gutter: Dp, scrolled
                 color = MaterialTheme.colorScheme.onBackground,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
             )
+            ThemeToggle()
         }
     }
 }
