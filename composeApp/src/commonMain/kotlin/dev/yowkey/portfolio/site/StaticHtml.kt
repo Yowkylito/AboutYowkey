@@ -9,6 +9,7 @@ import dev.yowkey.portfolio.model.MessageDraft
 import dev.yowkey.portfolio.model.MessageTopic
 import dev.yowkey.portfolio.model.Portfolio
 import dev.yowkey.portfolio.model.Project
+import dev.yowkey.portfolio.model.Relation
 import dev.yowkey.portfolio.model.Screenshot
 import dev.yowkey.portfolio.model.trackingKey
 import kotlinx.serialization.json.JsonArray
@@ -154,7 +155,8 @@ object StaticHtml {
     /**
      * Where the page's script shows the notes, from the backend; hidden until it answers. The ratings dashboard is
      * here already, empty, for the script to fill: the average and its stars, and a bar per number of stars, each a
-     * button that shows only those notes. Then the line saying what the list shows, the list, and "Show more".
+     * button that opens that star's sheet. Then the line saying what the list shows, the list (pinned notes first,
+     * as the backend orders it), and "Show more"; last, the sheet itself.
      */
     private fun StringBuilder.visitorNotes(api: String) {
         appendLine("<div class=\"visitor-notes\" data-api=\"${escape(api)}\" hidden>")
@@ -163,9 +165,11 @@ object StaticHtml {
         appendLine("<div class=\"average\"><p class=\"score\"><strong></strong><span>/ 5</span></p><p class=\"meter\" role=\"img\"></p><p class=\"count\"></p></div>")
         append("<ul class=\"bars\">")
         (5 downTo 1).forEach {
+            // The script adds the counts to the label once it has them.
             append(
-                "<li><button type=\"button\" data-stars=\"$it\" aria-pressed=\"false\"><span class=\"label\">$it <i>★</i></span>" +
-                    "<span class=\"track\"><span class=\"fill\"></span></span><span class=\"n\"></span><span class=\"pct\"></span></button></li>",
+                "<li><button type=\"button\" data-stars=\"$it\" aria-haspopup=\"dialog\" aria-label=\"${escape(FeedbackCopy.openSheet(it))}\">" +
+                    "<span class=\"label\">$it <i>★</i></span><span class=\"track\"><span class=\"fill\"></span></span>" +
+                    "<span class=\"n\"></span><span class=\"pct\"></span></button></li>",
             )
         }
         appendLine("</ul>")
@@ -174,13 +178,54 @@ object StaticHtml {
         appendLine("<p class=\"list-line\" role=\"status\" aria-live=\"polite\"></p>")
         appendLine("<ul class=\"notes\"></ul>")
         appendLine("<button class=\"more\" type=\"button\" hidden>${escape(FeedbackCopy.MORE)}</button>")
+        starSheet()
         appendLine("</div>")
     }
 
     /**
-     * The note form, as the app's: name and email (optional), the impression, the message; public, as it says, so it
-     * sends the consent itself (a hidden field, for the plain form too). It posts to the backend
-     * at [api] the way the app does, through the page's script; without the script the browser posts the plain
+     * A star's notes, as a bottom sheet the dashboard's bars open (a modal `<dialog>`): the handle, the stars and the
+     * title with what they add up to, the close button, then the sorter (All and each [Relation], with its count), the
+     * list, "Show more", the line for the ratings whose words are private, and the line for a pick with nothing to
+     * read. Only the page's script opens it, and fills it from the backend; it is here empty so the script never
+     * builds structure, only words. The head stays put while the body scrolls under it.
+     */
+    private fun StringBuilder.starSheet() {
+        appendLine("<dialog class=\"star-sheet\" aria-labelledby=\"star-sheet-title\">")
+        appendLine("<div class=\"sheet-top\">")
+        appendLine("<span class=\"handle\" aria-hidden=\"true\"></span>")
+        appendLine(
+            "<div class=\"sheet-head\"><div><p class=\"sheet-stars\" aria-hidden=\"true\"></p><h4 id=\"star-sheet-title\"></h4>" +
+                "<p class=\"summary\"></p></div>" +
+                "<button class=\"close\" type=\"button\" aria-label=\"${escape(FeedbackCopy.CLOSE)}\">$CLOSE_ICON</button></div>",
+        )
+        append("<div class=\"relations\" role=\"group\" aria-label=\"${escape(SORTER_LABEL)}\">")
+        append("<button type=\"button\" data-relation=\"\" aria-pressed=\"true\">${escape(FeedbackCopy.ALL_RELATIONS)}<span class=\"n\"></span></button>")
+        Relation.entries.forEach {
+            append("<button type=\"button\" data-relation=\"${it.wire}\" aria-pressed=\"false\">${escape(it.plural)}<span class=\"n\"></span></button>")
+        }
+        appendLine("</div>")
+        appendLine("</div>")
+        appendLine("<div class=\"sheet-body\">")
+        appendLine("<ul class=\"notes\"></ul>")
+        appendLine("<p class=\"empty\" role=\"status\" hidden></p>")
+        appendLine("<button class=\"more\" type=\"button\" hidden>${escape(FeedbackCopy.MORE)}</button>")
+        appendLine("<p class=\"private-line\" hidden></p>")
+        appendLine("</div>")
+        appendLine("</dialog>")
+    }
+
+    /** What the sorter's chips are, for screen readers: they pick the notes by how their writers know the owner. */
+    private const val SORTER_LABEL = "Notes by how they know me"
+
+    /** The close button's cross; its name is the button's label. */
+    private const val CLOSE_ICON = "<svg width=\"18\" height=\"18\" viewBox=\"0 0 18 18\" aria-hidden=\"true\" focusable=\"false\">" +
+        "<path d=\"M4 4l10 10M14 4L4 14\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/></svg>"
+
+    /**
+     * The note form, as the app's: name and email (optional), how they know the owner as four radio buttons (optional,
+     * none picked sends nothing), the impression, the message; public, as it says, so it sends the consent itself (a
+     * hidden field, for the plain form too). It posts to the backend at [api] the way the app does, through the page's
+     * script, the relation included when one is picked; without the script the browser posts the plain
      * form and the backend answers with a page. The `website` field is a trap for bots that fill every field:
      * people never see it, and a filled one is quietly dropped.
      */
@@ -198,6 +243,11 @@ object StaticHtml {
                 "<input name=\"contact\" type=\"email\" maxlength=\"${FeedbackDraft.MAX_CONTACT}\" autocomplete=\"email\"></label>",
         )
         appendLine("</div>")
+        append("<fieldset class=\"relations\"><legend>${escape(FeedbackCopy.RELATION)} <span class=\"muted\">(optional)</span></legend>")
+        Relation.entries.forEach {
+            append("<label class=\"relation\"><input type=\"radio\" name=\"relation\" value=\"${it.wire}\"><span>${escape(it.label)}</span></label>")
+        }
+        appendLine("</fieldset>")
         append("<label><span>${escape(FeedbackCopy.RATING)} <span class=\"muted\">(optional)</span></span>")
         append("<select name=\"rating\"><option value=\"\">No rating</option>")
         (5 downTo 1).forEach { append("<option value=\"$it\">${escape(FeedbackCopy.ratingLabel(it))}</option>") }
