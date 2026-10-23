@@ -1,5 +1,6 @@
 {
   "siteUrl": "https://yowkylito.github.io/AboutYowkey/",
+  "api": "https://aboutyowkey-api.aboutyowkey-api.workers.dev",
   "profile": {
     "name": "Rodelito Tangonan",
     "headline": "Android Developer at DigiPlus since 2024 · Kotlin, Jetpack Compose, Clean Architecture",
