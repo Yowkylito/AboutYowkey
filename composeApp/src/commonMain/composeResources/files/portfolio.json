@@ -398,7 +398,8 @@
           "file": "bubuprotect-totp-rollover.webp",
           "caption": "Revealing a two-factor code and watching it roll over when its 30-second window ends (demo data)",
           "width": 332,
-          "height": 720
+          "height": 720,
+          "video": true
         }
       ],
       "screenshots": [
