@@ -28,14 +28,12 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.yowkey.portfolio.model.Module
 import dev.yowkey.portfolio.model.ModuleGraph
+import dev.yowkey.portfolio.ui.components.WrapRow
 import dev.yowkey.portfolio.ui.theme.PortfolioTheme
 
 /**
@@ -121,15 +119,19 @@ private fun ModuleCard(module: Module, modifier: Modifier = Modifier) {
         Text(module.role, style = MaterialTheme.typography.bodySmall, color = muted)
         if (uses.isNotEmpty()) {
             Spacer(Modifier.weight(1f))
-            Text(
-                buildAnnotatedString {
-                    withStyle(SpanStyle(color = muted)) { append("uses ") }
-                    // A no-break space before each dot keeps it on the line of the name it follows.
-                    withStyle(SpanStyle(color = named, fontFamily = FontFamily.Monospace)) { append(uses.joinToString(" · ")) }
-                },
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(top = 4.dp),
-            )
+            // One item per name, so a line breaks between names rather than inside a path like packages/cattown;
+            // the no-break space keeps each dot on the line of the name it follows.
+            val small = MaterialTheme.typography.bodySmall
+            WrapRow(Modifier.padding(top = 4.dp), horizontalSpacing = 4.dp, verticalSpacing = 0.dp) {
+                Text("uses", style = small, color = muted)
+                uses.forEachIndexed { index, name ->
+                    Text(
+                        if (index < uses.lastIndex) "$name ·" else name,
+                        style = small.copy(fontFamily = FontFamily.Monospace),
+                        color = named,
+                    )
+                }
+            }
         }
     }
 }
