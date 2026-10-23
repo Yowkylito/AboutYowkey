@@ -41,6 +41,9 @@ object PortfolioParser {
             require(!api.endsWith("/")) { "api must not end with a slash: the page appends /visits and /feedback" }
         }
         validateProof(portfolio.profile.proof)
+        portfolio.profile.photo?.let { photo ->
+            require(SCREENSHOT_FILE.matches(photo)) { "profile.photo must be a plain name ending in .webp, got $photo" }
+        }
 
         val duplicateIds = portfolio.projects.groupBy { it.id }.filterValues { it.size > 1 }.keys
         require(duplicateIds.isEmpty()) { "project ids must be unique, repeated: $duplicateIds" }

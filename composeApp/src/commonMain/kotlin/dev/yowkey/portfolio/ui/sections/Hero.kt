@@ -7,8 +7,10 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -34,8 +36,9 @@ import dev.yowkey.portfolio.ui.theme.PortfolioTheme
  * and where now (headline), why (proof), and how to reach out, all above the fold. The summary comes after the
  * buttons so it can never push them down.
  *
- * [wide] puts the proof in a card beside the intro; otherwise it sits between headline and buttons. The primary
- * button mails [Profile.email] directly; without an email it falls back to [onContact] (the Contact section).
+ * [wide] puts the proof in a card beside the intro, under the portrait ([Profile.photo], see [HeroPortrait]);
+ * otherwise the portrait leads and the proof sits between headline and buttons. The primary button mails
+ * [Profile.email] directly; without an email it falls back to [onContact] (the Contact section).
  * [stats], from the site's backend, is the live line under the headline: the published notes' rating and the
  * visit count; nothing is drawn for it until there is something to say.
  */
@@ -49,6 +52,7 @@ fun Hero(
     modifier: Modifier = Modifier,
     stats: LiveStats? = null,
 ) {
+    val photo = profile.photoPath
     if (wide && profile.proof.isNotEmpty()) {
         Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1.5f), verticalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -58,12 +62,18 @@ fun Hero(
                 HeroSummary(profile.summary)
             }
             Spacer(Modifier.width(48.dp))
-            OutlinedCard(Modifier.weight(1f)) {
-                ProofPoints(profile.proof, Modifier.padding(28.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                photo?.let { HeroPortrait(it, profile.name, Modifier.fillMaxWidth().height(224.dp)) }
+                OutlinedCard(Modifier.fillMaxWidth()) {
+                    ProofPoints(profile.proof, Modifier.padding(28.dp))
+                }
             }
         }
     } else {
         Column(modifier, verticalArrangement = Arrangement.spacedBy(20.dp)) {
+            photo?.let {
+                HeroPortrait(it, profile.name, Modifier.widthIn(max = 480.dp).fillMaxWidth().height(if (compact) 168.dp else 208.dp))
+            }
             HeroIntro(profile, compact)
             stats?.takeUnless { it.isEmpty }?.let { HeroStats(it) }
             if (profile.proof.isNotEmpty()) ProofPoints(profile.proof, Modifier.padding(vertical = 4.dp))
@@ -158,6 +168,7 @@ private val previewProfile = Profile(
     location = "London",
     email = "ada@example.com",
     availability = "Open to relocation",
+    photo = "portrait.webp",
     proof = listOf(
         ProofPoint("53%", "of the app's code written by me, from day one"),
         ProofPoint("#1 of ~40", "engineers by story points, at 2.4x the team average"),
@@ -177,9 +188,12 @@ private fun WideHeroPreview() = PortfolioTheme {
     Hero(previewProfile, compact = false, wide = true, onSeeProjects = {}, onContact = {})
 }
 
-/** No proof and no email: the wide layout falls back to one column and the button to the Contact section. */
+/** No proof, email or photo: the wide layout falls back to one column and the button to the Contact section. */
 @Preview(widthDp = 1120)
 @Composable
 private fun BareHeroPreview() = PortfolioTheme {
-    Hero(previewProfile.copy(proof = emptyList(), email = null), compact = false, wide = true, onSeeProjects = {}, onContact = {})
+    Hero(
+        previewProfile.copy(proof = emptyList(), email = null, photo = null),
+        compact = false, wide = true, onSeeProjects = {}, onContact = {},
+    )
 }

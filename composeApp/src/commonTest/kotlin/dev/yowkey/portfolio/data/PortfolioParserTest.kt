@@ -54,6 +54,16 @@ class PortfolioParserTest {
     }
 
     @Test
+    fun photoIsOptionalAndAPlainWebpName() {
+        fun withPhoto(file: String) = validJson.replace("\"summary\": \"Builds things.\"", "\"summary\": \"Builds things.\", \"photo\": \"$file\"")
+        assertEquals("files/profile/me.webp", PortfolioParser.parse(withPhoto("me.webp")).profile.photoPath)
+        assertEquals(null, PortfolioParser.parse(validJson).profile.photoPath, "the photo is optional")
+        listOf("../escape.webp", "dir/x.webp", "x.png", "x.thumb.webp").forEach { bad ->
+            assertFailsWith<IllegalArgumentException>(bad) { PortfolioParser.parse(withPhoto(bad)) }
+        }
+    }
+
+    @Test
     fun proofPointsParseAndStayShortEnoughForTheHero() {
         fun withProof(vararg points: Pair<String, String>) = validJson.replace(
             "\"summary\": \"Builds things.\"",
