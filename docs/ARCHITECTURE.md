@@ -12,7 +12,7 @@ data/    PortfolioRepository ◄── ResourcePortfolioRepository(readContent, 
            └─ PortfolioParser (decode + validate)
 model/   Portfolio, Profile, Service, Project, Engineering, Experience, SkillGroup, Link   (@Serializable, @Immutable)
          ProjectGroup (work, then personal: a project with a company is work)
-         ModuleGraph (cycle check, transitive reduction, layered plan for the module diagram)
+         ModuleGraph (cycle check, dependency layers for the module diagram)
 site/    StaticHtml (common)  ◄── jvmMain/site/StaticSite.kt ◄── Gradle task generateStaticSite
 ```
 
@@ -28,9 +28,9 @@ Arrows point one way: UI → ViewModel → repository → parser → model. Noth
 | `ui/sections` | The page's rows. Projects use `WorkCard` (figures, no media: the code is the employer's) or `ProjectCard` (cover or clip). |
 | `ui/PortfolioScreen` | Stateless page: adaptive layout from `WindowSizeClass`, nav, reveal animation, list ↔ detail switch. |
 | `ui/navigation` | `Route` (`Home` / `Project(id)`, parsed from and written to `#/projects/<id>`) and the `Navigator` interface. The web's `HashNavigator` (wasmJsMain) keeps it in browser history; the desktop uses `InMemoryNavigator`. Provided per platform by `di/platformModule` (expect/actual). |
-| `ui/detail` | `ProjectDetailScreen` (two columns on expanded, one below) and `ModuleDiagram`, drawn from `ModuleGraph.plan`. |
+| `ui/detail` | `ProjectDetailScreen` (two columns on expanded, one below) and `ModuleDiagram`, bands of cards from `ModuleGraph.layers` that wrap to the width instead of scrolling. |
 | `ui/CoverPlayback` | Which card covers may play: on screen, most visible first, at most two. Pure, unit-tested. |
-| `model/ModuleGraph` | The module graph's rules and layout: cycles, the arrows worth drawing, layers with lanes for long arrows. Pure, unit-tested. |
+| `model/ModuleGraph` | The module graph's rules: cycles, and the layers that put every module above what it uses. Pure, unit-tested. |
 | `site/StaticHtml` | Renders the crawlable HTML twin of the page, plus `sitemap.xml` and `robots.txt`. |
 | `di/AppModule` | Koin wiring: dispatcher, repository, ViewModel. |
 
@@ -53,6 +53,7 @@ Arrows point one way: UI → ViewModel → repository → parser → model. Noth
   video pass pointer events through to the canvas, so the pager still swipes over it. A video that fails to load
   falls back to the WebP.
 - The detail screen's pinned media column and its top bar divider read the scroll offset in the layer and draw
-  phases; the module diagram is one layout node whose arrows are drawn behind it from the positions it computed.
+  phases. The module diagram levels each line of cards with `IntrinsicSize.Min` too, so a card's "uses" names are a
+  `WrapRow` for the same reason.
 - The card grid levels rows with `IntrinsicSize.Min`, so the card's chip groups use `WrapRow`, whose intrinsic
   height matches what it draws (FlowRow's did not, see `WrapRowLayoutTest`).

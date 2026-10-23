@@ -192,7 +192,7 @@ private fun DetailText(project: Project, compact: Boolean, onBack: () -> Unit, g
     if (project.optimizations.isNotEmpty()) {
         DetailSection("Optimizations and audits") { Checklist(project.optimizations) }
     }
-    project.engineering?.let { engineering -> HowItsBuilt(engineering, compact) }
+    project.engineering?.let { engineering -> HowItsBuilt(engineering) }
     gallery?.invoke()
     if (project.stack.isNotEmpty()) {
         DetailSection("Stack") { Tags(project.stack) }
@@ -217,7 +217,7 @@ private fun DetailHeader(project: Project, compact: Boolean) {
 
 /** Chips, the architecture paragraph, the module diagram, the decisions and the quality checklist, each if given. */
 @Composable
-private fun HowItsBuilt(engineering: Engineering, compact: Boolean) {
+private fun HowItsBuilt(engineering: Engineering) {
     DetailSection("How it's built") {
         Column(verticalArrangement = Arrangement.spacedBy(28.dp)) {
             if (engineering.builtWith.isNotEmpty() || engineering.platforms.isNotEmpty()) {
@@ -230,7 +230,7 @@ private fun HowItsBuilt(engineering: Engineering, compact: Boolean) {
                 Text(it, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
             }
             if (engineering.modules.isNotEmpty()) {
-                SubSection("Modules") { ModuleDiagram(engineering.modules, compact) }
+                SubSection("Modules") { ModuleDiagram(engineering.modules) }
             }
             if (engineering.decisions.isNotEmpty()) {
                 SubSection("Key decisions") { Decisions(engineering.decisions) }
