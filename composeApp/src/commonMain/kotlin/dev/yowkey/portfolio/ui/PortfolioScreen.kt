@@ -97,6 +97,7 @@ import dev.yowkey.portfolio.ui.navigation.rememberPageReading
 import dev.yowkey.portfolio.ui.theme.LocalReducedMotion
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
+import dev.yowkey.portfolio.ui.components.LocalBottomEndClearance
 
 /** Column counts and spacing for the current window, derived from its size class, never from raw dp checks. */
 data class PageLayout(
@@ -283,6 +284,11 @@ private fun PortfolioContent(
     val listState = rememberLazyListState()
     val reading = rememberPageReading(listState)
     val backToTop = rememberBackToTopShown(listState)
+    // The button's corner (its 48dp, the gutter around it, a margin, and any host button it floats above), which no
+    // playing cover may pass under while the button shows: see CoverPlayback.clearOf.
+    val keepClearPx = with(LocalDensity.current) {
+        (layout.gutter + 48.dp + 16.dp + LocalBottomEndClearance.current).roundToPx()
+    }
     val seen = remember { mutableSetOf<Any>() }
     val reducedMotion = LocalReducedMotion.current
     val project = remember(portfolio, route) {
@@ -327,6 +333,7 @@ private fun PortfolioContent(
                     message = message,
                     onOpenLink = onOpenLink,
                     notesControls = notesControls,
+                    coverKeepClear = { if (backToTop.value && uncovered) keepClearPx else 0 },
                 )
                 BackToTop(
                     visible = { backToTop.value && uncovered },
@@ -361,6 +368,7 @@ fun PortfolioPage(
     message: MessageControls = MessageControls(),
     onOpenLink: (Link) -> Unit = {},
     notesControls: NotesControls = NotesControls(),
+    coverKeepClear: () -> Int = { 0 },
 ) {
     val items = remember(portfolio, layout, notes) {
         buildPageItems(
@@ -396,9 +404,10 @@ fun PortfolioPage(
             CoverPlayback.select(
                 info.visibleItemsInfo.mapNotNull { visible ->
                     val row = items.getOrNull(visible.index) as? PageItem.Projects ?: return@mapNotNull null
+                    val clear = CoverPlayback.clearOf(visible.offset, visible.size, info.viewportEndOffset, coverKeepClear())
                     CoverPlayback.VisibleRow(
                         coverClipIds = row.projects.filter { it.coverClip != null }.map { it.id },
-                        visibleFraction = CoverPlayback.visibleFraction(
+                        visibleFraction = if (!clear) 0f else CoverPlayback.visibleFraction(
                             visible.offset, visible.size, info.viewportStartOffset, info.viewportEndOffset,
                         ),
                     )
