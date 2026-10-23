@@ -194,8 +194,9 @@
       "coverClip": {
         "file": "pawffice-boot.webp",
         "caption": "Clocking in to Pawffice: the badge is stamped, the office wakes up, the town appears",
-        "width": 720,
-        "height": 370
+        "width": 683,
+        "height": 351,
+        "video": true
       },
       "title": "Pawffice",
       "tagline": "Multiplayer 3D cat office: one three.js engine in a Tauri Mac app and an Expo Android app",
