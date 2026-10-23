@@ -18,6 +18,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -30,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import dev.yowkey.portfolio.App
 import dev.yowkey.portfolio.R
 import dev.yowkey.portfolio.app.owner.OwnerViewModel
+import dev.yowkey.portfolio.ui.components.LocalBottomEndClearance
 import dev.yowkey.portfolio.ui.navigation.Navigator
 import dev.yowkey.portfolio.ui.navigation.Route
 import dev.yowkey.portfolio.ui.theme.AndroidThemeStore
@@ -73,6 +75,9 @@ fun ComponentActivity.applySystemBars(dark: Boolean) {
     )
 }
 
+/** The owner's button at the guest view's bottom end: 40 dp tall on a 16 dp margin. */
+private val OwnerButtonClearance = 56.dp
+
 // The scrims Android puts behind three-button navigation by default (gesture navigation shows none).
 private val LightNavigationScrim = Color.argb(0xe6, 0xFF, 0xFF, 0xFF)
 private val DarkNavigationScrim = Color.argb(0x80, 0x1b, 0x1b, 0x1b)
@@ -92,8 +97,12 @@ private fun GuestView(signedIn: Boolean, reducedMotion: Boolean, onOwner: () -> 
             .background(MaterialTheme.colorScheme.background)
             .windowInsetsPadding(WindowInsets.safeDrawing),
     ) {
-        App(platformLabel = "Android on your device", reducedMotion = reducedMotion)
-        if (signedIn && route == Route.Home) {
+        val ownerButton = signedIn && route == Route.Home
+        // Back to top rises above the owner's button rather than hiding under it.
+        CompositionLocalProvider(LocalBottomEndClearance provides if (ownerButton) OwnerButtonClearance else 0.dp) {
+            App(platformLabel = "Android on your device", reducedMotion = reducedMotion)
+        }
+        if (ownerButton) {
             SmallFloatingActionButton(
                 onClick = onOwner,
                 containerColor = MaterialTheme.colorScheme.primaryContainer,

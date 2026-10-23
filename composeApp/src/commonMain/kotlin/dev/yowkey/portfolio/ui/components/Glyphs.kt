@@ -120,6 +120,25 @@ fun BackGlyph(color: Color, modifier: Modifier = Modifier, glyphSize: Dp = 20.dp
     )
 }
 
+/** An up-pointing arrow, for Back to top: [BackGlyph] turned a quarter. */
+@Composable
+fun UpGlyph(color: Color, modifier: Modifier = Modifier, glyphSize: Dp = 20.dp) {
+    Spacer(
+        modifier.size(glyphSize).drawWithCache {
+            val head = Path().apply {
+                moveTo(size.width * 0.22f, size.height * 0.45f)
+                lineTo(size.width * 0.5f, size.height * 0.17f)
+                lineTo(size.width * 0.78f, size.height * 0.45f)
+            }
+            val stroke = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+            onDrawBehind {
+                drawLine(color, Offset(size.width / 2, size.height * 0.2f), Offset(size.width / 2, size.height * 0.84f), stroke.width, StrokeCap.Round)
+                drawPath(head, color, style = stroke)
+            }
+        },
+    )
+}
+
 /** A tick in a ring, for the quality checklist. */
 @Composable
 fun CheckGlyph(color: Color, modifier: Modifier = Modifier, glyphSize: Dp = 18.dp) {
