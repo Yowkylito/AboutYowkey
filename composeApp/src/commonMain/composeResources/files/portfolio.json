@@ -390,7 +390,8 @@
         "file": "eagles-watch-boot.webp",
         "caption": "The web app's boot screen pulses while the Kotlin/Wasm bundle loads, then hands off to Explore",
         "width": 324,
-        "height": 720
+        "height": 720,
+        "video": true
       },
       "title": "The Eagle's Watch",
       "tagline": "Public-works transparency app: one Compose UI for Android and Web, every figure sourced",
