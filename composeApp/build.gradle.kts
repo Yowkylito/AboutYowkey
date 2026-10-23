@@ -1,4 +1,12 @@
+import org.gradle.api.provider.ValueSource
+import org.gradle.api.provider.ValueSourceParameters
+import org.gradle.process.ExecOperations
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
+import java.io.ByteArrayOutputStream
+import java.time.Instant
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
+import javax.inject.Inject
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -8,8 +16,39 @@ plugins {
 }
 
 /**
+ * The id of a build for the generated page: the short git commit, or the build time (UTC) where there is no git.
+ * The page loads the app as `composeApp.js?v=<id>`, so a new deploy's index.html never gets the previous deploy's
+ * script out of the GitHub Pages cache. A ValueSource read only at execution time, as the task's input, keeps the
+ * configuration cache valid across commits while the task still re-runs for each one.
+ */
+abstract class BuildId : ValueSource<String, ValueSourceParameters.None> {
+    @get:Inject
+    abstract val execOperations: ExecOperations
+
+    override fun obtain(): String = gitCommit() ?: TIME.format(Instant.now())
+
+    private fun gitCommit(): String? = try {
+        val stdout = ByteArrayOutputStream()
+        val result = execOperations.exec {
+            commandLine("git", "rev-parse", "--short", "HEAD")
+            standardOutput = stdout
+            errorOutput = ByteArrayOutputStream()
+            isIgnoreExitValue = true
+        }
+        stdout.toString().trim().takeIf { result.exitValue == 0 && it.isNotEmpty() }
+    } catch (e: Exception) { // git is not installed
+        null
+    }
+
+    private companion object {
+        val TIME: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'").withZone(ZoneOffset.UTC)
+    }
+}
+
+/**
  * Renders portfolio.json into the crawlable HTML the browser shows before (and instead of, on browsers without
  * WasmGC) the Compose app. Runs the same parser as the app, so malformed content fails the build, not the site.
+ * The build id ([BuildId]) is an input too, so the page is regenerated for every commit.
  */
 val generateStaticSite = tasks.register<JavaExec>("generateStaticSite") {
     group = "build"
@@ -17,14 +56,16 @@ val generateStaticSite = tasks.register<JavaExec>("generateStaticSite") {
     val content = layout.projectDirectory.file("src/commonMain/composeResources/files/portfolio.json")
     val template = layout.projectDirectory.file("web/index.template.html")
     val output = layout.buildDirectory.dir("generated/site")
+    val build = providers.of(BuildId::class.java) {}
     inputs.file(content)
     inputs.file(template)
+    inputs.property("build", build)
     outputs.dir(output)
     val jvmMain = kotlin.jvm().compilations.getByName("main")
     classpath = files(jvmMain.output.allOutputs, jvmMain.runtimeDependencyFiles)
     mainClass.set("dev.yowkey.portfolio.site.StaticSiteKt")
     argumentProviders.add(CommandLineArgumentProvider {
-        listOf(content.asFile.absolutePath, template.asFile.absolutePath, output.get().asFile.absolutePath)
+        listOf(content.asFile.absolutePath, template.asFile.absolutePath, output.get().asFile.absolutePath, build.get())
     })
 }
 
