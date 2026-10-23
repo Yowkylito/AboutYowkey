@@ -431,7 +431,7 @@
       "id": "vistago",
       "visibility": "private",
       "cover": { "file": "vistago-cover.webp", "caption": "Vistago's splash: \"Travel, beautifully planned\"", "width": 740, "height": 1600 },
-      "coverClip": { "file": "vistago-splash.webp", "caption": "Vistago's launch: the compass, wordmark and tagline animate in", "width": 332, "height": 720 },
+      "coverClip": { "file": "vistago-splash.webp", "caption": "Vistago's launch: the compass, wordmark and tagline animate in", "width": 332, "height": 720, "video": true },
       "title": "Vistago",
       "tagline": "Offline-first AI travel companion for Android with a self-healing free-LLM model router",
       "summary": "An offline-first AI travel companion for Android: plan trips, translate through the camera, and keep travel memories, with or without a connection.",
@@ -538,7 +538,8 @@
         "file": "eagles-watch-boot.webp",
         "caption": "The web app's boot screen pulses while the Kotlin/Wasm bundle loads, then hands off to Explore",
         "width": 324,
-        "height": 720
+        "height": 720,
+        "video": true
       },
       "title": "The Eagle's Watch",
       "tagline": "Public-works transparency app: one Compose UI for Android and Web, every figure sourced",
@@ -632,7 +633,8 @@
         "file": "calm-escape-launch.webp",
         "caption": "Calm Escape's launch: the lotus seal on deep green, then the in-app reveal",
         "width": 332,
-        "height": 720
+        "height": 720,
+        "video": true
       },
       "title": "Calm Escape Premier",
       "tagline": "Multi-tenant spa booking: KMP apps and Next.js sites on one database-enforced schedule",
@@ -751,9 +753,10 @@
       "cover": { "file": "seventhj-cover.webp", "caption": "Seventh J's splash: the SJ mark and wordmark on an obsidian ground", "width": 720, "height": 1600 },
       "coverClip": {
         "file": "seventhj-splash.webp",
-        "caption": "Seventh J's splash: brush strokes swirl inward and settle into the SJ mark",
+        "caption": "Seventh J's splash: brush strokes spiral in over a starry night sky and settle into the SJ mark",
         "width": 252,
-        "height": 560
+        "height": 560,
+        "video": true
       },
       "title": "Seventh J",
       "tagline": "Gallery-inventory app on one Compose Multiplatform UI codebase for Android, iOS and Web",
@@ -814,9 +817,10 @@
       "clips": [
         {
           "file": "seventhj-splash-home.webp",
-          "caption": "First launch on the web build: strokes spin inward, settle into the SJ mark, then hand off to Home as the figures count up",
+          "caption": "First launch: strokes spiral in over a starry night sky, settle into the SJ mark, then hand off to Home",
           "width": 324,
-          "height": 720
+          "height": 720,
+          "video": true
         }
       ],
       "screenshots": [
