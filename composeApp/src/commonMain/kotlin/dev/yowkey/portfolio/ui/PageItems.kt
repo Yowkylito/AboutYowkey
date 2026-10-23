@@ -86,13 +86,22 @@ sealed interface PageItem {
         override val showsHeader = true
     }
 
-    /** One row of the published notes, between the contact block and the form; the first row carries the title. */
+    /**
+     * The private message form, right under the contact block and ahead of everything public (the published notes,
+     * then the note form); only when the content names the site's backend ([Portfolio.api]).
+     */
+    data object Message : PageItem {
+        override val key = "message"
+        override val section = Section.Contact
+    }
+
+    /** One row of the published notes, between the message form and the note form; the first row carries the title. */
     data class Notes(val notes: List<PublicNote>, val columns: Int, val row: Int) : PageItem {
         override val key = "notes-$row"
         override val section = Section.Contact
     }
 
-    /** The note form, under the contact block; only when the content names the site's backend ([Portfolio.api]). */
+    /** The note form, under the notes it may join; only when the content names the site's backend ([Portfolio.api]). */
     data object Feedback : PageItem {
         override val key = "feedback"
         override val section = Section.Contact
@@ -106,8 +115,8 @@ sealed interface PageItem {
 
 /**
  * Flattens the portfolio into rows for the current column counts, in [Section] order. Empty sections produce no rows
- * at all. [notes], the published notes from the site's backend, are chunked like the project cards and sit between
- * the contact block and the form; without a backend there are neither.
+ * at all. With the site's backend, the Contact section continues with the private message form, then [notes], the
+ * published notes, chunked like the project cards, then the note form; without a backend there is none of them.
  */
 fun buildPageItems(
     portfolio: Portfolio,
@@ -132,6 +141,7 @@ fun buildPageItems(
     }
     add(PageItem.Contact(portfolio.profile.email, portfolio.links))
     if (portfolio.api != null) {
+        add(PageItem.Message)
         notes.chunked(projectColumns).forEachIndexed { row, chunk -> add(PageItem.Notes(chunk, projectColumns, row)) }
         add(PageItem.Feedback)
     }

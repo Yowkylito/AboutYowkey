@@ -1,11 +1,24 @@
 /**
  * The owner's pages, in the site's own colours: the inbox, with a button for everything that can be done to a
- * note, and the one-paragraph notices a plain form post gets back. Every value from the database or the request
- * goes through escape().
+ * message or a note, and the one-paragraph notices a plain form post gets back. Every value from the database or
+ * the request goes through escape().
  */
 
-export function renderInbox({ visits, items, days, today }) {
+/** The names the owner reads, on this page and in the alerts on the phone. */
+const TOPIC_LABELS = { job: "Job", freelance: "Freelance", collaboration: "Collaboration", other: "Other" };
+const LINK_LABELS = { linkedin: "LinkedIn", github: "GitHub" };
+
+export function topicLabel(topic) {
+  return TOPIC_LABELS[topic] || "Other";
+}
+
+export function linkLabel(link) {
+  return LINK_LABELS[link] || link.charAt(0).toUpperCase() + link.slice(1);
+}
+
+export function renderInbox({ visits, items, days, today, timeZone, messages = [], clicks = {} }) {
   const waiting = items.filter((item) => item.consent && !item.published_at && !item.hidden_at).length;
+  const unread = messages.filter((item) => !item.read_at && !item.archived_at).length;
   const rows = items
     .map(
       (item) => `<tr${item.hidden_at ? ' class="hidden"' : ""}>
@@ -18,14 +31,41 @@ export function renderInbox({ visits, items, days, today }) {
 </tr>`,
     )
     .join("\n");
+  const messageRows = messages
+    .map(
+      (item) => `<tr${item.archived_at ? ' class="hidden"' : ""}>
+  <td class="when">${escape(when(item.created_at))}</td>
+  <td class="topic">${escape(topicLabel(item.topic))}</td>
+  <td>${escape(item.name || "")}${contactLine(item.contact)}</td>
+  <td class="message">${escape(item.message)}</td>
+  <td class="status">${messageStatus(item)}</td>
+  <td class="actions"><form method="post" action="/inbox/messages/${Number(item.id)}">${messageButtons(item)}</form></td>
+</tr>`,
+    )
+    .join("\n");
   const series = days.map((entry) => `<li><span>${escape(entry.day)}</span><strong>${Number(entry.count)}</strong></li>`).join("");
+  const clickSeries = Object.entries(clicks)
+    .map(([link, count]) => `<li><span>${escape(linkLabel(link))}</span><strong>${Number(count)}</strong></li>`)
+    .join("");
   const since = visits.since ? ` since ${escape(visits.since)}` : "";
   return page(
     "Inbox",
     `<h1>Inbox</h1>
-<p class="muted">${Number(visits.total)} visits${since} · ${Number(visits.today)} today (${escape(today)}, UTC) · ${items.length} notes, ${waiting} waiting</p>
-<p class="muted">A note with the visitor's tick can be published; it then shows on the site with the name, the stars and the words, never the contact. Hide takes it down without deleting it.</p>
+<p class="muted">${Number(visits.total)} visits${since} · ${Number(visits.today)} today (${escape(today)}, ${escape(timeZone)}) · ${items.length} notes, ${waiting} waiting · ${messages.length} messages, ${unread} unread</p>
+<p class="muted">A note with the visitor's tick can be published; it then shows on the site with the name, the stars and the words, never the contact. Hide takes it down without deleting it. Messages are private: they are never on the site.</p>
 ${days.length ? `<h2>Visitors by day</h2>\n<ul class="days">${series}</ul>` : ""}
+${clickSeries ? `<h2>Link clicks today</h2>\n<ul class="days">${clickSeries}</ul>` : ""}
+<h2>Messages</h2>
+${
+  messages.length
+    ? `<table>
+<thead><tr><th>When</th><th>Topic</th><th>From</th><th>Message</th><th>Status</th><th></th></tr></thead>
+<tbody>
+${messageRows}
+</tbody>
+</table>`
+    : "<p>No messages yet.</p>"
+}
 <h2>Notes</h2>
 ${
   items.length
@@ -61,6 +101,20 @@ function buttons(item) {
   if (item.published_at) return button("unpublish", "Unpublish") + button("hide", "Hide") + remove;
   const publish = item.consent ? button("publish", "Publish", ' class="primary"') : button("publish", "Publish", ' disabled title="No consent from the visitor"');
   return publish + button("hide", "Hide") + remove;
+}
+
+/** Archived, read, or unread (waiting for the owner). */
+function messageStatus(item) {
+  if (item.archived_at) return `Archived<br><span class="dim">${escape(when(item.archived_at))}</span>`;
+  if (item.read_at) return `Read<br><span class="dim">${escape(when(item.read_at))}</span>`;
+  return "<strong>Unread</strong>";
+}
+
+function messageButtons(item) {
+  const button = (action, label, extra = "") => `<button name="action" value="${action}"${extra}>${label}</button>`;
+  const read = item.read_at ? button("unread", "Mark unread") : button("read", "Mark read", ' class="primary"');
+  const archive = item.archived_at ? button("unarchive", "Unarchive") : button("archive", "Archive");
+  return read + archive + button("delete", "Delete", ' class="danger" onclick="return confirm(\'Delete this message for good?\')"');
 }
 
 function stars(rating) {
@@ -111,6 +165,7 @@ function page(title, body) {
   td.when, td.status { white-space: nowrap; color: var(--muted); font-size: 14px; }
   td.status strong { color: var(--accent); }
   td.rating { white-space: nowrap; color: var(--accent); letter-spacing: .05em; }
+  td.topic { white-space: nowrap; font-weight: 600; }
   td.message { white-space: pre-wrap; overflow-wrap: anywhere; width: 45%; }
   td.actions form { display: flex; flex-direction: column; gap: 6px; }
   button { font: inherit; font-size: 13px; font-weight: 600; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; cursor: pointer; }

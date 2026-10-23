@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The site's icon (favicon.svg): the white Y on signal orange. Notifications and shortcuts wear it too. -->
+    <color name="yowkey_orange">#C2410C</color>
+    <color name="ic_launcher_background">#C2410C</color>
+    <color name="ic_shortcut_background">#FFE4D5</color>
+    <!-- The page's light background (composeApp ui/theme/Theme.kt), behind Compose while it starts. -->
+    <color name="paper">#FAFAFA</color>
+</resources>

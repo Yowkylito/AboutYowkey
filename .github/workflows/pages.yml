@@ -45,6 +45,32 @@ jobs:
         with:
           path: composeApp/build/dist/wasmJs/productionExecutable
 
+  # The owner's Android app (androidApp/). Built from a clean checkout, so with no Firebase config: the APK it uploads
+  # has push off and the 15-minute backup check on, which is the build CI must keep green. ubuntu-latest has the
+  # Android SDK; AGP fetches a missing platform itself.
+  android:
+    name: Build the Android app
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Build the debug APK
+        run: ./gradlew :androidApp:assembleDebug --stacktrace
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: yowkey-debug-apk
+          path: androidApp/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
   deploy:
     name: Deploy to GitHub Pages
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'

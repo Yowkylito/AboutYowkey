@@ -133,10 +133,14 @@ data class FeedbackDraft(
     }
 }
 
-/** The words of the note form and the published notes, shared by the app and the static page so both say the same. */
+/**
+ * The words of the note form and the published notes, shared by the app and the static page so both say the same.
+ * Hiring goes to the private [MessageCopy] form; a note is the public one, and says so.
+ */
 object FeedbackCopy {
     const val TITLE = "Leave a note"
-    const val INTRO = "Hiring, a bug on this site, or a thought on my work: I read every note. Tick the box and, once I have " +
+    const val PUBLIC = "Public"
+    const val INTRO = "A bug on this site, or a thought on my work: I read every note. Tick the box and, once I have " +
         "read it, it may appear here with your name; your email never does."
     const val NAME = "Name"
     const val CONTACT = "Email"
@@ -153,4 +157,92 @@ object FeedbackCopy {
     fun ratingLabel(rating: Int): String = "$rating · ${Impressions[rating - 1]}"
 
     private val Impressions = listOf("Poor", "Weak", "Fine", "Good", "Excellent")
+}
+
+/**
+ * The profile links whose clicks the backend counts, by their label lowercased; the worker's `TRACKED_LINKS` names
+ * the same ones and turns any other away.
+ */
+val TrackedLinks: Set<String> = setOf("linkedin", "github")
+
+/** The name the backend counts this link's clicks under ("linkedin" for "LinkedIn"); null for a link it does not count. */
+val Link.trackingKey: String?
+    get() = label.trim().lowercase().takeIf { it in TrackedLinks }
+
+/** What a private message is about, as the form's chips offer it; [wire] is the value the backend stores. */
+enum class MessageTopic(val wire: String, val label: String) {
+    Job("job", "A job"),
+    Freelance("freelance", "A freelance project"),
+    Collaboration("collaboration", "Collaboration"),
+    Other("other", "Something else"),
+    ;
+
+    companion object {
+        /** The topic stored as [wire]; null for anything else, so a value this app does not know is never guessed at. */
+        fun of(wire: String?): MessageTopic? = entries.firstOrNull { it.wire == wire }
+    }
+}
+
+/**
+ * A private message for the owner, as the visitor types it. Unlike a note it is never shown on the site, so it asks
+ * for a way to reply. The rules are the backend's (`POST /messages` in `worker/src/handler.js`), so the form can say
+ * what is wrong before anything is sent; the backend checks again.
+ */
+@Immutable
+@Serializable
+data class MessageDraft(
+    val name: String = "",
+    /** Where the reply goes: an email, or whatever else they choose to leave. Required, and only the owner sees it. */
+    val contact: String = "",
+    /** One of [MessageTopic]'s wire values; empty for none, which the backend files as [MessageTopic.Other]. */
+    val topic: String = "",
+    val message: String = "",
+) {
+    /**
+     * What stops this message from being sent, as sentences for the visitor; empty when it can go. The message, then
+     * the contact, then the name, then the topic, in the backend's order (`validateMessage`), so both name the same
+     * problem first.
+     */
+    val problems: List<String>
+        get() = buildList {
+            val text = message.trim()
+            val reply = contact.trim()
+            if (text.isEmpty()) add("Write a message first.")
+            else if (text.length > MAX_MESSAGE) add("Keep the message under $MAX_MESSAGE characters.")
+            if (reply.isEmpty()) add("Leave an email or another way to reach you.")
+            else if (reply.length > MAX_CONTACT) add("Keep the email under $MAX_CONTACT characters.")
+            if (name.trim().length > MAX_NAME) add("Keep the name under $MAX_NAME characters.")
+            if (topic.isNotBlank() && MessageTopic.of(topic.trim()) == null) add("Pick one of the topics.")
+        }
+
+    /** Trimmed, with no topic filed as [MessageTopic.Other], as the backend stores it. */
+    fun normalized(): MessageDraft =
+        MessageDraft(name.trim(), contact.trim(), topic.trim().ifEmpty { MessageTopic.Other.wire }, message.trim())
+
+    companion object {
+        const val MAX_NAME = 80
+        const val MAX_CONTACT = 160
+        const val MAX_MESSAGE = 2000
+    }
+}
+
+/**
+ * The words of the private message form, shared by the app and the static page. Next to the note form, each says
+ * plainly who reads it: a message only the owner, a note perhaps everyone.
+ */
+object MessageCopy {
+    const val TITLE = "Message me"
+    const val PRIVATE = "Private"
+    const val INTRO = "A job, a freelance project, or anything you would rather not post: only I read this, nothing " +
+        "from it is ever shown on the site, and I reply to the contact you leave."
+    const val NAME = "Name"
+    const val CONTACT = "How to reach you"
+    /** After "Required: " in the app and "(required: …)" on the static page. */
+    const val CONTACT_HINT = "an email, or another way to reply"
+    const val TOPIC = "What it's about"
+    const val MESSAGE = "Message"
+    const val SEND = "Send message"
+    const val SENDING = "Sending…"
+    const val THANKS = "Thanks, your message is in. I'll reply to the contact you left."
+    const val ANOTHER = "Send another"
 }

@@ -4,9 +4,13 @@ import dev.yowkey.portfolio.model.Engineering
 import dev.yowkey.portfolio.model.FeedbackCopy
 import dev.yowkey.portfolio.model.FeedbackDraft
 import dev.yowkey.portfolio.model.Link
+import dev.yowkey.portfolio.model.MessageCopy
+import dev.yowkey.portfolio.model.MessageDraft
+import dev.yowkey.portfolio.model.MessageTopic
 import dev.yowkey.portfolio.model.Portfolio
 import dev.yowkey.portfolio.model.Project
 import dev.yowkey.portfolio.model.Screenshot
+import dev.yowkey.portfolio.model.trackingKey
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -102,12 +106,49 @@ object StaticHtml {
         }
 
         appendLine("<section id=\"contact\"><h2>Contact</h2>")
-        links(listOfNotNull(p.email?.let { Link("Email", "mailto:$it") }) + portfolio.links)
+        links(listOfNotNull(p.email?.let { Link("Email", "mailto:$it") }) + portfolio.links, tracksClicksAt = portfolio.api)
+        // As in the app: the private form first, then everything public (the published notes, the note form).
         portfolio.api?.let {
+            messageForm(it)
             visitorNotes(it)
             feedbackForm(it)
         }
         appendLine("</section>")
+    }
+
+    /**
+     * The private message form, as the app's: name (optional), how to reach you (required), the topic as four radio
+     * buttons (none picked is filed as "Something else"), the message. It posts to the backend at [api] like the note
+     * form: through the page's script, or as a plain form the backend answers with a page. The `website` trap is the
+     * note form's too.
+     */
+    private fun StringBuilder.messageForm(api: String) {
+        appendLine("<h3 id=\"message\">${escape(MessageCopy.TITLE)} <span class=\"badge\">${escape(MessageCopy.PRIVATE)}</span></h3>")
+        appendLine("<p class=\"note\">${escape(MessageCopy.INTRO)}</p>")
+        appendLine("<form class=\"message\" method=\"post\" action=\"${escape("$api/messages")}\" data-api=\"${escape(api)}\">")
+        appendLine("<div class=\"fields\">")
+        appendLine(
+            "<label><span>${escape(MessageCopy.NAME)} <span class=\"muted\">(optional)</span></span>" +
+                "<input name=\"name\" maxlength=\"${MessageDraft.MAX_NAME}\" autocomplete=\"name\"></label>",
+        )
+        appendLine(
+            "<label><span>${escape(MessageCopy.CONTACT)} <span class=\"muted\">(required: ${escape(MessageCopy.CONTACT_HINT)})</span></span>" +
+                "<input name=\"contact\" required maxlength=\"${MessageDraft.MAX_CONTACT}\" autocomplete=\"email\"></label>",
+        )
+        appendLine("</div>")
+        append("<fieldset class=\"topics\"><legend>${escape(MessageCopy.TOPIC)} <span class=\"muted\">(optional)</span></legend>")
+        MessageTopic.entries.forEach {
+            append("<label class=\"topic\"><input type=\"radio\" name=\"topic\" value=\"${it.wire}\"><span>${escape(it.label)}</span></label>")
+        }
+        appendLine("</fieldset>")
+        appendLine(
+            "<label><span>${escape(MessageCopy.MESSAGE)}</span>" +
+                "<textarea name=\"message\" required maxlength=\"${MessageDraft.MAX_MESSAGE}\" rows=\"5\"></textarea></label>",
+        )
+        appendLine("<label class=\"trap\" aria-hidden=\"true\"><span>Website</span><input name=\"website\" tabindex=\"-1\" autocomplete=\"off\"></label>")
+        appendLine("<button type=\"submit\">${escape(MessageCopy.SEND)}</button>")
+        appendLine("<p class=\"status\" role=\"status\" aria-live=\"polite\"></p>")
+        appendLine("</form>")
     }
 
     /** Where the page's script lists the notes the owner has published, from the backend; hidden until it has some. */
@@ -125,7 +166,7 @@ object StaticHtml {
      * people never see it, and a filled one is quietly dropped.
      */
     private fun StringBuilder.feedbackForm(api: String) {
-        appendLine("<h3 id=\"feedback\">${escape(FeedbackCopy.TITLE)}</h3>")
+        appendLine("<h3 id=\"feedback\">${escape(FeedbackCopy.TITLE)} <span class=\"badge\">${escape(FeedbackCopy.PUBLIC)}</span></h3>")
         appendLine("<p class=\"note\">${escape(FeedbackCopy.INTRO)}</p>")
         appendLine("<form class=\"feedback\" method=\"post\" action=\"${escape("$api/feedback")}\" data-api=\"${escape(api)}\">")
         appendLine("<div class=\"fields\">")
@@ -316,11 +357,18 @@ object StaticHtml {
         list(items)
     }
 
-    private fun StringBuilder.links(links: List<Link>) {
+    /**
+     * With [tracksClicksAt], the backend's address, the links it counts (LinkedIn, GitHub) carry their name as
+     * `data-track` and the address as `data-api`, and the page's script sends a beacon when one is opened.
+     */
+    private fun StringBuilder.links(links: List<Link>, tracksClicksAt: String? = null) {
         if (links.isEmpty()) return
         appendLine("<p class=\"links\">")
-        links.forEach {
-            appendLine("<a href=\"${escape(it.url)}\" rel=\"noopener\">${escape(it.label)}</a>")
+        links.forEach { link ->
+            val tracked = tracksClicksAt?.let { api ->
+                link.trackingKey?.let { " data-track=\"$it\" data-api=\"${escape(api)}\"" }
+            }.orEmpty()
+            appendLine("<a href=\"${escape(link.url)}\" rel=\"noopener\"$tracked>${escape(link.label)}</a>")
         }
         appendLine("</p>")
     }

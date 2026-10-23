@@ -2,9 +2,11 @@ package dev.yowkey.portfolio.site
 
 import dev.yowkey.portfolio.data.PortfolioParser
 import dev.yowkey.portfolio.model.GalleryItem
+import dev.yowkey.portfolio.model.MessageCopy
 import dev.yowkey.portfolio.model.Portfolio
 import dev.yowkey.portfolio.model.Project
 import dev.yowkey.portfolio.model.RepoVisibility
+import dev.yowkey.portfolio.model.trackingKey
 import dev.yowkey.portfolio.ui.image.AnimatedClip
 import dev.yowkey.portfolio.ui.image.ClipFrames
 import dev.yowkey.portfolio.ui.image.ScreenshotImages
@@ -253,6 +255,26 @@ class SiteContentTest {
         assertEquals(api != null, "class=\"visitor-notes\"" in page)
         assertEquals(api != null, "class=\"live-stats muted\"" in page)
         api?.let { assertTrue("action=\"${StaticHtml.escape(it)}/feedback\"" in page) }
+    }
+
+    /**
+     * Likewise the private message form, and the beacon on the profile's LinkedIn and GitHub links; the template's
+     * script sends both, and thanks the visitor in the app's words.
+     */
+    @Test
+    fun theMessageFormAndTheTrackedLinksFollowTheContentsBackend() {
+        val api = portfolio.api
+        assertEquals(api != null, "<form class=\"message\"" in page)
+        assertEquals(api != null, "data-track=\"" in page)
+        val tracked = portfolio.links.mapNotNull { it.trackingKey }
+        assertTrue(tracked.isNotEmpty(), "the profile links to LinkedIn or GitHub")
+        api?.let {
+            assertTrue("action=\"${StaticHtml.escape(it)}/messages\"" in page)
+            tracked.forEach { key -> assertTrue("data-track=\"$key\" data-api=\"${StaticHtml.escape(it)}\"" in page, "$key is not tracked") }
+        }
+        assertTrue("navigator.sendBeacon(link.dataset.api + \"/clicks\", JSON.stringify({ link: name }))" in page)
+        assertTrue("addEventListener(\"auxclick\"" in page, "a middle click counts too")
+        assertTrue(MessageCopy.THANKS in page, "the static form thanks the visitor as the app does")
     }
 
     /** The card's lead (the cover clip, else the cover) opens its article, ahead of the title. */

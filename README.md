@@ -170,6 +170,16 @@ Browsers without WasmGC, or a failed download, just keep the HTML version. It ca
 screens do, one `<article id="project-<id>">` per project, and a `#/projects/<id>` link scrolls to that article
 there too.
 
+With an `api` in `portfolio.json` (see below), both versions also count clicks on the profile's LinkedIn and GitHub
+links, and carry a private **Message me** form. A click leaves as a beacon (`navigator.sendBeacon`), which the browser
+delivers even as the link takes the tab away; the page sends it at most once per link per page load and never makes
+the link wait for it. The worker counts it once per visitor per day per link, telling visitors apart by the same
+salted daily hash as visits, and nothing is stored on the device. The desktop window is the owner's, so it counts
+nothing. The message form sits above the published notes and the public **Leave a note** form, and each is badged
+Private or Public: a message asks for a way to reply (an email, or anything else) and an optional topic (a job, a
+freelance project, a collaboration, something else), only the owner reads it, and it is never shown on the site.
+Without the page's script, both forms post as plain HTML forms and the worker answers with a page.
+
 ## Run it
 
 JDK 17+ (Android Studio's bundled JBR works).
@@ -186,6 +196,58 @@ JDK 17+ (Android Studio's bundled JBR works).
 `.github/workflows/pages.yml` scans for secrets, runs the tests, builds the bundle and deploys it on every push to
 `main`, then runs Lighthouse against the live URL. Pull requests get the same build and tests without the deploy.
 One-time setup: **Settings → Pages → Source: GitHub Actions**.
+
+## Android app
+
+`androidApp/` builds **Yowkey**, an APK for my own phone. It opens on the portfolio exactly as the site shows it,
+running natively. Long-press its icon and pick **Owner** to sign in (the password is the worker's `ADMIN_TOKEN`, see
+below): a dashboard of today's visits, LinkedIn and GitHub clicks, unread messages and who wants to hire me, the 30
+days of visits and their countries; the private messages (reply by email, archive, delete), the notes to publish or
+hide, and the history of every alert and daily report. A new message, a new note and the 23:59 summary arrive as
+notifications. Once signed in, the app opens there, with **Portfolio** to go back to the site.
+
+The SDK needs platform 37 (Compose 1.12 compiles against it; the app targets 36 and runs on Android 8.0+).
+
+```bash
+./gradlew :androidApp:assembleDebug     # androidApp/build/outputs/apk/debug/androidApp-debug.apk
+adb install -r androidApp/build/outputs/apk/debug/androidApp-debug.apk
+./gradlew :androidApp:assembleRelease   # shrunk with R8; signed only with keystore.properties, below
+```
+
+Every CI run of `pages.yml` builds the debug APK and keeps it for two weeks as the `yowkey-debug-apk` artifact.
+
+**Push, once.** Without it the app still gets every alert, by asking the worker every 15 minutes; with it they
+arrive as they happen.
+
+1. In the [Firebase console](https://console.firebase.google.com/), create a project (Analytics is not needed).
+2. Add an Android app with the package name `dev.yowkey.portfolio`, download its `google-services.json` and put it
+   at `androidApp/google-services.json`. It is gitignored; never commit it. The build applies the Google services
+   plugin only when the file is there, so without it everything builds the same with push off.
+3. Give the worker its key, `FCM_SERVICE_ACCOUNT` (step 3 and 4 under "Visits and feedback" below).
+4. Rebuild, install, sign in once and allow notifications. **Settings** in the app then says this phone is
+   registered and the server has push set up.
+
+**A signed release, once.** Create a key and keep it safe (every update must be signed with the same one):
+
+```bash
+keytool -genkeypair -v -keystore ~/keys/yowkey-release.jks -keyalg RSA -keysize 4096 -validity 10000 -alias yowkey
+```
+
+then `keystore.properties` at the repo root (gitignored), and `assembleRelease` signs with it:
+
+```properties
+storeFile=/Users/you/keys/yowkey-release.jks
+storePassword=…
+keyAlias=yowkey
+keyPassword=…
+```
+
+Without the file the release APK is unsigned and Android will not install it; use the debug one. A debug install
+must be uninstalled before a release one goes on (they are signed with different keys).
+
+**Trying it against a local worker** (debug builds only): with `npx wrangler dev` running in `worker/`,
+`adb shell am start -n dev.yowkey.portfolio/.app.MainActivity --es debug_api http://10.0.2.2:8787` sends the
+app's requests there instead (the emulator reaches the computer at 10.0.2.2), and `--es debug_api ""` undoes it.
 
 ## Visits and feedback
 
@@ -269,5 +331,53 @@ Cloudflare Workers" template, with D1 edit added). Without them the workflow onl
 **Locally**: `npm run dev` in `worker/` serves it at `http://localhost:8787` against a SQLite file under
 `.wrangler/` (`npm run db:init:local` first, which applies the migrations locally; copy `.dev.vars.example` to `.dev.vars` for the two secrets). Set
 `"api": "http://localhost:8787"` in `portfolio.json` while testing: the parser allows `http://` for localhost only.
+
+**Messages, link clicks and the owner's app**: the worker also keeps
+
+- **Messages**: what the contact form sends privately (the contact is required, so there is someone to write back
+  to; the topic is job, freelance, collaboration or other). A message is never on the site. A visitor may send 3
+  a day, and the same hidden field catches bots.
+- **Link clicks**: how many visitors clicked the links named in `TRACKED_LINKS` (`worker/wrangler.toml`: LinkedIn
+  and GitHub), once per visitor per day per link, told apart by the same daily hash as visits and deleted the
+  same way. Bots are not counted.
+- **Countries**: Cloudflare's guess at a counted visit's country, kept only as a count per country per day, never
+  next to a visitor.
+
+Everything is counted by your day, Asia/Manila (`TIME_ZONE`), and at 23:59 there a cron writes the day's report.
+Each new note, new message and daily report is kept as an alert that the Android app reads from the worker's
+`/admin/` routes (the same `ADMIN_TOKEN`, sent as a Bearer token), and, once Firebase is set up, pushed to your
+phone as it happens. The inbox page shows the messages too, with **Mark read**, **Archive** and **Delete**, and
+today's link clicks.
+
+To turn it on, once, in `worker/`:
+
+1. Create the new tables (`worker/migrations/0003`):
+
+   ```bash
+   npm run db:init
+   ```
+
+2. A free [Firebase project](https://console.firebase.google.com/), and in it an Android app with the package name
+   `dev.yowkey.portfolio`. The `google-services.json` it offers is for the app's build, not the worker.
+
+3. The key the worker sends pushes with: in the Firebase console, **Project settings → Service accounts →
+   Generate new private key**. It downloads a JSON file; keep it out of the repo.
+
+4. Hand it to the worker as a secret (Wrangler reads the file from the pipe, so the key is never in a command or a
+   config file), then delete the file:
+
+   ```bash
+   npx wrangler secret put FCM_SERVICE_ACCOUNT < key.json
+   ```
+
+5. Deploy, which also sets up the 23:59 cron:
+
+   ```bash
+   npm run deploy
+   ```
+
+Without step 4 the rest still works: the alerts are kept, and the app finds them when it checks every 15 minutes;
+they just do not arrive the moment they happen. Locally, `npx wrangler dev --test-scheduled` runs the daily report
+when you open `/__scheduled`.
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and [`docs/READINESS.md`](docs/READINESS.md).

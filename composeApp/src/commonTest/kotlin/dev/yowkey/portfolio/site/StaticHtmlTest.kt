@@ -4,6 +4,8 @@ import dev.yowkey.portfolio.data.PortfolioParser
 import dev.yowkey.portfolio.model.Decision
 import dev.yowkey.portfolio.model.Engineering
 import dev.yowkey.portfolio.model.FeedbackCopy
+import dev.yowkey.portfolio.model.Link
+import dev.yowkey.portfolio.model.MessageCopy
 import dev.yowkey.portfolio.model.Module
 import dev.yowkey.portfolio.model.Project
 import dev.yowkey.portfolio.model.ProofPoint
@@ -103,7 +105,7 @@ class StaticHtmlTest {
 
         val html = StaticHtml.content(portfolio.copy(api = "https://api.example/\"x"))
         val contact = html.substringAfter("<section id=\"contact\">").substringBefore("</section>")
-        assertTrue("<h3 id=\"feedback\">${FeedbackCopy.TITLE}</h3>" in contact)
+        assertTrue("<h3 id=\"feedback\">${FeedbackCopy.TITLE} <span class=\"badge\">${FeedbackCopy.PUBLIC}</span></h3>" in contact)
         assertTrue(
             "<form class=\"feedback\" method=\"post\" action=\"https://api.example/&quot;x/feedback\" data-api=\"https://api.example/&quot;x\">" in contact,
             "the form posts to the backend, escaped",
@@ -128,6 +130,66 @@ class StaticHtmlTest {
         assertTrue(notesBox in contact, "the notes' place")
         assertTrue(contact.indexOf(notesBox) < contact.indexOf("<form class=\"feedback\""), "the notes come before the form")
         assertFalse("<footer" in html, "the count moved from the footer to the hero")
+    }
+
+    /**
+     * The private message form posts to the backend without the page's script too, marks itself private against
+     * the note form's public, and comes before everything public in the Contact section.
+     */
+    @Test
+    fun theMessageFormAppearsOnlyWithABackendAndPostsToIt() {
+        assertFalse("form class=\"message\"" in StaticHtml.content(portfolio))
+        assertFalse("id=\"message\"" in StaticHtml.content(portfolio))
+
+        val html = StaticHtml.content(portfolio.copy(api = "https://api.example/\"x"))
+        val contact = html.substringAfter("<section id=\"contact\">").substringBefore("</section>")
+        assertTrue("<h3 id=\"message\">${MessageCopy.TITLE} <span class=\"badge\">${MessageCopy.PRIVATE}</span></h3>" in contact)
+        assertTrue("<p class=\"note\">${StaticHtml.escape(MessageCopy.INTRO)}</p>" in contact)
+        val form = contact.substringAfter("<form class=\"message\"").substringBefore("</form>")
+        assertTrue(
+            "<form class=\"message\" method=\"post\" action=\"https://api.example/&quot;x/messages\" data-api=\"https://api.example/&quot;x\">" in contact,
+            "the form posts to the backend, escaped",
+        )
+        listOf(
+            "<input name=\"name\" maxlength=\"80\" autocomplete=\"name\">",
+            "<span>${MessageCopy.CONTACT} <span class=\"muted\">(required: ${MessageCopy.CONTACT_HINT})</span></span>" +
+                "<input name=\"contact\" required maxlength=\"160\" autocomplete=\"email\">",
+            "<fieldset class=\"topics\"><legend>${StaticHtml.escape(MessageCopy.TOPIC)} <span class=\"muted\">(optional)</span></legend>",
+            "<label class=\"topic\"><input type=\"radio\" name=\"topic\" value=\"job\"><span>A job</span></label>" +
+                "<label class=\"topic\"><input type=\"radio\" name=\"topic\" value=\"freelance\"><span>A freelance project</span></label>" +
+                "<label class=\"topic\"><input type=\"radio\" name=\"topic\" value=\"collaboration\"><span>Collaboration</span></label>" +
+                "<label class=\"topic\"><input type=\"radio\" name=\"topic\" value=\"other\"><span>Something else</span></label></fieldset>",
+            "<textarea name=\"message\" required maxlength=\"2000\" rows=\"5\"></textarea>",
+            "<label class=\"trap\" aria-hidden=\"true\"><span>Website</span><input name=\"website\" tabindex=\"-1\" autocomplete=\"off\"></label>",
+            "<button type=\"submit\">${MessageCopy.SEND}</button>",
+            "<p class=\"status\" role=\"status\" aria-live=\"polite\"></p>",
+        ).forEach { assertTrue(it in form, "the message form lacks $it") }
+        assertFalse("consent" in form || "rating" in form, "nothing in it is ever shown, so there is nothing to agree to")
+        assertTrue(
+            contact.indexOf("<form class=\"message\"") in 0 until contact.indexOf("class=\"visitor-notes\""),
+            "the private form comes before the published notes and the note form",
+        )
+    }
+
+    /** With a backend, the profile's LinkedIn and GitHub links name themselves for the page's click beacon. */
+    @Test
+    fun theTrackedLinksCarryTheirNameOnlyWithABackend() {
+        val links = portfolio.copy(
+            links = listOf(Link("LinkedIn", "https://www.linkedin.com/in/ada"), Link("GitHub", "https://github.com/ada"), Link("Blog", "https://ada.dev")),
+            projects = listOf(portfolio.projects[0].copy(links = listOf(Link("Source on GitHub", "https://github.com/ada/one")))),
+        )
+        val without = StaticHtml.content(links)
+        assertFalse("data-track" in without)
+        assertTrue("<a href=\"https://www.linkedin.com/in/ada\" rel=\"noopener\">LinkedIn</a>" in without)
+
+        val html = StaticHtml.content(links.copy(api = "https://api.example"))
+        val contact = html.substringAfter("<section id=\"contact\">").substringBefore("</section>")
+        assertTrue(
+            "<a href=\"https://www.linkedin.com/in/ada\" rel=\"noopener\" data-track=\"linkedin\" data-api=\"https://api.example\">LinkedIn</a>" in contact,
+        )
+        assertTrue("<a href=\"https://github.com/ada\" rel=\"noopener\" data-track=\"github\" data-api=\"https://api.example\">GitHub</a>" in contact)
+        assertTrue("<a href=\"https://ada.dev\" rel=\"noopener\">Blog</a>" in contact, "a link the backend does not count")
+        assertEquals(2, Regex("data-track=").findAll(html).count(), "only the profile's two, not a project's source link")
     }
 
     @Test

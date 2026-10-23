@@ -4,7 +4,7 @@
 wasmJsMain/main.kt ─┐                     jvmMain/main.kt (desktop window)
                     ├─ startKoin(appModule) → App()
                     │
-ui/      PortfolioRoute ── koinViewModel ──► PortfolioViewModel ── StateFlow<PortfolioUiState>, <VisitCount?>, <SiteNotes?>, <FeedbackUiState>
+ui/      PortfolioRoute ── koinViewModel ──► PortfolioViewModel ── StateFlow<PortfolioUiState>, <VisitCount?>, <SiteNotes?>, <FeedbackUiState>, <MessageUiState>
            │            └─ koinInject ──► Navigator ── StateFlow<Route>   (HashNavigator on web, InMemoryNavigator on JVM)
            └─ PortfolioScreen (stateless) → list: TopBar, sections/*   |   detail/ProjectDetailScreen
                                              (AnimatedContent on the route; the list's LazyListState lives above it)
@@ -13,6 +13,7 @@ data/    PortfolioRepository ◄── ResourcePortfolioRepository(readContent, 
          SiteApi ◄── HttpSiteApi(HttpTransport: FetchTransport on web, JavaHttpTransport on JVM) ──► worker/ (Cloudflare Worker + D1)
 model/   Portfolio, Profile, Service, Project, Engineering, Experience, SkillGroup, Link   (@Serializable, @Immutable)
          VisitCount, RatingSummary, PublicNote, SiteNotes, LiveStats, FeedbackDraft, FeedbackCopy (Site.kt: what the backend answers and takes, the hero's line, the form's words)
+         MessageDraft, MessageTopic, MessageCopy, Link.trackingKey (Site.kt too: the private message form, the tracked links)
          ProjectGroup (work, then personal: a project with a company is work)
          ModuleGraph (cycle check, dependency layers for the module diagram)
 site/    StaticHtml (common)  ◄── jvmMain/site/StaticSite.kt ◄── Gradle task generateStaticSite
@@ -26,18 +27,63 @@ Arrows point one way: UI → ViewModel → repository → parser → model. Noth
 | `data/PortfolioParser` | Turns JSON into a valid `Portfolio` or fails with a reason. Shared by the app and the build. |
 | `data/PortfolioRepository` | Loads the portfolio off the main thread; the source (`Res.readBytes`) is injected so tests fake it. |
 | `data/SiteApi` | The site's backend as the app sees it: count this visit, read the published notes and their rating, send a note. `HttpSiteApi` speaks the worker's JSON over an `HttpTransport` each platform provides (`fetch` on the web; `java.net.http` on the desktop, which only reads the count). Called only when `Portfolio.api` is set. |
-| `ui/PortfolioViewModel` | `Loading → Ready | Error`, with a retry that ignores double taps; once ready, counts the visit and loads the published notes (each once) and runs the note form's `Idle → Sending → Sent | Failed`. |
+| `ui/PortfolioViewModel` | `Loading → Ready | Error`, with a retry that ignores double taps; once ready, counts the visit and loads the published notes (each once), runs the note form's and the message form's `Idle → Sending → Sent | Failed`, and counts a LinkedIn or GitHub click once per link per page load. |
 | `ui/PageItems` | Flattens the portfolio into keyed lazy-list rows for the current column count, the projects split into their two groups (work first, each group's first row carrying its title and note). Pure, unit-tested. |
-| `ui/sections` | The page's rows. Projects use `WorkCard` (figures, no media: the code is the employer's) or `ProjectCard` (cover or clip). The hero carries the live line (`LiveStats`); the Contact section the published `NoteCards` and the `FeedbackForm`. |
+| `ui/sections` | The page's rows. Projects use `WorkCard` (figures, no media: the code is the employer's) or `ProjectCard` (cover or clip). The hero carries the live line (`LiveStats`); the Contact section the private `MessageForm`, then the published `NoteCards` and the public `FeedbackForm`. |
 | `ui/PortfolioScreen` | Stateless page: adaptive layout from `WindowSizeClass`, nav, reveal animation, list ↔ detail switch. |
 | `ui/navigation` | `Route` (`Home` / `Project(id)`, parsed from and written to `#/projects/<id>`) and the `Navigator` interface. The web's `HashNavigator` (wasmJsMain) keeps it in browser history; the desktop uses `InMemoryNavigator`. Provided per platform by `di/platformModule` (expect/actual). |
 | `ui/detail` | `ProjectDetailScreen` (two columns on expanded, one below) and `ModuleDiagram`, bands of cards from `ModuleGraph.layers` that wrap to the width instead of scrolling. |
 | `ui/CoverPlayback` | Which card covers may play: on screen, most visible first, at most two. Pure, unit-tested. |
 | `ui/theme` | The palette (neutral zinc, one blue accent; a light and a dark scale), the type scale, and the theme switch: light unless the visitor asks for dark, never the OS's choice. `App` keeps the choice through `savedDarkTheme`/`saveDarkTheme` (expect/actual: the browser's localStorage on the web, where the template's head script applies the same key before the static page's first paint; Java preferences on the desktop). A switch spreads the new theme from the switch: `ThemeReveal` keeps the page's last frame in a graphics layer, swaps the theme under a picture of it and cuts a growing circle out of the picture (under reduced motion the picture fades instead). |
 | `model/ModuleGraph` | The module graph's rules: cycles, and the layers that put every module above what it uses. Pure, unit-tested. |
-| `site/StaticHtml` | Renders the crawlable HTML twin of the page, plus `sitemap.xml` and `robots.txt`. With an `api`, that includes the note form (posting to the worker, with or without the page's script) and the visit count's place, which the template's script fills. The page loads the app as `composeApp.js?v=<build>`, the build id `generateStaticSite` passes in (the git commit; the build time where there is no git): GitHub Pages caches every file for ten minutes, and a plain `composeApp.js` could be the previous deploy's, pointing at wasm files that are gone (those are content-hashed already). |
+| `site/StaticHtml` | Renders the crawlable HTML twin of the page, plus `sitemap.xml` and `robots.txt`. With an `api`, that includes the message and note forms (posting to the worker, with or without the page's script), the visit count's place, which the template's script fills, and `data-track` on the LinkedIn and GitHub links for its click beacon. The page loads the app as `composeApp.js?v=<build>`, the build id `generateStaticSite` passes in (the git commit; the build time where there is no git): GitHub Pages caches every file for ten minutes, and a plain `composeApp.js` could be the previous deploy's, pointing at wasm files that are gone (those are content-hashed already). |
 | `worker/` | The backend itself: one Cloudflare Worker over one D1 database (`migrations/`), plain JavaScript with no dependencies, tested in Node against SQLite. Routes, limits and rules in `worker/src/handler.js`; the owner's inbox page, with its publish/hide/delete buttons, in `inbox.js`. |
 | `di/AppModule` | Koin wiring: dispatcher, repository, ViewModel. |
+
+## Link clicks and private messages
+
+A click on the profile's LinkedIn or GitHub link opens the link first; only then does `LinkButton` tell the
+ViewModel, whose `trackClick` sends `POST /clicks {"link":"linkedin"}` on its own coroutine at most once per link per
+page load and drops any failure, so the link never waits on it or fails with it. In the browser `HttpSiteApi` hands
+the click to a `Beacon` (`navigator.sendBeacon`, `text/plain`, no CORS preflight), which outlives the tab; elsewhere
+it goes through the `HttpTransport`, and the desktop (`countsVisits = false`) sends nothing. The static page's
+script does the same for its `data-track` links. The worker counts a click once per visitor per day per link, by the
+salted daily hash it uses for visits; nothing is kept on the device. The private message form (`MessageDraft`,
+`POST /messages`) mirrors the note form, its rules the worker's own sentences in the worker's order, and is badged
+Private against the note form's Public; only the owner reads a message, and the site never shows one.
+
+## Android
+
+```
+androidApp/  com.android.application, applicationId dev.yowkey.portfolio ("Yowkey")
+  YowkeyApplication ── startKoin(appModule, platformModule, ownerModule) · AndroidThemeStore.init · channels · PollWorker
+  MainActivity ── YowkeyRoot ─┬─ guest view: App() (the shared page, unchanged) + BackHandler → Navigator.back()
+       ▲                      ├─ SignInScreen ─┐
+       │ OwnerLink            └─ AdminScreen ──┴─ OwnerViewModel ── OwnerSession ── AdminApi ──► worker /admin/*
+       │ (shortcut "Owner",       Dashboard · Messages · Notes · Records · Settings        │
+       │  notification taps)                                                               └─ OwnerStore + TokenCipher
+  push/  PushService (FCM data message) ─┐                                                   (prefs; token sealed with an
+         PollWorker (WorkManager, 15 min)┴─► AlertNotifier: notification id = record id,      Android Keystore AES-GCM key)
+         RegisterWorker (POST /admin/devices)   channels messages / notes / daily, tap → OwnerLink
+composeApp/  com.android.kotlin.multiplatform.library (namespace dev.yowkey.portfolio.shared), next to jvm and wasmJs
+  androidMain/  UrlConnectionTransport (HttpTransport + AdminTransport) · platformModule (InMemoryNavigator,
+                HttpSiteApi(countsVisits from AndroidHost)) · ClipVideo (ExoPlayer → TextureView) · AnimatedClip
+                (first frame) · ThemeStore (SharedPreferences)
+  commonMain/admin/  AdminApi, AdminTransport, the owner routes' DTOs, and the pure rules (filters, the 30-day
+                series, top countries, the backup check's cursor), tested in commonTest/admin
+  skikoMain/  what the desktop and the web share and Android has not: AnimatedClip over Skia's Codec
+```
+
+| Piece | One job |
+|---|---|
+| Guest view | The portfolio exactly as on the web: the shared `App`, kept clear of the system bars and the keyboard (edge to edge, `safeDrawing` insets), Back popping the in-memory `Navigator`. It counts its visit and clicks like a browser (`countsVisits = true`) only when the owner was signed out when the app started. Card covers, the viewer and the detail hero play the clips' 60 fps `.mp4` twins with Media3 ExoPlayer, muted and looping, paused while `playing` is false or the window is hidden; a failed video falls back to the WebP, which Android, with no Skia, shows as its first frame. |
+| Way in | The guest UI is untouched: a static launcher shortcut, "Owner" (long-press the icon), and every notification open MainActivity with an `OwnerLink` (`yowkey-owner://messages/34`, no intent filter). Signed in, the app opens on the admin view, which has "Portfolio" in its top bar; from the guest view the owner gets back with Back or the corner button, which guests never see. |
+| `OwnerSession` | Signs in by checking the password (the worker's `ADMIN_TOKEN`) with `GET /admin/summary`, then seals it in the Keystore, notes where the alert records stand, schedules the backup check and registers for push. A 401 anywhere signs out to the sign-in screen with the reason; sign-out sends `DELETE /admin/devices`, cancels the work, unregisters from FCM and clears the notifications. The server is `Portfolio.api` from the bundled `portfolio.json`. |
+| `AdminApi` | The owner routes over an `AdminTransport` (an `HttpTransport` that also takes headers, for the bearer token): JSON with `ignoreUnknownKeys`, the worker's `{error}` sentence as the error, 401 as `AdminSignedOutException`, nothing reached as an offline error. |
+| Push | Firebase Cloud Messaging, data-only. The config file (`androidApp/google-services.json`) is never committed; the build applies the Google services plugin only when it is there. Without it the app builds and runs the same with push off. `PushService` turns each message into the notification the backup check would make; `onRegistered`/`onNewToken` re-register while signed in. |
+| Backup check | `PollWorker`, periodic every 15 minutes with a network constraint, only while signed in: `GET /admin/notifications?after=<cursor>` (oldest first), each record through the same `AlertNotifier`, the cursor and the ids already shown kept in `OwnerStore` (`planPoll`). Its first run only notes the newest id, so old alerts never flood in. Settings has "Check now". |
+| Theme | The page's own: light unless the visitor (or the owner, in Settings) switches, kept in `AndroidThemeStore`; the admin view and the system bars' icons follow the same choice. |
+| Debug only | `DebugApi` (src/debug; src/release has a no-op twin) redirects every request to a local worker given with `--es debug_api http://10.0.2.2:8787`, and the debug network config allows plain HTTP to 10.0.2.2 and localhost only. |
 
 ## Performance notes
 
