@@ -63,7 +63,8 @@ fun FeedbackForm(
 ) {
     Column(modifier.widthIn(max = 640.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         FormTitle(FeedbackCopy.TITLE, FeedbackCopy.PUBLIC)
-        Text(FeedbackCopy.INTRO, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        val intro = MaterialTheme.typography.bodyMedium
+        Text(FeedbackCopy.INTRO, style = intro, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.readingMeasure(intro))
         if (state is FeedbackUiState.Sent) SentNote(onReset) else DraftForm(state, onSend, wide)
     }
 }

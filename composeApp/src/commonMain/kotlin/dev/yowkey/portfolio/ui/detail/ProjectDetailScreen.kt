@@ -24,6 +24,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.Typography
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -49,13 +50,16 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import dev.yowkey.portfolio.model.Decision
 import dev.yowkey.portfolio.model.Engineering
 import dev.yowkey.portfolio.model.GalleryItem
@@ -80,10 +84,12 @@ import dev.yowkey.portfolio.ui.image.ScreenshotViewer
 import dev.yowkey.portfolio.ui.image.ViewerMediaImage
 import dev.yowkey.portfolio.ui.image.ViewerRequest
 import dev.yowkey.portfolio.ui.sections.FigureList
+import dev.yowkey.portfolio.ui.sections.ParagraphGap
 import dev.yowkey.portfolio.ui.sections.MediaFrame
 import dev.yowkey.portfolio.ui.sections.mediaFrameCorner
 import dev.yowkey.portfolio.ui.sections.ProjectHeading
 import dev.yowkey.portfolio.ui.sections.ScreenshotStrip
+import dev.yowkey.portfolio.ui.sections.readingMeasure
 import dev.yowkey.portfolio.ui.theme.LocalReducedMotion
 import dev.yowkey.portfolio.ui.theme.PortfolioTheme
 
@@ -94,7 +100,10 @@ import dev.yowkey.portfolio.ui.theme.PortfolioTheme
  * contributions and the optimizations and audits, then how it is built.
  *
  * Expanded windows put the media on the left and the text on the right, the media staying in view while the text
- * scrolls; narrower ones stack everything in one column. Back is the top bar's button, Escape, the button at the end, or the browser's Back (via the router).
+ * scrolls; narrower ones, and any project without media, read as one article column no wider than [ArticleWidth],
+ * centred. Its headings are the page's section headings, its long text keeps to the reading measure, and the lead
+ * media carries its caption under it. Back is the top bar's button, Escape, the button at the end, or the browser's
+ * Back (via the router).
  * The cover clip plays while the screen shows, except under reduced motion and while the viewer is open (the
  * viewer plays its own copy).
  */
@@ -129,11 +138,8 @@ fun ProjectDetailScreen(
     ) {
         DetailTopBar(project.title, onBack, layout.gutter, scrolled = { scroll.value > 0 })
         Box(Modifier.weight(1f).fillMaxWidth().verticalScroll(scroll), contentAlignment = Alignment.TopCenter) {
-            val content = Modifier
-                .widthIn(max = if (twoColumns || lead != null) PageLayout.MaxWidth else TextColumnMaxWidth)
-                .fillMaxWidth()
-                .padding(horizontal = layout.gutter)
-                .padding(top = if (layout.compact) 20.dp else 40.dp, bottom = 96.dp)
+            val ends = Modifier.padding(top = if (layout.compact) 20.dp else 40.dp, bottom = 96.dp)
+            val gap = if (layout.compact) SectionGapCompact else SectionGap
             val leadIndex = lead?.let { gallery.indexOf(it) } ?: 0
             // Under reduced motion the hero clip waits for the reader's Play instead of starting on its own.
             var chosenToPlay by remember(project) { mutableStateOf(false) }
@@ -144,7 +150,14 @@ fun ProjectDetailScreen(
                 // together. The offset is read in the layer, so scrolling moves it without recomposing anything.
                 var rowHeight by remember { mutableIntStateOf(0) }
                 var mediaHeight by remember { mutableIntStateOf(0) }
-                Row(content.onSizeChanged { rowHeight = it.height }) {
+                Row(
+                    Modifier
+                        .widthIn(max = PageLayout.MaxWidth)
+                        .fillMaxWidth()
+                        .padding(horizontal = layout.gutter)
+                        .then(ends)
+                        .onSizeChanged { rowHeight = it.height },
+                ) {
                     Column(
                         Modifier
                             .weight(0.92f)
@@ -152,18 +165,22 @@ fun ProjectDetailScreen(
                             .graphicsLayer {
                                 translationY = scroll.value.toFloat().coerceIn(0f, (rowHeight - mediaHeight).coerceAtLeast(0).toFloat())
                             },
-                        verticalArrangement = Arrangement.spacedBy(28.dp),
+                        verticalArrangement = Arrangement.spacedBy(gap),
                     ) {
                         DetailMedia(lead!!, playing, compact = false, onOpen = { openViewer(leadIndex) }, onTogglePlay = togglePlay)
                         GallerySection(strip, gallery.indexOf(strip.firstOrNull()), openViewer)
                     }
                     Spacer(Modifier.width(48.dp))
-                    Column(Modifier.weight(1.08f), verticalArrangement = Arrangement.spacedBy(SectionGap)) {
+                    Column(Modifier.weight(1.08f), verticalArrangement = Arrangement.spacedBy(gap)) {
                         DetailText(project, compact = false, onBack = onBack)
                     }
                 }
             } else {
-                Column(content, verticalArrangement = Arrangement.spacedBy(SectionGap)) {
+                // Gutters first, then the cap, so the column is the article's width and the gutters stay outside it.
+                Column(
+                    Modifier.padding(horizontal = layout.gutter).then(ends).widthIn(max = ArticleWidth).fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(gap),
+                ) {
                     lead?.let { DetailMedia(it, playing, compact = layout.compact, onOpen = { openViewer(leadIndex) }, onTogglePlay = togglePlay) }
                     DetailText(project, compact = layout.compact, onBack = onBack, gallery = {
                         GallerySection(strip, gallery.indexOf(strip.firstOrNull()), openViewer)
@@ -189,7 +206,10 @@ private fun DetailText(project: Project, compact: Boolean, onBack: () -> Unit, g
     }
     if (project.highlights.isNotEmpty()) {
         DetailSection(project.highlightsTitle) {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) { project.highlights.forEach { Bullet(it) } }
+            Column(
+                Modifier.readingMeasure(MaterialTheme.typography.bodyMedium),
+                verticalArrangement = Arrangement.spacedBy(ParagraphGap),
+            ) { project.highlights.forEach { Bullet(it) } }
         }
     }
     if (project.optimizations.isNotEmpty()) {
@@ -210,15 +230,27 @@ private fun DetailText(project: Project, compact: Boolean, onBack: () -> Unit, g
 @Composable
 private fun DetailHeader(project: Project, compact: Boolean) {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        // A step above the section headings that follow, on a phone too.
         ProjectHeading(
             project,
-            if (compact) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.displayMedium,
+            if (compact) MaterialTheme.typography.displaySmall else MaterialTheme.typography.displayMedium,
             iconSize = if (compact) 48.dp else 64.dp,
         )
+        val typography = MaterialTheme.typography
         project.tagline?.let {
-            Text(it, style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurface)
+            Text(
+                it,
+                style = typography.headlineSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.readingMeasure(typography.headlineSmall),
+            )
         }
-        Text(project.summary, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            project.summary,
+            style = typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.readingMeasure(typography.bodyLarge),
+        )
         project.disclaimer?.let { Disclaimer(it) }
     }
 }
@@ -231,6 +263,7 @@ private fun Disclaimer(text: String) {
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier
+            .readingMeasure(MaterialTheme.typography.bodyMedium)
             .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(10.dp))
             .padding(horizontal = 16.dp, vertical = 12.dp),
     )
@@ -248,7 +281,8 @@ private fun HowItsBuilt(engineering: Engineering) {
                 }
             }
             engineering.architecture?.let {
-                Text(it, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+                val style = MaterialTheme.typography.bodyLarge
+                Text(it, style = style, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.readingMeasure(style))
             }
             if (engineering.modules.isNotEmpty()) {
                 SubSection("Modules") { ModuleDiagram(engineering.modules) }
@@ -288,9 +322,15 @@ private fun Decisions(decisions: List<Decision>) {
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(top = 3.dp),
                 )
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(decision.title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-                    Text(decision.detail, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    val detail = MaterialTheme.typography.bodyMedium
+                    Text(
+                        decision.detail,
+                        style = detail,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.readingMeasure(detail),
+                    )
                 }
             }
         }
@@ -301,22 +341,25 @@ private fun Decisions(decisions: List<Decision>) {
 @Composable
 private fun ImpactList(items: List<String>) {
     val rule = MaterialTheme.colorScheme.primary
+    val style = MaterialTheme.typography.bodyLarge
     Column(
         Modifier
+            .readingMeasure(style)
             .drawBehind {
                 val x = 1.5.dp.toPx()
                 drawLine(rule, Offset(x, 0f), Offset(x, size.height), 3.dp.toPx())
             }
             .padding(start = 20.dp),
+        // A paragraph apart, as ParagraphGap is for the smaller text: about 0.75em of bodyLarge.
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        items.forEach { Text(it, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface) }
+        items.forEach { Text(it, style = style, color = MaterialTheme.colorScheme.onSurface) }
     }
 }
 
 @Composable
 private fun Checklist(items: List<String>) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(Modifier.readingMeasure(MaterialTheme.typography.bodyMedium), verticalArrangement = Arrangement.spacedBy(ParagraphGap)) {
         items.forEach { item ->
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
                 CheckGlyph(MaterialTheme.colorScheme.primary, Modifier.padding(top = 2.dp))
@@ -348,12 +391,13 @@ private fun Links(links: List<Link>) {
     }
 }
 
+/** A section of the article, headed at the page's section scale so the two screens read as one hierarchy. */
 @Composable
 private fun DetailSection(title: String, content: @Composable () -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
         Text(
             title,
-            style = MaterialTheme.typography.titleLarge,
+            style = MaterialTheme.typography.headlineMedium,
             color = MaterialTheme.colorScheme.onBackground,
             modifier = Modifier.semantics { heading() },
         )
@@ -361,12 +405,13 @@ private fun DetailSection(title: String, content: @Composable () -> Unit) {
     }
 }
 
+/** A part of a section, labelled in accent capitals as the page labels a group inside a section. */
 @Composable
 private fun SubSection(title: String, content: @Composable () -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text(
             title.uppercase(),
-            style = MaterialTheme.typography.labelMedium,
+            style = MaterialTheme.typography.labelLarge.copy(letterSpacing = 1.4.sp),
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.semantics { heading() },
         )
@@ -376,7 +421,8 @@ private fun SubSection(title: String, content: @Composable () -> Unit) {
 
 /**
  * The lead media, large, on the same accent wash as the card's stage: the cover clip playing (its poster first),
- * or the full-size still. Tapping it opens the viewer there.
+ * or the full-size still. Tapping it opens the viewer there. Its caption sits under it, as under a figure; the
+ * media already says it to a screen reader (it is the image's description), so the caption is not said twice.
  */
 @Composable
 private fun DetailMedia(
@@ -391,44 +437,57 @@ private fun DetailMedia(
     val base = scheme.surfaceVariant
     val glow = scheme.primary.copy(alpha = 0.16f)
     val portrait = item.shot.aspectRatio < 1f
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .drawWithCache {
-                val gradient = Brush.verticalGradient(listOf(wash, base))
-                val halo = Brush.radialGradient(
-                    listOf(glow, glow.copy(alpha = 0f)),
-                    center = Offset(size.width / 2, size.height * 0.35f),
-                    radius = size.maxDimension * 0.6f,
-                )
-                onDrawBehind {
-                    drawRect(gradient)
-                    drawRect(halo)
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(20.dp))
+                .drawWithCache {
+                    val gradient = Brush.verticalGradient(listOf(wash, base))
+                    val halo = Brush.radialGradient(
+                        listOf(glow, glow.copy(alpha = 0f)),
+                        center = Offset(size.width / 2, size.height * 0.35f),
+                        radius = size.maxDimension * 0.6f,
+                    )
+                    onDrawBehind {
+                        drawRect(gradient)
+                        drawRect(halo)
+                    }
+                }
+                .clickable(onClickLabel = if (item.isClip) "Open the clip" else "View larger", role = Role.Button, onClick = onOpen)
+                .padding(if (portrait) 28.dp else if (compact) 14.dp else 24.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            val box = if (portrait) Modifier.height(if (compact) PortraitHeroCompact else PortraitHero) else Modifier.fillMaxWidth()
+            MediaFrame(item.shot, box) { frame ->
+                if (item.isClip) {
+                    // Under reduced motion the Play/Pause button sits over the clip, and a video would hide it: keep the WebP.
+                    CoverClip(
+                        item.shot,
+                        playing,
+                        frame,
+                        cornerRadius = mediaFrameCorner(item.shot),
+                        videoAllowed = !LocalReducedMotion.current,
+                    )
+                } else {
+                    ViewerMediaImage(item, playing = false, modifier = frame)
                 }
             }
-            .clickable(onClickLabel = if (item.isClip) "Open the clip" else "View larger", role = Role.Button, onClick = onOpen)
-            .padding(if (portrait) 28.dp else if (compact) 14.dp else 24.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        val box = if (portrait) Modifier.height(if (compact) PortraitHeroCompact else PortraitHero) else Modifier.fillMaxWidth()
-        MediaFrame(item.shot, box) { frame ->
-            if (item.isClip) {
-                // Under reduced motion the Play/Pause button sits over the clip, and a video would hide it: keep the WebP.
-                CoverClip(
-                    item.shot,
-                    playing,
-                    frame,
-                    cornerRadius = mediaFrameCorner(item.shot),
-                    videoAllowed = !LocalReducedMotion.current,
-                )
-            } else {
-                ViewerMediaImage(item, playing = false, modifier = frame)
-            }
+            onTogglePlay?.let { toggle -> PlayPauseButton(playing = playing, onToggle = toggle) }
         }
-        onTogglePlay?.let { toggle -> PlayPauseButton(playing = playing, onToggle = toggle) }
+        val caption = MaterialTheme.typography.mediaCaption
+        Text(
+            item.shot.caption,
+            style = caption,
+            color = scheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 4.dp).readingMeasure(caption).clearAndSetSemantics {},
+        )
     }
 }
+
+/** A caption under media: smaller than body text and muted, as a figure's caption is. */
+private val Typography.mediaCaption: TextStyle
+    get() = bodySmall.copy(fontSize = 13.sp, lineHeight = 20.sp, letterSpacing = 0.2.sp)
 
 /**
  * The detail screen's bar: back, the project's title so a visitor deep in the page knows where they are, and the
@@ -468,8 +527,12 @@ private fun DetailTopBar(title: String, onBack: () -> Unit, gutter: Dp, scrolled
     }
 }
 
-private val SectionGap = 40.dp
-private val TextColumnMaxWidth = 760.dp
+/** Between the article's sections: about twice a section heading's size, so each section starts clearly new. */
+private val SectionGap = 56.dp
+private val SectionGapCompact = 44.dp
+
+/** The article column: the reading measure plus room for figures, chips and the module diagram beside it. */
+private val ArticleWidth = 720.dp
 private val PortraitHero = 520.dp
 private val PortraitHeroCompact = 440.dp
 

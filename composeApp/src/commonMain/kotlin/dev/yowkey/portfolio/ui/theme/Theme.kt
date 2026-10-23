@@ -60,6 +60,13 @@ private val DarkColors = darkColorScheme(
 
 private val BaseTypography = Typography()
 
+/**
+ * One scale for both screens, so a heading means the same thing wherever it is: display for the name and a
+ * project's title; headlineMedium for every section, the page's and the project page's; headlineSmall for a lead
+ * sentence (the hero's headline, the Contact line, a project's tagline); titleLarge for cards and forms;
+ * titleMedium for an item in a list (a job, an award, a decision). Body text is set at 1.6 times its size, the
+ * line height long text reads easiest at; headings sit tighter, since they are one or two lines.
+ */
 private val PortfolioTypography = BaseTypography.copy(
     displayLarge = BaseTypography.displayLarge.copy(
         fontWeight = FontWeight.Bold, fontSize = 72.sp, lineHeight = 76.sp, letterSpacing = (-2).sp,
@@ -67,12 +74,16 @@ private val PortfolioTypography = BaseTypography.copy(
     displayMedium = BaseTypography.displayMedium.copy(
         fontWeight = FontWeight.Bold, fontSize = 48.sp, lineHeight = 52.sp, letterSpacing = (-1.2).sp,
     ),
+    // A project's title on a phone: a step above the section headings under it, small enough for two words a line.
+    displaySmall = BaseTypography.displaySmall.copy(
+        fontWeight = FontWeight.Bold, fontSize = 36.sp, lineHeight = 42.sp, letterSpacing = (-0.8).sp,
+    ),
     headlineMedium = BaseTypography.headlineMedium.copy(fontWeight = FontWeight.SemiBold, letterSpacing = (-0.5).sp),
     headlineSmall = BaseTypography.headlineSmall.copy(fontWeight = FontWeight.Normal, lineHeight = 34.sp),
     titleLarge = BaseTypography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
     titleMedium = BaseTypography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-    bodyLarge = BaseTypography.bodyLarge.copy(fontSize = 18.sp, lineHeight = 28.sp),
-    bodyMedium = BaseTypography.bodyMedium.copy(fontSize = 15.sp, lineHeight = 23.sp),
+    bodyLarge = BaseTypography.bodyLarge.copy(fontSize = 18.sp, lineHeight = 29.sp),
+    bodyMedium = BaseTypography.bodyMedium.copy(fontSize = 15.sp, lineHeight = 24.sp),
     labelLarge = BaseTypography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
     labelMedium = BaseTypography.labelMedium.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 1.4.sp),
 )
