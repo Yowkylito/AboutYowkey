@@ -44,6 +44,59 @@
   ],
   "projects": [
     {
+      "id": "pawffice",
+      "visibility": "private",
+      "cover": {
+        "file": "pawffice-cover.webp",
+        "caption": "Pawffice's loading screen: \"Reading your staff record…\" over the town",
+        "width": 1600,
+        "height": 900
+      },
+      "title": "Pawffice",
+      "summary": "A local-first, multi-agent AI workspace for the desktop, presented as a 3D town where a crew of cats takes your prompts.",
+      "period": "Aug 2026 – Present",
+      "highlights": [
+        "Classifies each prompt into ordered AI stages and feeds every stage the previous one's output",
+        "Pricing gates before anything runs, repository-path isolation and rate-limit handling",
+        "13 P0 build-blocking tests guard the cost and security rules"
+      ],
+      "stack": ["Rust", "Tauri 2", "SQLite", "TypeScript", "JavaScript", "SVG"],
+      "clips": [
+        {
+          "file": "pawffice-ride.webp",
+          "caption": "The crew rides along in your car while Pumpkin and Earl Whiskers answer in the crew thread",
+          "width": 480,
+          "height": 271
+        }
+      ],
+      "screenshots": [
+        {
+          "file": "pawffice-town.webp",
+          "caption": "The town: walk your cat around while the crew thread on the right takes prompts",
+          "width": 1600,
+          "height": 900
+        },
+        {
+          "file": "pawffice-crew-answer.webp",
+          "caption": "Crew members answer in the thread, each in their own role",
+          "width": 1600,
+          "height": 900
+        },
+        {
+          "file": "pawffice-hiring.webp",
+          "caption": "Onboarding: the CEO cat \"hires\" you with four questions",
+          "width": 1600,
+          "height": 900
+        },
+        {
+          "file": "pawffice-wardrobe.webp",
+          "caption": "The wardrobe: breed, coat and outfit for your cat",
+          "width": 1600,
+          "height": 900
+        }
+      ]
+    },
+    {
       "id": "bubuprotect",
       "visibility": "public",
       "cover": {
@@ -331,59 +384,6 @@
         "AI-assisted retries and on-device Gemini prompt refinement"
       ],
       "stack": ["Kotlin", "Jetpack Compose", "Ktor", "Koin", "DataStore", "SSE", "Firebase AI"]
-    },
-    {
-      "id": "pawffice",
-      "visibility": "private",
-      "cover": {
-        "file": "pawffice-cover.webp",
-        "caption": "Pawffice's loading screen: \"Reading your staff record…\" over the town",
-        "width": 1600,
-        "height": 900
-      },
-      "title": "Pawffice",
-      "summary": "A local-first, multi-agent AI workspace for the desktop, presented as a 3D town where a crew of cats takes your prompts.",
-      "period": "Aug 2026 – Present",
-      "highlights": [
-        "Classifies each prompt into ordered AI stages and feeds every stage the previous one's output",
-        "Pricing gates before anything runs, repository-path isolation and rate-limit handling",
-        "13 P0 build-blocking tests guard the cost and security rules"
-      ],
-      "stack": ["Rust", "Tauri 2", "SQLite", "TypeScript", "JavaScript", "SVG"],
-      "clips": [
-        {
-          "file": "pawffice-ride.webp",
-          "caption": "The crew rides along in your car while Pumpkin and Earl Whiskers answer in the crew thread",
-          "width": 480,
-          "height": 271
-        }
-      ],
-      "screenshots": [
-        {
-          "file": "pawffice-town.webp",
-          "caption": "The town: walk your cat around while the crew thread on the right takes prompts",
-          "width": 1600,
-          "height": 900
-        },
-        {
-          "file": "pawffice-crew-answer.webp",
-          "caption": "Crew members answer in the thread, each in their own role",
-          "width": 1600,
-          "height": 900
-        },
-        {
-          "file": "pawffice-hiring.webp",
-          "caption": "Onboarding: the CEO cat \"hires\" you with four questions",
-          "width": 1600,
-          "height": 900
-        },
-        {
-          "file": "pawffice-wardrobe.webp",
-          "caption": "The wardrobe: breed, coat and outfit for your cat",
-          "width": 1600,
-          "height": 900
-        }
-      ]
     },
     {
       "id": "myai",
