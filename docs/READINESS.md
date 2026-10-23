@@ -22,8 +22,16 @@ apply; what does is below. `[x]` done, `[ ]` open, `N/A` with the reason.
   form from any site. All of it tested in Node against SQLite
 - [x] A note is shown on the site only with the visitor's tick and the owner's click, with the name, the stars and
   the words; the contact never leaves the inbox. `GET /notes` is the only public read, cached for a minute
-- [x] No secrets in the repo or the bundle: the worker's are set with `wrangler secret put`, and its local
-  `.dev.vars` is gitignored. CI runs gitleaks over the full history
+- [x] Link clicks and countries keep nothing about a person: a click is counted once per visitor per day per link
+  by the same daily hash as a visit (the hashes deleted with the next day's first click), only for the links in
+  `TRACKED_LINKS`, never for a bot; a country is Cloudflare's guess from the address, stored only as a count per
+  country per day. Neither is ever next to a visitor id
+- [x] Messages are private: never on the site, 3 per visitor per day, the same limits and trap field as notes. The
+  owner's app reads them, the notes and the counts over `/admin/` with the same `ADMIN_TOKEN` as a Bearer token,
+  answered `no-store`; the phones' push tokens are dropped when FCM says they are dead. A push carries a visitor's
+  contact only for a message (who to write back to), and only to the owner's phone
+- [x] No secrets in the repo or the bundle: the worker's (the Firebase service-account key included) are set with
+  `wrangler secret put`, and its local `.dev.vars` is gitignored. CI runs gitleaks over the full history
 - [x] Links limited to `https://` and `mailto:` by the parser (blocks `javascript:` URLs in content)
 - [x] Project ids limited to `a-z`, `0-9` and `-` by the parser: they are written into the URL fragment and into HTML
   `id`s, and the router only accepts that shape back
@@ -58,10 +66,12 @@ apply; what does is below. `[x]` done, `[ ]` open, `N/A` with the reason.
 ## 4. Database
 
 - Content is one JSON file in the repo, versioned by git
-- Visits and notes live in a D1 (SQLite) database on Cloudflare: `worker/migrations/`, applied in order by
-  `npm run db:init` (wrangler remembers which have run). Three tables: `visits` (a count per day), `visitors`
-  (today's hashes, deleted the next day) and `feedback` (with `consent`, `published_at`, `hidden_at`). Nothing
-  identifying is kept beyond what a visitor types into the form
+- Visits, clicks, notes and messages live in a D1 (SQLite) database on Cloudflare: `worker/migrations/`, applied in
+  order by `npm run db:init` (wrangler remembers which have run). Counts by the owner's local day (Asia/Manila):
+  `visits`, `visit_countries` and `clicks`; today's hashes, deleted the next day: `visitors` and `clickers`; what
+  visitors write: `feedback` (with `consent`, `published_at`, `hidden_at`, `day`) and `messages` (with `read_at`,
+  `archived_at`); the owner's: `notifications` (every alert), `devices` (the phones' FCM tokens) and
+  `daily_reports`. Nothing identifying is kept beyond what a visitor types into a form
 
 ## 5. Real-world testing
 
@@ -88,6 +98,10 @@ performance warn).
 - [x] Visit counts (once per visitor per day, no addresses kept) and a feedback inbox, on the site's own worker. The
   page shows them once `portfolio.json` names the worker (README, "Visits and feedback"); the notes the owner
   publishes, and their rating, show on the page too
+- [x] The owner hears about a new note or message as it arrives, and gets the day's numbers at 23:59 Manila time:
+  each is kept as a record the Android app polls every 15 minutes, and pushed through FCM once the
+  `FCM_SERVICE_ACCOUNT` secret is set (README, "Visits and feedback"). A failed push never fails the visitor's
+  request
 - [ ] Custom domain (`CNAME`). Trigger: when a domain is bought
 
 ## Not done
@@ -98,5 +112,4 @@ performance warn).
 - Android / iOS targets. Trigger: when an app-store demo is wanted
 - Custom font. The default font is used; bundling Inter (as in The Eagle's Watch) is a small follow-up
 - `og:image` for link previews. Trigger: when there is artwork for it
-- A notification for a new note (email, say): the inbox is pulled, not pushed. Trigger: when checking it becomes a chore
 - Editing a published note's words (a typo the visitor made, say): today it is publish as is or not at all. Trigger: the first such note
