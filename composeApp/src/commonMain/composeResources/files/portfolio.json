@@ -760,7 +760,7 @@
       "id": "seventhj",
       "icon": "seventhj.webp",
       "visibility": "private",
-      "cover": { "file": "seventhj-cover.webp", "caption": "Seventh J's splash: the SJ mark and wordmark on an obsidian ground", "width": 720, "height": 1600 },
+      "cover": { "file": "seventhj-cover.webp", "caption": "Seventh J's splash: the SJ mark and wordmark over a starry night sky", "width": 720, "height": 1600 },
       "coverClip": {
         "file": "seventhj-splash.webp",
         "caption": "Seventh J's splash: brush strokes spiral in over a starry night sky and settle into the SJ mark",
@@ -773,8 +773,8 @@
       "summary": "An inventory and dealer-floor app for a Makati art gallery, built once in Compose Multiplatform for Android, iOS and the web. Runs on sample data while the data layer is built.",
       "period": "Aug 2026",
       "highlights": [
-        "Painterly splash: 900 strokes follow a flow field and converge onto the logo's own pixels (260 on the web)",
-        "Home tuned to the frame budget: figures and sparkline animate only in view; skeletons animate in the draw phase",
+        "Starry Night splash: 960 strokes share one flow field, and the mark's own strokes spiral into its pixels",
+        "Sculptures turn in a software 3D renderer in shared code: about a thousand faces a piece, no allocation per frame",
         "One Compose UI on three targets, with a Navigation 3 back stack that iOS and Wasm can restore"
       ],
       "engineering": {
@@ -792,7 +792,7 @@
           },
           {
             "title": "Animation budgeted per platform",
-            "detail": "The 900-stroke painterly splash plays once per process on Android and iOS only. It is skipped on the web, on warm start and under reduced motion, because that many canvas strokes would stall a browser tab."
+            "detail": "The 960-stroke Starry Night splash plays once per process on Android and iOS only. It is skipped on the web, on warm start and under reduced motion, because that many canvas strokes would stall a browser tab."
           },
           {
             "title": "State modelled before the data source",
@@ -834,22 +834,27 @@
         }
       ],
       "screenshots": [
-        { "file": "seventhj-home.webp", "caption": "Home: the greeting, then the approvals waiting on you (sample data)", "width": 720, "height": 1600 },
         {
-          "file": "seventhj-figures.webp",
-          "caption": "The month's figures, an eight-month sales sparkline and the floor alerts (sample data)",
+          "file": "seventhj-home.webp",
+          "caption": "Home: the stock's value, the requests that need you and the watchlist (sample data)",
           "width": 720,
           "height": 1600
         },
         {
-          "file": "seventhj-approval.webp",
-          "caption": "An approval opened from Home through a shared-element transition, with asking vs. sold price (sample data)",
+          "file": "seventhj-sculpture.webp",
+          "caption": "The sculpture room: a piece from the software 3D renderer that you drag to turn (sample data)",
           "width": 720,
           "height": 1600
         },
         {
-          "file": "seventhj-approvals.webp",
-          "caption": "Every open request, sortable by date, requester, location or amount (sample data)",
+          "file": "seventhj-sale.webp",
+          "caption": "A sale in a sheet: its steps from approval to delivery, then the price, discount and commission (sample data)",
+          "width": 720,
+          "height": 1600
+        },
+        {
+          "file": "seventhj-artists.webp",
+          "caption": "Artists, gallery favourites first, with each one's stock and starting price (sample data)",
           "width": 720,
           "height": 1600
         }
