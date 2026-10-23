@@ -102,4 +102,63 @@ class SiteTest {
     fun ratingLabelsRunFromPoorToExcellent() {
         assertEquals(listOf("1 · Poor", "2 · Weak", "3 · Fine", "4 · Good", "5 · Excellent"), (1..5).map(FeedbackCopy::ratingLabel))
     }
+
+    @Test
+    fun aMessageNeedsWordsAndAWayToReplyAndKeepsToTheLimits() {
+        assertEquals(emptyList(), MessageDraft(contact = "ada@example.com", message = "Hi").problems)
+        assertEquals(emptyList(), MessageDraft("Ada", "@ada on LinkedIn", "freelance", "x".repeat(MessageDraft.MAX_MESSAGE)).problems)
+        assertEquals(listOf("Leave an email or another way to reach you."), MessageDraft(contact = "  ", message = "Hi").problems)
+        assertEquals(listOf("Write a message first."), MessageDraft(contact = "a@b.c", message = " \n ").problems)
+        assertEquals(
+            listOf("Keep the message under ${MessageDraft.MAX_MESSAGE} characters."),
+            MessageDraft(contact = "a@b.c", message = "x".repeat(MessageDraft.MAX_MESSAGE + 1)).problems,
+        )
+        assertEquals(listOf("Pick one of the topics."), MessageDraft(contact = "a@b.c", topic = "spam", message = "Hi").problems)
+        assertEquals(emptyList(), MessageDraft(contact = "a@b.c", topic = " ", message = "Hi").problems, "a blank topic is none")
+    }
+
+    /** Every sentence the worker can answer with, in its order: the required fields, then the limits, then the topic. */
+    @Test
+    fun aMessagesProblemsComeInTheBackendsOrder() {
+        val nothing = MessageDraft("n".repeat(MessageDraft.MAX_NAME + 1), "", "nope", "")
+        assertEquals(
+            listOf(
+                "Write a message first.",
+                "Leave an email or another way to reach you.",
+                "Keep the name under ${MessageDraft.MAX_NAME} characters.",
+                "Pick one of the topics.",
+            ),
+            nothing.problems,
+        )
+        val tooMuch = MessageDraft("n".repeat(81), "c".repeat(MessageDraft.MAX_CONTACT + 1), "job", "x".repeat(2001))
+        assertEquals(
+            listOf("Keep the message under 2000 characters.", "Keep the name under 80 characters.", "Keep the email under 160 characters."),
+            tooMuch.problems,
+        )
+        assertEquals(
+            listOf("Leave an email or another way to reach you.", "Keep the message under 2000 characters."),
+            MessageDraft(message = "x".repeat(2001)).problems,
+        )
+    }
+
+    @Test
+    fun aNormalizedMessageIsTrimmedAndFilesNoTopicAsOther() {
+        assertEquals(MessageDraft("Ada", "a@b.c", "job", "Hi"), MessageDraft(" Ada ", " a@b.c ", " job ", "\nHi\n").normalized())
+        assertEquals("other", MessageDraft(contact = "a@b.c", message = "Hi").normalized().topic)
+    }
+
+    @Test
+    fun theTopicsAreTheBackendsFourWithTheFormsLabels() {
+        assertEquals(listOf("job", "freelance", "collaboration", "other"), MessageTopic.entries.map { it.wire })
+        assertEquals(listOf("A job", "A freelance project", "Collaboration", "Something else"), MessageTopic.entries.map { it.label })
+        assertEquals(MessageTopic.Collaboration, MessageTopic.of("collaboration"))
+        listOf(null, "", "Job", "hiring").forEach { assertNull(MessageTopic.of(it), "$it") }
+    }
+
+    @Test
+    fun onlyLinkedInAndGitHubAreTrackedByTheirLabel() {
+        assertEquals("linkedin", Link("LinkedIn", "https://www.linkedin.com/in/ada").trackingKey)
+        assertEquals("github", Link(" GitHub ", "https://github.com/ada").trackingKey)
+        listOf("Email", "Source on GitHub", "Résumé").forEach { assertNull(Link(it, "https://example.com").trackingKey, it) }
+    }
 }

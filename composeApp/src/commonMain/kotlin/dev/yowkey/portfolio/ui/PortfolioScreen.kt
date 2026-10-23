@@ -58,7 +58,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.window.core.layout.WindowSizeClass
 import dev.yowkey.portfolio.model.FeedbackDraft
+import dev.yowkey.portfolio.model.Link
 import dev.yowkey.portfolio.model.LiveStats
+import dev.yowkey.portfolio.model.MessageDraft
 import dev.yowkey.portfolio.model.Portfolio
 import dev.yowkey.portfolio.model.SiteNotes
 import dev.yowkey.portfolio.model.VisitCount
@@ -72,6 +74,7 @@ import dev.yowkey.portfolio.ui.sections.Footer
 import dev.yowkey.portfolio.ui.sections.GroupHeader
 import dev.yowkey.portfolio.ui.sections.Hero
 import dev.yowkey.portfolio.ui.sections.JobEntry
+import dev.yowkey.portfolio.ui.sections.MessageForm
 import dev.yowkey.portfolio.ui.sections.NoteCards
 import dev.yowkey.portfolio.ui.sections.ProjectCard
 import dev.yowkey.portfolio.ui.sections.ServiceCard
@@ -124,6 +127,14 @@ data class FeedbackControls(
     val onReset: () -> Unit = {},
 )
 
+/** The private message form's state and its two actions, as [FeedbackControls] are the note form's. */
+@Immutable
+data class MessageControls(
+    val state: MessageUiState = MessageUiState.Idle,
+    val onSend: (MessageDraft) -> Unit = {},
+    val onReset: () -> Unit = {},
+)
+
 /** Stateful entry: owns the ViewModel and the router. Everything below it is stateless and previewable. */
 @Composable
 fun PortfolioRoute(
@@ -140,6 +151,10 @@ fun PortfolioRoute(
     val feedbackState by viewModel.feedback.collectAsState()
     val onSendFeedback: (FeedbackDraft) -> Unit = remember(viewModel) { viewModel::sendFeedback }
     val onResetFeedback: () -> Unit = remember(viewModel) { viewModel::resetFeedback }
+    val messageState by viewModel.message.collectAsState()
+    val onSendMessage: (MessageDraft) -> Unit = remember(viewModel) { viewModel::sendMessage }
+    val onResetMessage: () -> Unit = remember(viewModel) { viewModel::resetMessage }
+    val onOpenLink: (Link) -> Unit = remember(viewModel) { viewModel::trackClick }
     val onOpenProject: (String) -> Unit = remember(navigator) { { id -> navigator.open(Route.Project(id)) } }
     val onBack: () -> Unit = remember(navigator) { { navigator.back() } }
     val onUnknownProject: () -> Unit = remember(navigator) { { navigator.replace(Route.Home) } }
@@ -156,6 +171,8 @@ fun PortfolioRoute(
         visits = visits,
         notes = notes,
         feedback = FeedbackControls(feedbackState, onSendFeedback, onResetFeedback),
+        message = MessageControls(messageState, onSendMessage, onResetMessage),
+        onOpenLink = onOpenLink,
     )
 }
 
@@ -165,6 +182,8 @@ fun PortfolioRoute(
  * @param visits the hero's count, once the site's backend has answered; null until then, or without a backend
  * @param notes the published notes and their rating, for the hero's line and the cards above the form; null likewise
  * @param feedback the note form's state and actions; the form only exists when the content names a backend
+ * @param message the private message form's state and actions; likewise only with a backend
+ * @param onOpenLink called once a profile link in the Contact section has opened, to count LinkedIn and GitHub
  */
 @Composable
 fun PortfolioScreen(
@@ -180,13 +199,18 @@ fun PortfolioScreen(
     visits: VisitCount? = null,
     notes: SiteNotes? = null,
     feedback: FeedbackControls = FeedbackControls(),
+    message: MessageControls = MessageControls(),
+    onOpenLink: (Link) -> Unit = {},
 ) {
     Surface(modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         when (state) {
             PortfolioUiState.Loading -> LoadingPage()
             is PortfolioUiState.Error -> ErrorPage(state.message, onRetry)
             is PortfolioUiState.Ready -> {
-                PortfolioContent(state.portfolio, route, platformLabel, visits, notes, feedback, onOpenProject, onBack, onUnknownProject)
+                PortfolioContent(
+                    state.portfolio, route, platformLabel, visits, notes, feedback, message, onOpenLink, onOpenProject, onBack,
+                    onUnknownProject,
+                )
                 val shown by rememberUpdatedState(onContentShown)
                 LaunchedEffect(Unit) {
                     withFrameNanos { } // after the first frame of real content is on screen
@@ -211,6 +235,8 @@ private fun PortfolioContent(
     visits: VisitCount?,
     notes: SiteNotes?,
     feedback: FeedbackControls,
+    message: MessageControls,
+    onOpenLink: (Link) -> Unit,
     onOpenProject: (String) -> Unit,
     onBack: () -> Unit,
     onUnknownProject: () -> Unit,
@@ -254,6 +280,8 @@ private fun PortfolioContent(
                 notes = notes,
                 feedback = feedback,
                 onOpenProject = onOpenProject,
+                message = message,
+                onOpenLink = onOpenLink,
             )
         } else {
             ProjectDetailScreen(shown, layout, onBack = onBack)
@@ -274,6 +302,8 @@ fun PortfolioPage(
     feedback: FeedbackControls,
     onOpenProject: (String) -> Unit,
     modifier: Modifier = Modifier,
+    message: MessageControls = MessageControls(),
+    onOpenLink: (Link) -> Unit = {},
 ) {
     val items = remember(portfolio, layout, notes) {
         buildPageItems(portfolio, layout.serviceColumns, layout.projectColumns, notes?.notes.orEmpty())
@@ -346,7 +376,7 @@ fun PortfolioPage(
                     ) {
                         PageRow(
                             item, layout, platformLabel, numbered.indexOf(item.section) + 1, navigate, onOpenProject, isCoverPlaying,
-                            stats, feedback,
+                            stats, feedback, message, onOpenLink,
                         )
                     }
                 }
@@ -358,9 +388,9 @@ fun PortfolioPage(
 private fun PageItem.topSpacing(layout: PageLayout): Dp = when {
     this is PageItem.Hero -> if (layout.compact) 40.dp else 96.dp
     this is PageItem.Footer -> 96.dp
-    // The published notes, then the form: apart from the contact block above them, closer than a new section.
+    // The message form, the published notes, the note form: apart from what is above each, closer than a new section.
     this is PageItem.Notes && row == 0 -> if (layout.compact) 48.dp else 64.dp
-    this is PageItem.Feedback -> if (layout.compact) 48.dp else 64.dp
+    this is PageItem.Message || this is PageItem.Feedback -> if (layout.compact) 48.dp else 64.dp
     showsHeader -> if (layout.compact) 72.dp else 120.dp
     // The second group of a section: clearly apart from the first group's last row, closer than a new section.
     this is PageItem.Projects && showsGroupHeader -> if (layout.compact) 56.dp else 72.dp
@@ -379,6 +409,8 @@ private fun PageRow(
     isCoverPlaying: (String) -> Boolean,
     stats: LiveStats,
     feedback: FeedbackControls,
+    message: MessageControls,
+    onOpenLink: (Link) -> Unit,
 ) {
     when (item) {
         is PageItem.Hero -> SelectionContainer {
@@ -422,7 +454,10 @@ private fun PageRow(
             SkillGroups(item.groups, layout.skillColumns)
         }
         is PageItem.Contact -> SectionFrame(item, number, layout) {
-            ContactBlock(item.email, item.links)
+            ContactBlock(item.email, item.links, onOpenLink = onOpenLink)
+        }
+        PageItem.Message -> SectionFrame(item, number, layout) {
+            MessageForm(message.state, message.onSend, message.onReset, wide = !layout.compact)
         }
         is PageItem.Notes -> SectionFrame(item, number, layout) {
             NoteCards(item.notes, item.columns, showsTitle = item.row == 0)

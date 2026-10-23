@@ -4,6 +4,8 @@ import dev.yowkey.portfolio.data.PortfolioRepository
 import dev.yowkey.portfolio.data.SiteApi
 import dev.yowkey.portfolio.data.SiteApiException
 import dev.yowkey.portfolio.model.FeedbackDraft
+import dev.yowkey.portfolio.model.Link
+import dev.yowkey.portfolio.model.MessageDraft
 import dev.yowkey.portfolio.model.Portfolio
 import dev.yowkey.portfolio.model.PublicNote
 import dev.yowkey.portfolio.model.RatingSummary
@@ -69,6 +71,23 @@ class PortfolioViewModelTest {
             sent += api to draft
             gate?.await()
             sendResult()
+        }
+
+        var clickResult: () -> Unit = {}
+        val clicks = mutableListOf<Pair<String, String>>()
+        var messageResult: () -> Unit = {}
+        val messages = mutableListOf<Pair<String, MessageDraft>>()
+        var messageGate: CompletableDeferred<Unit>? = null
+
+        override suspend fun trackClick(api: String, link: String) {
+            clicks += api to link
+            clickResult()
+        }
+
+        override suspend fun sendMessage(api: String, draft: MessageDraft) {
+            messages += api to draft
+            messageGate?.await()
+            messageResult()
         }
     }
 
@@ -216,8 +235,109 @@ class PortfolioViewModelTest {
         val viewModel = PortfolioViewModel(FakeRepository { samplePortfolio() }, siteApi)
         advanceUntilIdle()
         viewModel.sendFeedback(FeedbackDraft(message = "Hello?"))
+        viewModel.sendMessage(MessageDraft(contact = "a@b.c", message = "Hello?"))
+        viewModel.trackClick(Link("LinkedIn", "https://www.linkedin.com/in/ada"))
         advanceUntilIdle()
         assertEquals(FeedbackUiState.Idle, viewModel.feedback.value)
+        assertEquals(MessageUiState.Idle, viewModel.message.value)
         assertEquals(emptyList(), siteApi.sent)
+        assertEquals(emptyList(), siteApi.messages)
+        assertEquals(emptyList(), siteApi.clicks)
+    }
+
+    private val linkedIn = Link("LinkedIn", "https://www.linkedin.com/in/ada")
+    private val gitHub = Link("GitHub", "https://github.com/ada")
+
+    @Test
+    fun aMessageGoesOutOnceAndTheFormFollowsIt() = runTest(dispatcher) {
+        val siteApi = FakeSiteApi().apply { messageGate = CompletableDeferred() }
+        val viewModel = PortfolioViewModel(FakeRepository { withApi }, siteApi)
+        advanceUntilIdle()
+        assertEquals(MessageUiState.Idle, viewModel.message.value)
+
+        val draft = MessageDraft("Ada", "ada@example.com", "job", "Are you open to a role?")
+        viewModel.sendMessage(draft)
+        advanceUntilIdle()
+        assertEquals(MessageUiState.Sending, viewModel.message.value)
+        viewModel.sendMessage(draft.copy(message = "again"))
+        viewModel.resetMessage()
+        advanceUntilIdle()
+        assertEquals(MessageUiState.Sending, viewModel.message.value, "a second tap, or a reset, changes nothing mid-flight")
+        assertEquals(listOf("https://api.example" to draft), siteApi.messages)
+        assertEquals(FeedbackUiState.Idle, viewModel.feedback.value, "the note form is untouched")
+
+        siteApi.messageGate?.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(MessageUiState.Sent, viewModel.message.value)
+        viewModel.resetMessage()
+        assertEquals(MessageUiState.Idle, viewModel.message.value, "Send another")
+    }
+
+    @Test
+    fun aMessageWithAProblemOrARefusalFailsWithTheSentence() = runTest(dispatcher) {
+        val siteApi = FakeSiteApi()
+        val viewModel = PortfolioViewModel(FakeRepository { withApi }, siteApi)
+        advanceUntilIdle()
+
+        viewModel.sendMessage(MessageDraft(message = "No way back"))
+        advanceUntilIdle()
+        assertEquals(MessageUiState.Failed("Leave an email or another way to reach you."), viewModel.message.value)
+        assertEquals(emptyList(), siteApi.messages, "nothing incomplete is sent")
+
+        siteApi.messageResult = { throw SiteApiException("That is plenty for one day, thank you. Try again tomorrow.") }
+        viewModel.sendMessage(MessageDraft(contact = "a@b.c", message = "Fourth"))
+        advanceUntilIdle()
+        assertEquals(MessageUiState.Failed("That is plenty for one day, thank you. Try again tomorrow."), viewModel.message.value)
+        assertEquals(1, siteApi.messages.size)
+        viewModel.resetMessage()
+        assertEquals(MessageUiState.Idle, viewModel.message.value)
+    }
+
+    @Test
+    fun aTrackedLinkIsCountedOncePerLinkPerPageLoad() = runTest(dispatcher) {
+        val siteApi = FakeSiteApi()
+        val viewModel = PortfolioViewModel(FakeRepository { withApi }, siteApi)
+        advanceUntilIdle()
+
+        repeat(3) { viewModel.trackClick(linkedIn) }
+        viewModel.trackClick(gitHub)
+        viewModel.trackClick(gitHub.copy(url = "https://github.com/ada?tab=repositories"))
+        advanceUntilIdle()
+        assertEquals(listOf("https://api.example" to "linkedin", "https://api.example" to "github"), siteApi.clicks)
+    }
+
+    @Test
+    fun anUntrackedLinkOrAClickBeforeTheContentIsCountsNothing() = runTest(dispatcher) {
+        val repository = FakeRepository { withApi }.apply { gate = CompletableDeferred() }
+        val siteApi = FakeSiteApi()
+        val viewModel = PortfolioViewModel(repository, siteApi)
+        viewModel.trackClick(linkedIn)
+        advanceUntilIdle()
+        assertEquals(emptyList(), siteApi.clicks, "no backend known yet")
+
+        repository.gate?.complete(Unit)
+        advanceUntilIdle()
+        viewModel.trackClick(Link("Email me", "mailto:ada@example.com"))
+        viewModel.trackClick(Link("Source on GitHub", "https://github.com/ada/site"))
+        advanceUntilIdle()
+        assertEquals(emptyList(), siteApi.clicks, "only the profile's LinkedIn and GitHub count")
+
+        viewModel.trackClick(linkedIn)
+        advanceUntilIdle()
+        assertEquals(listOf("https://api.example" to "linkedin"), siteApi.clicks, "a click before the content does not use up the link")
+    }
+
+    @Test
+    fun aFailedClickChangesNothingAndIsNotRetried() = runTest(dispatcher) {
+        val siteApi = FakeSiteApi().apply { clickResult = { throw SiteApiException("No connection") } }
+        val viewModel = PortfolioViewModel(FakeRepository { withApi }, siteApi)
+        advanceUntilIdle()
+        viewModel.trackClick(linkedIn)
+        advanceUntilIdle()
+        viewModel.trackClick(linkedIn)
+        advanceUntilIdle()
+        assertEquals(1, siteApi.clicks.size)
+        assertIs<PortfolioUiState.Ready>(viewModel.state.value)
+        assertEquals(MessageUiState.Idle, viewModel.message.value)
     }
 }

@@ -245,9 +245,10 @@ fun SkillGroups(groups: List<SkillGroup>, columns: Int, modifier: Modifier = Mod
     }
 }
 
+/** The email and the profile's links; [onOpenLink] hears of each link once it has opened, to count LinkedIn and GitHub. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun ContactBlock(email: String?, links: List<Link>, modifier: Modifier = Modifier) {
+fun ContactBlock(email: String?, links: List<Link>, modifier: Modifier = Modifier, onOpenLink: (Link) -> Unit = {}) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(20.dp)) {
         Text(
             "Hiring for Android, or have a project in mind? Let's talk.",
@@ -259,7 +260,9 @@ fun ContactBlock(email: String?, links: List<Link>, modifier: Modifier = Modifie
         }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             email?.let { LinkButton(Link("Email me", "mailto:$it"), primary = true) }
-            links.forEachIndexed { index, link -> LinkButton(link, primary = email == null && index == 0) }
+            links.forEachIndexed { index, link ->
+                LinkButton(link, primary = email == null && index == 0, onOpened = { onOpenLink(link) })
+            }
         }
     }
 }
