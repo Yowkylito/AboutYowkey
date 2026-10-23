@@ -39,18 +39,19 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfoV2
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -65,6 +66,7 @@ import dev.yowkey.portfolio.model.Portfolio
 import dev.yowkey.portfolio.model.Relation
 import dev.yowkey.portfolio.model.SiteNotes
 import dev.yowkey.portfolio.model.VisitCount
+import dev.yowkey.portfolio.ui.components.BackToTop
 import dev.yowkey.portfolio.ui.components.SectionHeader
 import dev.yowkey.portfolio.ui.components.rememberRevealProgress
 import dev.yowkey.portfolio.ui.sections.AwardList
@@ -86,9 +88,13 @@ import dev.yowkey.portfolio.ui.sections.StarNotesSheet
 import dev.yowkey.portfolio.ui.sections.WorkCard
 import dev.yowkey.portfolio.ui.detail.ProjectDetailScreen
 import dev.yowkey.portfolio.ui.navigation.Navigator
+import dev.yowkey.portfolio.ui.navigation.PageReading
+import dev.yowkey.portfolio.ui.navigation.ReadingFrame
 import dev.yowkey.portfolio.ui.navigation.Route
+import dev.yowkey.portfolio.ui.navigation.formFocus
+import dev.yowkey.portfolio.ui.navigation.rememberBackToTopShown
+import dev.yowkey.portfolio.ui.navigation.rememberPageReading
 import dev.yowkey.portfolio.ui.theme.LocalReducedMotion
-import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -252,10 +258,11 @@ fun PortfolioScreen(
 }
 
 /**
- * The list and the detail screen, switched by [route]. The list's scroll position and its reveal bookkeeping live
- * here, above the switch, so coming back from a project lands exactly where the visitor left, with nothing
- * re-animating. Opening a project rises and fades in over 280 ms; going back fades it out. Under reduced motion
- * the switch is instant.
+ * The list and the detail screen, switched by [route]. The list's scroll position, its reveal bookkeeping, its
+ * reading keys and whether Back to top shows live here, above the switch, so coming back from a project lands
+ * exactly where the visitor left (the list is rebuilt on the same state, which keeps the first row's index and
+ * offset), with nothing re-animating. Opening a project rises and fades in over 280 ms; going back fades it out.
+ * Under reduced motion the switch is instant.
  */
 @Composable
 private fun PortfolioContent(
@@ -274,6 +281,8 @@ private fun PortfolioContent(
 ) {
     val layout = PageLayout.from(currentWindowAdaptiveInfoV2().windowSizeClass)
     val listState = rememberLazyListState()
+    val reading = rememberPageReading(listState)
+    val backToTop = rememberBackToTopShown(listState)
     val seen = remember { mutableSetOf<Any>() }
     val reducedMotion = LocalReducedMotion.current
     val project = remember(portfolio, route) {
@@ -299,34 +308,49 @@ private fun PortfolioContent(
         label = "screen",
     ) { shown ->
         if (shown == null) {
-            PortfolioPage(
-                portfolio = portfolio,
-                platformLabel = platformLabel,
-                layout = layout,
-                listState = listState,
-                seen = seen,
-                // Read from the current route, not this child's: the list fading out must stop its covers now.
-                coversActive = showingList && !reducedMotion,
-                visits = visits,
-                notes = notes,
-                feedback = feedback,
-                onOpenProject = onOpenProject,
-                message = message,
-                onOpenLink = onOpenLink,
-                notesControls = notesControls,
-            )
+            // The star sheet covers the page: the keys and Back to top stand aside while it is open.
+            val uncovered = showingList && notesControls.sheet == null
+            ReadingFrame(reading, enabled = uncovered) {
+                PortfolioPage(
+                    portfolio = portfolio,
+                    platformLabel = platformLabel,
+                    layout = layout,
+                    listState = listState,
+                    reading = reading,
+                    seen = seen,
+                    // Read from the current route, not this child's: the list fading out must stop its covers now.
+                    coversActive = showingList && !reducedMotion,
+                    visits = visits,
+                    notes = notes,
+                    feedback = feedback,
+                    onOpenProject = onOpenProject,
+                    message = message,
+                    onOpenLink = onOpenLink,
+                    notesControls = notesControls,
+                )
+                BackToTop(
+                    visible = { backToTop.value && uncovered },
+                    onClick = { reading.backToTop(reducedMotion) },
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(end = layout.gutter, bottom = layout.gutter),
+                )
+            }
         } else {
             ProjectDetailScreen(shown, layout, onBack = onBack)
         }
     }
 }
 
+/**
+ * The page's list. [reading] runs its section jumps and learns from its form rows when the focus is in a form (see
+ * [ReadingFrame], which hosts this).
+ */
 @Composable
 fun PortfolioPage(
     portfolio: Portfolio,
     platformLabel: String,
     layout: PageLayout,
     listState: LazyListState,
+    reading: PageReading,
     seen: MutableSet<Any>,
     coversActive: Boolean,
     visits: VisitCount?,
@@ -347,7 +371,8 @@ fun PortfolioPage(
     val stats = LiveStats(visits, notes?.ratings)
     val starts = remember(items) { sectionStarts(items) }
     val numbered = remember(starts) { starts.keys.filter { it != Section.Home } }
-    val scope = rememberCoroutineScope()
+    val reducedMotion = LocalReducedMotion.current
+    val density = LocalDensity.current
     val activeSection by remember(items) {
         derivedStateOf {
             // At the very bottom the short Contact section can never reach the top, so it would never light up.
@@ -355,10 +380,14 @@ fun PortfolioPage(
             else items.getOrNull(listState.firstVisibleItemIndex)?.section ?: Section.Home
         }
     }
-    val navigate: (Section) -> Unit = remember(starts) {
-        { section -> starts[section]?.let { scope.launch { listState.animateScrollToItem(it) } } }
+    // A glide whose time scales with the distance, landing exactly on the section's header (see glideToItem).
+    val navigate: (Section) -> Unit = remember(starts, items, layout, density, reducedMotion, reading) {
+        { section ->
+            starts[section]?.let { index ->
+                reading.jumpTo(index, with(density) { items[index].landingInto(layout).roundToPx() }, reducedMotion)
+            }
+        }
     }
-    val reducedMotion = LocalReducedMotion.current
     // Recomputed on every scroll frame (a few visible rows), but readers are only told when the set of ids changes.
     val playingCovers = remember(items, coversActive) {
         derivedStateOf {
@@ -397,9 +426,12 @@ fun PortfolioPage(
         LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
             items(items, key = { it.key }, contentType = { it::class.simpleName }) { item ->
                 val progress = rememberRevealProgress(item.key, seen, reducedMotion)
+                // A form row scrolled away with the focus in it goes without a word: let the reading keys back in.
+                if (item.holdsForm) DisposableEffect(item.key) { onDispose { reading.formFocusChanged(item.key, focused = false) } }
                 Box(
                     Modifier
                         .fillMaxWidth()
+                        .then(if (item.holdsForm) Modifier.formFocus(reading, item.key) else Modifier)
                         .graphicsLayer {
                             alpha = progress.value
                             translationY = (1f - progress.value) * 28.dp.toPx()
@@ -554,6 +586,19 @@ private fun SectionFrame(
 }
 
 private val EaseOutCubic = CubicBezierEasing(0.33f, 1f, 0.68f, 1f)
+
+/** How far under the bar a section's header lands after a jump: close enough to read as arrived, with room to breathe. */
+private val HeaderLanding = 32.dp
+
+/**
+ * How far into its first row a jump to a section stops: past the row's top spacing but for [HeaderLanding], so the
+ * header lands just under the bar rather than a whole section gap below it. The hero is the top of the page.
+ */
+private fun PageItem.landingInto(layout: PageLayout): Dp =
+    if (this is PageItem.Hero) 0.dp else (topSpacing(layout) - HeaderLanding).coerceAtLeast(0.dp)
+
+/** The rows with text fields: while the focus is in one, the reading keys leave its keys alone. */
+private val PageItem.holdsForm: Boolean get() = this == PageItem.Message || this == PageItem.Feedback
 
 @Composable
 fun LoadingPage(modifier: Modifier = Modifier) {
