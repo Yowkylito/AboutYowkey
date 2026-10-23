@@ -16,7 +16,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asComposeImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
@@ -25,10 +24,6 @@ import dev.yowkey.portfolio.model.GalleryItem
 import dev.yowkey.portfolio.model.Screenshot
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
-import org.jetbrains.skia.AnimationDisposalMode
-import org.jetbrains.skia.Bitmap
-import org.jetbrains.skia.Codec
-import org.jetbrains.skia.Data
 import kotlin.math.roundToInt
 
 /** What the viewer keeps decoded, weighed in bytes against one budget (see `ScreenshotImages.VIEWER_BUDGET`). */
@@ -44,55 +39,35 @@ sealed interface ViewerMedia {
 val ImageBitmap.byteCount: Long get() = width.toLong() * height * 4
 
 /**
- * An animated WebP decoded one frame at a time into one reusable bitmap, with Skia's [Codec]. Only the encoded
- * file and that one frame are ever in memory: a 4.5 s, 54-frame clip at 480×271 holds ~0.7 MB encoded + 0.5 MB
- * of pixels, where decoding every frame up front would hold 28 MB.
+ * An animated WebP decoded one frame at a time into one reusable bitmap. Only the encoded file and that one frame
+ * are ever in memory: a 4.5 s, 54-frame clip at 480×271 holds ~0.7 MB encoded + 0.5 MB of pixels, where decoding
+ * every frame up front would hold 28 MB. The desktop and the web decode it with Skia's `Codec` (skikoMain); Android,
+ * which has no Skia and plays the clips' `.mp4` twins instead, holds only the first frame.
  *
  * Not thread-safe: one player at a time steps it, which the viewer guarantees (a clip is one page).
  */
-class AnimatedClip private constructor(private val data: Data, private val codec: Codec) : ViewerMedia {
-
-    val frameCount: Int = codec.frameCount
-    private val frames = codec.framesInfo
-    private val bitmap = Bitmap().apply { allocPixels(codec.imageInfo) }
+interface AnimatedClip : ViewerMedia {
+    val frameCount: Int
 
     /** The bitmap as Compose sees it. The wrapper is made once; drawing it reads the pixels as they are now. */
-    val image: ImageBitmap = bitmap.asComposeImageBitmap()
+    val image: ImageBitmap
 
     /** The frame the bitmap holds; it survives the viewer closing, so reopening resumes where it stopped. */
-    var heldFrame: Int = ClipFrames.NO_FRAME
-        private set
+    val heldFrame: Int
 
-    override val byteCount: Long = data.size.toLong() + image.byteCount
-
-    fun delayMillis(frame: Int): Int = ClipFrames.delayMillis(frames[frame].duration)
+    fun delayMillis(frame: Int): Int
 
     /** Decodes [frame] into the bitmap, on top of the frame already there when the format allows it. */
-    fun show(frame: Int) {
-        if (frame == heldFrame) return
-        val held = heldFrame
-        val prior = ClipFrames.priorFrame(
-            frame = frame,
-            held = held,
-            required = frames[frame].requiredFrame,
-            heldRestoresPrevious = held >= 0 && frames[held].disposalMethod == AnimationDisposalMode.RESTORE_PREVIOUS,
-        )
-        codec.readPixels(bitmap, frame, prior)
-        bitmap.notifyPixelsChanged()
-        heldFrame = frame
-    }
+    fun show(frame: Int)
 
     companion object {
         /** Parses [bytes] and decodes the first frame, so the viewer has a picture the moment it gets the clip. */
-        fun decode(bytes: ByteArray): AnimatedClip {
-            val data = Data.makeFromBytes(bytes)
-            val clip = AnimatedClip(data, Codec.makeFromData(data))
-            require(clip.frameCount > 0) { "clip has no frames" }
-            clip.show(0)
-            return clip
-        }
+        fun decode(bytes: ByteArray): AnimatedClip = decodeAnimatedClip(bytes)
     }
 }
+
+/** Each platform's [AnimatedClip.decode]. */
+internal expect fun decodeAnimatedClip(bytes: ByteArray): AnimatedClip
 
 /**
  * Plays [clip] in a loop while [playing], filling the bounds it is given (the caller sizes it to the clip's

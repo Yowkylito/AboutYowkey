@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The portfolio's own palette (composeApp ui/theme/Theme.kt): signal orange on warm paper, or on ink. -->
+    <color name="yowkey_orange">#C2410C</color>
+    <color name="paper">#F7F5F0</color>
+    <color name="ink">#0E1014</color>
+    <color name="ic_launcher_background">#C2410C</color>
+    <color name="ic_shortcut_background">#FFE4D5</color>
+</resources>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Only the window behind Compose: the paper colour, so a cold start shows no white flash. -->
+    <style name="Theme.Yowkey" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/paper</item>
+        <item name="android:colorAccent">@color/yowkey_orange</item>
+    </style>
+</resources>

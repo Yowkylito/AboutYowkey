@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Yowkey</string>
+    <string name="shortcut_owner_short">Owner</string>
+    <string name="shortcut_owner_long">Owner view</string>
+    <string name="channel_messages">Messages</string>
+    <string name="channel_messages_about">A visitor sent you a private message.</string>
+    <string name="channel_notes">Notes</string>
+    <string name="channel_notes_about">A visitor left a note on the site.</string>
+    <string name="channel_daily">Daily summary</string>
+    <string name="channel_daily_about">The day\'s visits, clicks, notes and messages, at 23:59.</string>
+</resources>

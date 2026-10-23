@@ -5,6 +5,11 @@ build/
 *.iml
 local.properties
 .DS_Store
+# androidApp/: the Firebase config and the release signing key stay on the owner's machine (README "Android app").
+google-services.json
+keystore.properties
+*.jks
+*.keystore
 # worker/
 node_modules/
 .wrangler/
