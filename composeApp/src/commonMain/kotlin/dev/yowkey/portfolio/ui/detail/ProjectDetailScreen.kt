@@ -79,6 +79,7 @@ import dev.yowkey.portfolio.ui.image.ViewerMediaImage
 import dev.yowkey.portfolio.ui.image.ViewerRequest
 import dev.yowkey.portfolio.ui.sections.FigureList
 import dev.yowkey.portfolio.ui.sections.MediaFrame
+import dev.yowkey.portfolio.ui.sections.mediaFrameCorner
 import dev.yowkey.portfolio.ui.sections.ProjectHeading
 import dev.yowkey.portfolio.ui.sections.ScreenshotStrip
 import dev.yowkey.portfolio.ui.components.PlayPauseButton
@@ -412,7 +413,14 @@ private fun DetailMedia(
         val box = if (portrait) Modifier.height(if (compact) PortraitHeroCompact else PortraitHero) else Modifier.fillMaxWidth()
         MediaFrame(item.shot, box) { frame ->
             if (item.isClip) {
-                CoverClip(item.shot, playing, frame)
+                // Under reduced motion the Play/Pause button sits over the clip, and a video would hide it: keep the WebP.
+                CoverClip(
+                    item.shot,
+                    playing,
+                    frame,
+                    cornerRadius = mediaFrameCorner(item.shot),
+                    videoAllowed = !LocalReducedMotion.current,
+                )
             } else {
                 ViewerMediaImage(item, playing = false, modifier = frame)
             }
