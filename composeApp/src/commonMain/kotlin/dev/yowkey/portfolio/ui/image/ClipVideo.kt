@@ -14,9 +14,11 @@ internal expect val playsClipVideo: Boolean
 /**
  * Plays the video at [path] (relative to composeResources) muted and in a loop while [playing], filling the bounds it
  * is given. On the web this is an HTML `<video>` placed over the canvas, so Compose cannot draw on top of it: use it
- * only where nothing overlaps the media (the viewer), and round its corners with [cornerRadius], since a Compose
- * clip only reaches it as a rectangle. Pointer input passes through to the Compose content underneath, so the
- * viewer's swipes and taps still work over it. [onError] is called if the video cannot be loaded or decoded.
+ * only where nothing is drawn over the media (the viewer, card covers, the detail screen's hero), inside a
+ * scrolling area that sits below the top bar (Compose clips the element to it, as a rectangle), and put it up only
+ * while it should be seen. Round its corners with [cornerRadius] to match the media's own clip. Pointer input
+ * passes through to the Compose content underneath, so swipes and taps still work over it. [onError] is called if
+ * the video cannot be loaded or decoded.
  */
 @Composable
 internal expect fun ClipVideo(path: String, playing: Boolean, cornerRadius: Dp, onError: () -> Unit, modifier: Modifier)

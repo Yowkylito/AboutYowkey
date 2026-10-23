@@ -49,9 +49,10 @@ python scripts/prepare_screenshots.py --clip path/to/60fps-demo.mp4 vistago-trip
   animates it natively.
 - **Clip video** (`"video": true` on a clip or the cover clip, optional): add `--video` and the script also writes
   `<name>.mp4`, H.264 at 60 fps (long edge 1440 px, silent, at most 1536 KB). It needs a 60 fps recording (the
-  Mac's and most phones' screen recorders make one); slower sources are refused. The web viewer plays the video
-  instead of the WebP, through the browser's video decoder; the desktop app, the cards, the detail screen and the
-  static page keep the WebP. Under reduced motion the viewer shows the poster until Play, and a tap on the playing
+  Mac's and most phones' screen recorders make one); slower sources are refused. On the web the viewer, the card
+  covers and the detail page's hero play the video instead of the WebP, through the browser's video decoder; the
+  desktop app and the static page keep the WebP. Under reduced motion the cards and the hero stay on the WebP (the
+  hero's Play button sits over the clip), and the viewer shows the poster until Play, where a tap on the playing
   video pauses it (the video is drawn above the Play button).
 - **Visibility**: `"public"` or `"private"`. The card shows a "Public repo" / "Private repo" badge, and if any
   project is private a note under the Projects header says why its source is not linked. Leave it out for no badge.

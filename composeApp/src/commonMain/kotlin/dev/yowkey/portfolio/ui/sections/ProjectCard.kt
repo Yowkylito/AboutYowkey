@@ -168,7 +168,8 @@ fun CoverStage(project: Project, playing: () -> Boolean, modifier: Modifier = Mo
             val play by remember { derivedStateOf { isPlaying() } }
             MediaFrame(media.shot, Modifier.padding(vertical = 22.dp, horizontal = 20.dp)) { frame ->
                 when (media.kind) {
-                    GalleryItem.Kind.CoverClip -> CoverClip(media.shot, playing = play, modifier = frame)
+                    GalleryItem.Kind.CoverClip ->
+                        CoverClip(media.shot, playing = play, modifier = frame, cornerRadius = mediaFrameCorner(media.shot))
                     else -> Box(frame, contentAlignment = Alignment.Center) {
                         ScreenshotImage(media.cardPath, media.shot.caption, LocalScreenshotImages.current?.thumbnails, Modifier.matchParentSize())
                         if (media.isClip) PlayGlyph()
@@ -186,21 +187,28 @@ fun CoverStage(project: Project, playing: () -> Boolean, modifier: Modifier = Mo
 @Composable
 fun MediaFrame(shot: Screenshot, modifier: Modifier = Modifier, content: @Composable (Modifier) -> Unit) {
     val portrait = shot.aspectRatio < 1f
+    val corner = mediaFrameCorner(shot)
     val frame = if (portrait) {
         Modifier
             .fillMaxHeight()
             .aspectRatio(shot.aspectRatio)
             .border(4.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(22.dp))
             .padding(4.dp)
-            .clip(RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(corner))
     } else {
         Modifier
             .aspectRatio(shot.aspectRatio)
-            .clip(RoundedCornerShape(10.dp))
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(corner))
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(corner))
     }
     Box(modifier, contentAlignment = Alignment.Center) { content(frame) }
 }
+
+/**
+ * The corner radius [MediaFrame] clips [shot] to, for content that a Compose clip only reaches as a rectangle (a
+ * cover clip's HTML video).
+ */
+fun mediaFrameCorner(shot: Screenshot): Dp = if (shot.aspectRatio < 1f) 18.dp else 10.dp
 
 /** A text-only project's stand-in for a cover: its initials, large, in the accent. */
 @Composable

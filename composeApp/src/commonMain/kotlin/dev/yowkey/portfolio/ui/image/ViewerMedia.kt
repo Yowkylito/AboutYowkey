@@ -222,10 +222,39 @@ private fun DecodedMedia(item: GalleryItem, playing: Boolean, modifier: Modifier
 /**
  * A cover clip: its poster at once, and the clip over it while [playing]. The clip is not even downloaded until it
  * is first asked to play, so a card that never comes into view, or a visitor who asked for reduced motion, costs
- * only the poster. Paused, it holds the frame it reached. The caller sizes this to the clip's aspect ratio.
+ * only the poster. The caller sizes this to the clip's aspect ratio.
+ *
+ * Where the platform plays video ([playsClipVideo]) and [videoAllowed], a clip with a 60 fps twin plays that instead,
+ * with its corners rounded to [cornerRadius] (see [ClipVideo]). The video is only put up while [playing]: it is
+ * drawn above everything Compose draws, so a paused one would show through the viewer opened over the page. Paused,
+ * the cover is its poster again. If the video fails to load, the WebP takes over. Otherwise, paused, the WebP holds
+ * the frame it reached.
  */
 @Composable
-fun CoverClip(shot: Screenshot, playing: Boolean, modifier: Modifier = Modifier) {
+fun CoverClip(
+    shot: Screenshot,
+    playing: Boolean,
+    modifier: Modifier = Modifier,
+    cornerRadius: Dp = 0.dp,
+    videoAllowed: Boolean = true,
+) {
+    var videoFailed by remember(shot) { mutableStateOf(false) }
+    if (playsClipVideo && shot.video && videoAllowed && !videoFailed) {
+        val images = LocalScreenshotImages.current
+        Box(modifier) {
+            ScreenshotImage(shot.posterPath, shot.caption, images?.thumbnails, Modifier.fillMaxSize())
+            if (playing) {
+                ClipVideo(shot.videoPath, playing = true, cornerRadius, onError = { videoFailed = true }, modifier = Modifier.fillMaxSize())
+            }
+        }
+    } else {
+        DecodedCoverClip(shot, playing, modifier)
+    }
+}
+
+/** A cover clip's WebP, decoded frame by frame by [ClipPlayer] once it is first asked to play. */
+@Composable
+private fun DecodedCoverClip(shot: Screenshot, playing: Boolean, modifier: Modifier) {
     val images = LocalScreenshotImages.current
     var wanted by remember(shot) { mutableStateOf(playing) }
     if (playing && !wanted) SideEffect { wanted = true }
