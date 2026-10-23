@@ -58,7 +58,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.window.core.layout.WindowSizeClass
 import dev.yowkey.portfolio.model.FeedbackDraft
+import dev.yowkey.portfolio.model.LiveStats
 import dev.yowkey.portfolio.model.Portfolio
+import dev.yowkey.portfolio.model.SiteNotes
 import dev.yowkey.portfolio.model.VisitCount
 import dev.yowkey.portfolio.ui.components.SectionHeader
 import dev.yowkey.portfolio.ui.components.rememberRevealProgress
@@ -70,6 +72,7 @@ import dev.yowkey.portfolio.ui.sections.Footer
 import dev.yowkey.portfolio.ui.sections.GroupHeader
 import dev.yowkey.portfolio.ui.sections.Hero
 import dev.yowkey.portfolio.ui.sections.JobEntry
+import dev.yowkey.portfolio.ui.sections.NoteCards
 import dev.yowkey.portfolio.ui.sections.ProjectCard
 import dev.yowkey.portfolio.ui.sections.ServiceCard
 import dev.yowkey.portfolio.ui.sections.SkillGroups
@@ -133,6 +136,7 @@ fun PortfolioRoute(
     val state by viewModel.state.collectAsState()
     val route by navigator.route.collectAsState()
     val visits by viewModel.visits.collectAsState()
+    val notes by viewModel.notes.collectAsState()
     val feedbackState by viewModel.feedback.collectAsState()
     val onSendFeedback: (FeedbackDraft) -> Unit = remember(viewModel) { viewModel::sendFeedback }
     val onResetFeedback: () -> Unit = remember(viewModel) { viewModel::resetFeedback }
@@ -150,6 +154,7 @@ fun PortfolioRoute(
         onContentShown = onContentShown,
         modifier = modifier,
         visits = visits,
+        notes = notes,
         feedback = FeedbackControls(feedbackState, onSendFeedback, onResetFeedback),
     )
 }
@@ -157,7 +162,8 @@ fun PortfolioRoute(
 /**
  * @param route which screen to show once content is ready; a project id that is not in the content calls
  *   [onUnknownProject] (the router then goes home) and shows the list meanwhile
- * @param visits the footer's count, once the site's backend has answered; null until then, or without a backend
+ * @param visits the hero's count, once the site's backend has answered; null until then, or without a backend
+ * @param notes the published notes and their rating, for the hero's line and the cards above the form; null likewise
  * @param feedback the note form's state and actions; the form only exists when the content names a backend
  */
 @Composable
@@ -172,6 +178,7 @@ fun PortfolioScreen(
     onContentShown: () -> Unit,
     modifier: Modifier = Modifier,
     visits: VisitCount? = null,
+    notes: SiteNotes? = null,
     feedback: FeedbackControls = FeedbackControls(),
 ) {
     Surface(modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -179,7 +186,7 @@ fun PortfolioScreen(
             PortfolioUiState.Loading -> LoadingPage()
             is PortfolioUiState.Error -> ErrorPage(state.message, onRetry)
             is PortfolioUiState.Ready -> {
-                PortfolioContent(state.portfolio, route, platformLabel, visits, feedback, onOpenProject, onBack, onUnknownProject)
+                PortfolioContent(state.portfolio, route, platformLabel, visits, notes, feedback, onOpenProject, onBack, onUnknownProject)
                 val shown by rememberUpdatedState(onContentShown)
                 LaunchedEffect(Unit) {
                     withFrameNanos { } // after the first frame of real content is on screen
@@ -202,6 +209,7 @@ private fun PortfolioContent(
     route: Route,
     platformLabel: String,
     visits: VisitCount?,
+    notes: SiteNotes?,
     feedback: FeedbackControls,
     onOpenProject: (String) -> Unit,
     onBack: () -> Unit,
@@ -243,6 +251,7 @@ private fun PortfolioContent(
                 // Read from the current route, not this child's: the list fading out must stop its covers now.
                 coversActive = showingList && !reducedMotion,
                 visits = visits,
+                notes = notes,
                 feedback = feedback,
                 onOpenProject = onOpenProject,
             )
@@ -261,11 +270,15 @@ fun PortfolioPage(
     seen: MutableSet<Any>,
     coversActive: Boolean,
     visits: VisitCount?,
+    notes: SiteNotes?,
     feedback: FeedbackControls,
     onOpenProject: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val items = remember(portfolio, layout) { buildPageItems(portfolio, layout.serviceColumns, layout.projectColumns) }
+    val items = remember(portfolio, layout, notes) {
+        buildPageItems(portfolio, layout.serviceColumns, layout.projectColumns, notes?.notes.orEmpty())
+    }
+    val stats = LiveStats(visits, notes?.ratings)
     val starts = remember(items) { sectionStarts(items) }
     val numbered = remember(starts) { starts.keys.filter { it != Section.Home } }
     val scope = rememberCoroutineScope()
@@ -333,7 +346,7 @@ fun PortfolioPage(
                     ) {
                         PageRow(
                             item, layout, platformLabel, numbered.indexOf(item.section) + 1, navigate, onOpenProject, isCoverPlaying,
-                            visits, feedback,
+                            stats, feedback,
                         )
                     }
                 }
@@ -345,7 +358,8 @@ fun PortfolioPage(
 private fun PageItem.topSpacing(layout: PageLayout): Dp = when {
     this is PageItem.Hero -> if (layout.compact) 40.dp else 96.dp
     this is PageItem.Footer -> 96.dp
-    // The note form: apart from the contact block above it, closer than a new section.
+    // The published notes, then the form: apart from the contact block above them, closer than a new section.
+    this is PageItem.Notes && row == 0 -> if (layout.compact) 48.dp else 64.dp
     this is PageItem.Feedback -> if (layout.compact) 48.dp else 64.dp
     showsHeader -> if (layout.compact) 72.dp else 120.dp
     // The second group of a section: clearly apart from the first group's last row, closer than a new section.
@@ -363,7 +377,7 @@ private fun PageRow(
     onNavigate: (Section) -> Unit,
     onOpenProject: (String) -> Unit,
     isCoverPlaying: (String) -> Boolean,
-    visits: VisitCount?,
+    stats: LiveStats,
     feedback: FeedbackControls,
 ) {
     when (item) {
@@ -374,6 +388,7 @@ private fun PageRow(
                 wide = layout.wideSections,
                 onSeeProjects = { onNavigate(Section.Projects) },
                 onContact = { onNavigate(Section.Contact) },
+                stats = stats,
             )
         }
         is PageItem.Services -> SectionFrame(item, number, layout) {
@@ -409,10 +424,13 @@ private fun PageRow(
         is PageItem.Contact -> SectionFrame(item, number, layout) {
             ContactBlock(item.email, item.links)
         }
+        is PageItem.Notes -> SectionFrame(item, number, layout) {
+            NoteCards(item.notes, item.columns, showsTitle = item.row == 0)
+        }
         PageItem.Feedback -> SectionFrame(item, number, layout) {
             FeedbackForm(feedback.state, feedback.onSend, feedback.onReset, wide = !layout.compact)
         }
-        PageItem.Footer -> Footer(platformLabel, visits?.summary)
+        PageItem.Footer -> Footer(platformLabel)
     }
 }
 

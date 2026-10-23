@@ -1,5 +1,5 @@
--- The portfolio's data: visit counts and the feedback inbox. Apply with `npm run db:init` (README, "Visits and feedback").
--- Every statement is idempotent, so it can be re-run after adding a table or an index.
+-- The portfolio's data: visit counts and the feedback inbox. Migrations are applied in order by
+-- `npm run db:init` (wrangler d1 migrations apply), which remembers the ones already run.
 
 CREATE TABLE IF NOT EXISTS visits (
   day   TEXT PRIMARY KEY,            -- UTC date, YYYY-MM-DD

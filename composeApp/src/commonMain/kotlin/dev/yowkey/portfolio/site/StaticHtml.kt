@@ -51,6 +51,8 @@ object StaticHtml {
         if (eyebrow.isNotEmpty()) appendLine("<p class=\"eyebrow\">${eyebrow.joinToString(" · ") { escape(it) }}</p>")
         appendLine("<h1>${escape(p.name)}</h1>")
         appendLine("<p class=\"headline\">${escape(p.headline)}</p>")
+        // The live line (the published notes' rating, the visit count), filled by the page's script from the backend.
+        portfolio.api?.let { appendLine("<p class=\"live-stats muted\" data-api=\"${escape(it)}\" hidden></p>") }
         if (p.proof.isNotEmpty()) {
             appendLine("<ul class=\"proof\">")
             p.proof.forEach { appendLine("<li><strong>${escape(it.value)}</strong> ${escape(it.label)}</li>") }
@@ -94,17 +96,23 @@ object StaticHtml {
 
         appendLine("<section id=\"contact\"><h2>Contact</h2>")
         links(listOfNotNull(p.email?.let { Link("Email", "mailto:$it") }) + portfolio.links)
-        portfolio.api?.let { feedbackForm(it) }
-        appendLine("</section>")
-
-        // The visit count's place, filled by the page's script from the backend; hidden until it answers.
         portfolio.api?.let {
-            appendLine("<footer class=\"site-footer\" hidden><p class=\"muted visits\" data-api=\"${escape(it)}\"></p></footer>")
+            visitorNotes(it)
+            feedbackForm(it)
         }
+        appendLine("</section>")
+    }
+
+    /** Where the page's script lists the notes the owner has published, from the backend; hidden until it has some. */
+    private fun StringBuilder.visitorNotes(api: String) {
+        appendLine("<div class=\"visitor-notes\" data-api=\"${escape(api)}\" hidden>")
+        appendLine("<h3>${escape(FeedbackCopy.NOTES_TITLE)}</h3>")
+        appendLine("<ul class=\"notes\"></ul>")
+        appendLine("</div>")
     }
 
     /**
-     * The note form, as the app's: name and email (optional), the impression, the message. It posts to the backend
+     * The note form, as the app's: name and email (optional), the impression, the message, the consent box. It posts to the backend
      * at [api] the way the app does, through the page's script; without the script the browser posts the plain
      * form and the backend answers with a page. The `website` field is a trap for bots that fill every field:
      * people never see it, and a filled one is quietly dropped.
@@ -131,6 +139,7 @@ object StaticHtml {
             "<label><span>${escape(FeedbackCopy.MESSAGE)}</span>" +
                 "<textarea name=\"message\" required maxlength=\"${FeedbackDraft.MAX_MESSAGE}\" rows=\"5\"></textarea></label>",
         )
+        appendLine("<label class=\"consent\"><input type=\"checkbox\" name=\"consent\" value=\"1\"><span>${escape(FeedbackCopy.CONSENT)}</span></label>")
         appendLine("<label class=\"trap\" aria-hidden=\"true\"><span>Website</span><input name=\"website\" tabindex=\"-1\" autocomplete=\"off\"></label>")
         appendLine("<button type=\"submit\">${escape(FeedbackCopy.SEND)}</button>")
         appendLine("<p class=\"status\" role=\"status\" aria-live=\"polite\"></p>")

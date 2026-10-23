@@ -264,18 +264,16 @@ fun ContactBlock(email: String?, links: List<Link>, modifier: Modifier = Modifie
     }
 }
 
-/** The last row: what renders the page and, once the site's backend has answered, how many have visited ([visits]). */
 @Composable
-fun Footer(platformLabel: String, visits: String? = null, modifier: Modifier = Modifier) {
+fun Footer(platformLabel: String, modifier: Modifier = Modifier) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(20.dp)) {
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-        Column(Modifier.padding(bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Box(Modifier.padding(bottom = 8.dp)) {
             Text(
                 "Built with Compose Multiplatform · running on $platformLabel",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            visits?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
     }
 }

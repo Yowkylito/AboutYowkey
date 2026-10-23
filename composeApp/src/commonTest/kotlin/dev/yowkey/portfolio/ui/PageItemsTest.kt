@@ -4,6 +4,7 @@ import dev.yowkey.portfolio.model.Award
 import dev.yowkey.portfolio.model.Experience
 import dev.yowkey.portfolio.model.Project
 import dev.yowkey.portfolio.model.ProjectGroup
+import dev.yowkey.portfolio.model.PublicNote
 import dev.yowkey.portfolio.model.RepoVisibility
 import dev.yowkey.portfolio.model.Service
 import dev.yowkey.portfolio.model.SkillGroup
@@ -106,6 +107,23 @@ class PageItemsTest {
         assertEquals(Section.Contact, PageItem.Feedback.section)
         assertFalse(PageItem.Feedback.showsHeader)
         assertEquals(sectionStarts(without).keys.toList(), sectionStarts(items).keys.toList(), "no section, so no nav entry, of its own")
+    }
+
+    /** The published notes sit between the contact block and the form, chunked like the project cards. */
+    @Test
+    fun thePublishedNotesComeBetweenContactAndTheFormInRows() {
+        val notes = (1..5).map { PublicNote(it.toLong(), "N$it", 5, "M$it", "2026-10-24") }
+        val withApi = portfolio.copy(api = "https://api.example")
+        val rows = buildPageItems(withApi, 2, 2, notes).filterIsInstance<PageItem.Notes>()
+        assertEquals(listOf(listOf(1L, 2L), listOf(3L, 4L), listOf(5L)), rows.map { row -> row.notes.map { it.id } })
+        assertEquals(listOf(0, 1, 2), rows.map { it.row })
+        assertEquals(listOf("notes-0", "notes-1", "notes-2"), rows.map { it.key })
+        assertTrue(rows.all { it.section == Section.Contact && !it.showsHeader })
+
+        val items = buildPageItems(withApi, 1, 1, notes.take(1))
+        assertEquals(listOf(PageItem.Contact(null, portfolio.links), PageItem.Notes(notes.take(1), 1, 0), PageItem.Feedback, PageItem.Footer), items.takeLast(4))
+        assertTrue(buildPageItems(portfolio, 1, 1, notes).none { it is PageItem.Notes }, "no backend, no notes, whatever was passed")
+        assertTrue(buildPageItems(withApi, 1, 1).none { it is PageItem.Notes }, "no notes yet, no rows")
     }
 
     @Test

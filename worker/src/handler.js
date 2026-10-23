@@ -1,15 +1,20 @@
 /**
  * The portfolio's backend: a visit counter and a feedback inbox, on one Cloudflare Worker and one D1 database
- * (schema.sql). Everything the site calls is here; index.js only hands requests over, so the tests run this file in
+ * (migrations/). Everything the site calls is here; index.js only hands requests over, so the tests run this file in
  * Node against SQLite without a Workers runtime.
  *
  * Routes:
- *   GET  /            health
- *   GET  /visits      { total, today, since }    reads the counts without adding to them
- *   POST /visits      { total, today, since }    counts one visit per visitor per day, then answers as GET
- *   POST /feedback    { ok }                     JSON from the page's script, or a plain HTML form post
- *   GET  /feedback    { visits, items }          owner only: `Authorization: Bearer <ADMIN_TOKEN>`
- *   GET  /inbox       HTML                       owner only: HTTP Basic auth, any user name, password ADMIN_TOKEN
+ *   GET  /                   health
+ *   GET  /visits             { total, today, since }    reads the counts without adding to them
+ *   POST /visits             { total, today, since }    counts one visit per visitor per day, then answers as GET
+ *   GET  /notes              { visits, ratings, notes } the published notes, newest first, and the rating they add up to
+ *   POST /feedback           { ok }                     JSON from the page's script, or a plain HTML form post
+ *   GET  /feedback           { visits, items }          owner only: `Authorization: Bearer <ADMIN_TOKEN>`
+ *   GET  /inbox              HTML                       owner only: HTTP Basic auth, any user name, password ADMIN_TOKEN
+ *   POST /inbox/notes/:id    303 → /inbox               owner only, from the inbox page: publish, unpublish, hide, unhide, delete
+ *
+ * A note is shown on the site only when the visitor ticked the consent box and the owner published it; hiding it
+ * takes it down again without deleting it. The visitor's contact is never public.
  *
  * Bindings and settings (wrangler.toml): DB (D1), ALLOWED_ORIGINS, SITE_URL. Secrets: ADMIN_TOKEN, VISITOR_SALT.
  */
@@ -23,6 +28,8 @@ export const LIMITS = Object.freeze({
   notesPerDay: 5,
   /** Characters of request body read; more is a 413. */
   body: 16 * 1024,
+  /** Published notes `GET /notes` returns, newest first. */
+  publicNotes: 12,
 });
 
 /**
@@ -31,24 +38,33 @@ export const LIMITS = Object.freeze({
  */
 const BOT = /bot|crawl|spider|slurp|lighthouse|headless|preview|facebookexternalhit|curl\/|wget\/|python|go-http-client|java\/|https?:\/\//i;
 
+const PUBLISHED = "published_at IS NOT NULL AND hidden_at IS NULL";
+
 export async function handleRequest(request, env, now = new Date()) {
   const url = new URL(request.url);
   const path = url.pathname.replace(/\/+$/, "") || "/";
   const cors = corsHeaders(request, env);
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
   // A page on another site may neither count visits nor leave notes here. A request with no Origin at all (curl,
-  // the owner's tools) is fine: the owner's routes have their own lock.
+  // the owner's tools) is fine: the owner's routes have their own lock, and the inbox page's own posts are checked
+  // against this worker's origin in inboxAction.
   const origin = request.headers.get("Origin");
-  if (origin && !cors["Access-Control-Allow-Origin"] && request.method !== "GET") {
+  const ownerPage = path.startsWith("/inbox");
+  if (origin && !ownerPage && !cors["Access-Control-Allow-Origin"] && request.method !== "GET") {
     return json({ error: "This page may not call the API." }, 403, cors);
   }
   try {
     if (path === "/" && request.method === "GET") return json({ ok: true, service: "aboutyowkey-api" }, 200, cors);
     if (path === "/visits" && request.method === "GET") return json(await visitCounts(env.DB, day(now)), 200, cors);
     if (path === "/visits" && request.method === "POST") return json(await recordVisit(request, env, now), 200, cors);
+    if (path === "/notes" && request.method === "GET") {
+      return json(await publicNotes(env.DB, day(now)), 200, { ...cors, "Cache-Control": "public, max-age=60" });
+    }
     if (path === "/feedback" && request.method === "POST") return await submitFeedback(request, env, now, cors);
     if (path === "/feedback" && request.method === "GET") return await listFeedback(request, env, url, now);
     if (path === "/inbox" && request.method === "GET") return await inbox(request, env, now);
+    const action = /^\/inbox\/notes\/(\d+)$/.exec(path);
+    if (action && request.method === "POST") return await inboxAction(request, env, Number(action[1]), now, url);
     return json({ error: "Not found." }, 404, cors);
   } catch (error) {
     console.error(error); // `npm run tail` shows it; the visitor gets no detail
@@ -100,6 +116,24 @@ async function visitorId(request, env, today, agent) {
   return sha256Hex(`${today}|${address}|${agent}|${env.VISITOR_SALT || ""}`);
 }
 
+// ---- Public notes ----
+
+/** What the page shows: the visits, the published notes' rating, and the latest published notes. Never a contact. */
+async function publicNotes(db, today) {
+  const [visits, rating, { results }] = await Promise.all([
+    visitCounts(db, today),
+    db.prepare(`SELECT COUNT(rating) AS count, ROUND(AVG(rating), 1) AS average FROM feedback WHERE ${PUBLISHED}`).first(),
+    db
+      .prepare(
+        `SELECT id, name, rating, message, substr(published_at, 1, 10) AS date FROM feedback WHERE ${PUBLISHED} ` +
+          "ORDER BY published_at DESC, id DESC LIMIT ?1",
+      )
+      .bind(LIMITS.publicNotes)
+      .all(),
+  ]);
+  return { visits, ratings: { count: rating.count, average: rating.average }, notes: results };
+}
+
 // ---- Feedback ----
 
 async function submitFeedback(request, env, now, cors) {
@@ -119,8 +153,10 @@ async function submitFeedback(request, env, now, cors) {
   }
   const note = normalizeFeedback(fields);
   await env.DB
-    .prepare("INSERT INTO feedback (created_at, name, contact, rating, message, visitor) VALUES (?1, ?2, ?3, ?4, ?5, ?6)")
-    .bind(now.toISOString(), note.name, note.contact, note.rating, note.message, visitor)
+    .prepare(
+      "INSERT INTO feedback (created_at, name, contact, rating, message, visitor, consent) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+    )
+    .bind(now.toISOString(), note.name, note.contact, note.rating, note.message, visitor, note.consent ? 1 : 0)
     .run();
   return reply(body.form, { ok: true }, 201, cors, env);
 }
@@ -151,6 +187,11 @@ function text(value) {
   return null;
 }
 
+/** The consent box: JSON `true`, or what a form or the page's script sends for a ticked box. */
+export function isYes(value) {
+  return value === true || ["1", "true", "on", "yes"].includes(String(value ?? "").trim().toLowerCase());
+}
+
 /**
  * What stops a note from being kept, message first, in sentences for the visitor. The same rules as the app's
  * `FeedbackDraft.problems`, so the form says it before anything is sent; this is the check that counts.
@@ -170,7 +211,7 @@ export function validateFeedback(fields) {
   return problems;
 }
 
-/** The note as stored: trimmed, the optional fields null when empty, the rating a number. */
+/** The note as stored: trimmed, the optional fields null when empty, the rating a number, the consent a boolean. */
 export function normalizeFeedback(fields) {
   const rating = text(fields.rating);
   return {
@@ -178,6 +219,7 @@ export function normalizeFeedback(fields) {
     contact: text(fields.contact) || null,
     rating: rating ? Number(rating) : null,
     message: text(fields.message),
+    consent: isYes(fields.consent),
   };
 }
 
@@ -203,9 +245,56 @@ async function inbox(request, env, now) {
   return html(renderInbox({ visits, items, days, today }), 200, { "Cache-Control": "no-store", "X-Robots-Tag": "noindex" });
 }
 
+/**
+ * One of the inbox page's buttons. The browser sends the inbox's Basic credentials with any request to this
+ * origin, a form on another site included, so only a post from this origin itself is acted on.
+ */
+async function inboxAction(request, env, id, now, url) {
+  const entry = await authorize(basicPassword(request), env, { basic: true });
+  if (entry !== true) return entry;
+  if (!fromThisOrigin(request, url)) return html(renderNotice("Refused", "Notes are acted on from the inbox page only.", "/inbox"), 403);
+  const { action } = Object.fromEntries(new URLSearchParams(await request.text()));
+  const note = await env.DB.prepare("SELECT id, consent FROM feedback WHERE id = ?1").bind(id).first();
+  if (!note) return html(renderNotice("Not found", `There is no note ${id}.`, "/inbox"), 404);
+  const stamp = now.toISOString();
+  let statement;
+  switch (action) {
+    case "publish":
+      if (!note.consent) return html(renderNotice("Not published", "The visitor did not agree to this note being shown.", "/inbox"), 409);
+      statement = env.DB.prepare("UPDATE feedback SET published_at = ?1, hidden_at = NULL WHERE id = ?2").bind(stamp, id);
+      break;
+    case "unpublish":
+      statement = env.DB.prepare("UPDATE feedback SET published_at = NULL WHERE id = ?1").bind(id);
+      break;
+    case "hide":
+      statement = env.DB.prepare("UPDATE feedback SET hidden_at = ?1 WHERE id = ?2").bind(stamp, id);
+      break;
+    case "unhide":
+      statement = env.DB.prepare("UPDATE feedback SET hidden_at = NULL WHERE id = ?1").bind(id);
+      break;
+    case "delete":
+      statement = env.DB.prepare("DELETE FROM feedback WHERE id = ?1").bind(id);
+      break;
+    default:
+      return html(renderNotice("Refused", `There is no "${action}" to do with a note.`, "/inbox"), 400);
+  }
+  await statement.run();
+  return new Response(null, { status: 303, headers: { Location: "/inbox" } });
+}
+
+/** Browsers say where a request came from: `Sec-Fetch-Site` when they know it, else the `Origin` of a post. */
+function fromThisOrigin(request, url) {
+  const site = request.headers.get("Sec-Fetch-Site");
+  if (site) return site === "same-origin";
+  return request.headers.get("Origin") === url.origin;
+}
+
 async function feedbackItems(db, limit) {
   const { results } = await db
-    .prepare("SELECT id, created_at, name, contact, rating, message FROM feedback ORDER BY id DESC LIMIT ?1")
+    .prepare(
+      "SELECT id, created_at, name, contact, rating, message, consent, published_at, hidden_at FROM feedback " +
+        "ORDER BY id DESC LIMIT ?1",
+    )
     .bind(limit)
     .all();
   return results;

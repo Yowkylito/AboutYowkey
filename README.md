@@ -189,18 +189,23 @@ One-time setup: **Settings → Pages → Source: GitHub Actions**.
 
 ## Visits and feedback
 
-The visit count in the footer and the "Leave a note" form under Contact are real data, kept by a small backend of
-the site's own: a Cloudflare Worker with a D1 (SQLite) database, in [`worker/`](worker/). GitHub Pages serves files
-only, so this is the one piece that runs on a server. Cloudflare's free plan covers it many times over (100,000
-requests a day), and it never sleeps.
+The live line under the hero's headline (the published notes' rating, the visit count), the "Notes from visitors"
+cards and the "Leave a note" form under Contact are real data, kept by a small backend of the site's own: a
+Cloudflare Worker with a D1 (SQLite) database, in [`worker/`](worker/). GitHub Pages serves files only, so this is
+the one piece that runs on a server. Cloudflare's free plan covers it many times over (100,000 requests a day), and
+it never sleeps.
 
 What it keeps, and nothing more:
 
 - **Visits**: one count per day. A visitor is counted once a day, told apart by a hash of the day, their address,
   their browser and a secret salt; the address itself is never stored, and the hashes are deleted the next day.
   Crawlers, link previews and CI's Lighthouse run read the count but are not counted.
-- **Notes**: what the form says (name and email are optional), the rating, the time, and the day's hash for a limit
-  of 5 notes per visitor per day. A hidden field catches bots that fill every field. Nothing is published.
+- **Notes**: what the form says (name and email are optional), the rating, the time, whether the visitor ticked
+  "You may show this note on the site", and the day's hash for a limit of 5 notes per visitor per day. A hidden
+  field catches bots that fill every field.
+- **What the page shows**: only notes the visitor agreed to show *and* you published from the inbox, with the
+  name (or "A visitor"), the stars and the words, never the email. The hero's rating is the mean of those notes'
+  stars. Hiding a note takes it down again; deleting it removes it for good.
 
 Until `portfolio.json` names the backend, neither the count nor the form is on the page. Setting it up takes about
 ten minutes, once:
@@ -211,7 +216,9 @@ ten minutes, once:
    cd worker && npm install && npx wrangler login
    ```
 
-2. Create the database, paste the `database_id` it prints into `worker/wrangler.toml`, and create the tables:
+2. Create the database, paste the `database_id` it prints into `worker/wrangler.toml`, and create the tables
+   (`db:init` applies `worker/migrations/` in order and remembers which ones have run, so it is also the command
+   after a new migration):
 
    ```bash
    npx wrangler d1 create aboutyowkey
@@ -244,16 +251,15 @@ ten minutes, once:
    "api": "https://aboutyowkey-api.<account>.workers.dev"
    ```
 
-   The build checks it is `https://` with no trailing slash. The next deploy of the site shows the count in the
-   footer and the form under Contact.
+   The build checks it is `https://` with no trailing slash. The next deploy of the site shows the live line under
+   the headline and the form under Contact; the notes appear as you publish them.
 
-**Reading the notes**: open `https://aboutyowkey-api.<account>.workers.dev/inbox` in a browser; any user name, the
-password is `ADMIN_TOKEN`. It lists the notes newest first, with the visit totals and the last two weeks by day.
-From the terminal, `npm run inbox` prints the same table, and one note is removed with
-
-```bash
-npx wrangler d1 execute aboutyowkey --remote --command "DELETE FROM feedback WHERE id = 3"
-```
+**Reading and publishing the notes**: open `https://aboutyowkey-api.<account>.workers.dev/inbox` in a browser; any
+user name, the password is `ADMIN_TOKEN`. It lists the notes newest first, with the visit totals and the last two
+weeks by day, and a button for each: **Publish** (only for a note whose visitor ticked the box; it then shows on the
+site), **Unpublish**, **Hide** (down, but kept), **Unhide** and **Delete**. The page's buttons only work from the
+page itself, so a form on some other site cannot act with your browser's saved password. From the terminal,
+`npm run inbox` prints the same table.
 
 **Changes to the worker** deploy from CI (`.github/workflows/worker.yml`) once two repository secrets exist:
 `CLOUDFLARE_ACCOUNT_ID` (on the dashboard's Workers page) and `CLOUDFLARE_API_TOKEN` (a token made from the "Edit
@@ -261,7 +267,7 @@ Cloudflare Workers" template, with D1 edit added). Without them the workflow onl
 `npm run deploy` by hand does the rest.
 
 **Locally**: `npm run dev` in `worker/` serves it at `http://localhost:8787` against a SQLite file under
-`.wrangler/` (`npm run db:init:local` first; copy `.dev.vars.example` to `.dev.vars` for the two secrets). Set
+`.wrangler/` (`npm run db:init:local` first, which applies the migrations locally; copy `.dev.vars.example` to `.dev.vars` for the two secrets). Set
 `"api": "http://localhost:8787"` in `portfolio.json` while testing: the parser allows `http://` for localhost only.
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and [`docs/READINESS.md`](docs/READINESS.md).

@@ -52,6 +52,7 @@
     #static-content { max-width: 1120px; margin: 0 auto; padding: 96px 20px 120px; }
     .hero h1 { font-size: clamp(44px, 9vw, 72px); line-height: 1.05; letter-spacing: -0.03em; margin: 8px 0 16px; }
     .headline { font-size: clamp(20px, 3vw, 24px); margin: 0 0 12px; max-width: 720px; }
+    .live-stats { font-size: 15px; font-weight: 600; margin: 0 0 16px; }
     .eyebrow { color: var(--accent); font-size: 12px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; margin: 0; }
     .proof { list-style: none; padding: 0; margin: 24px 0 8px; display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); max-width: 960px; }
     .proof strong { display: block; color: var(--accent); font-size: 28px; line-height: 1.2; }
@@ -92,9 +93,15 @@
     }
     form.feedback button:disabled { opacity: .6; cursor: default; }
     form.feedback .trap { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+    form.feedback label.consent { display: flex; align-items: center; gap: 10px; font-weight: 400; }
+    form.feedback label.consent input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
     form.feedback .status { margin: 0; min-height: 1.6em; color: var(--muted); }
-    .site-footer { margin-top: 64px; padding-top: 24px; border-top: 1px solid var(--line); font-size: 15px; }
-    .site-footer p { margin: 0; }
+    .visitor-notes { margin: 40px 0 8px; }
+    .notes { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+    .notes li { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 20px; }
+    .notes li p { margin: 0; }
+    .notes .stars { color: var(--accent); letter-spacing: .08em; margin: 0 0 8px; }
+    .notes .by { color: var(--muted); font-size: 14px; margin: 10px 0 0; }
     /* Projects' two groups: an accent label ruled to the edge, as in the app. */
     .project-group + .project-group { margin-top: 64px; }
     h3.group { display: flex; align-items: center; gap: 12px; font-size: 14px; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
@@ -158,23 +165,62 @@
     })();
   </script>
   <script>
-    // The visit count and the note form talk to the site's own backend (worker/), named by portfolio.json's "api"
-    // as data-api on their elements. Without one, neither element is on the page and nothing here runs. The
-    // backend counts a visitor once a day, so the app counting the same page load again changes nothing.
+    // The hero's live line, the published notes and the note form talk to the site's own backend (worker/), named
+    // by portfolio.json's "api" as data-api on their elements. Without one, none of them is on the page and nothing
+    // here runs. The backend counts a visitor once a day, so the app counting the same page load again changes nothing.
     (function () {
-      var visits = document.querySelector(".visits[data-api]");
-      if (visits) {
-        fetch(visits.dataset.api + "/visits", { method: "POST", credentials: "omit", cache: "no-store" })
-          .then(function (r) { return r.ok ? r.json() : null; })
-          .then(function (v) {
-            if (!v || !v.total) return;
-            var since = v.since && /^\d{4}-\d{2}-\d{2}$/.test(v.since)
-              ? " since " + new Date(v.since + "T00:00:00Z").toLocaleDateString("en", { month: "short", year: "numeric", timeZone: "UTC" })
-              : "";
-            visits.textContent = v.total.toLocaleString("en") + (v.total === 1 ? " visit" : " visits") + since;
-            visits.closest("footer").hidden = false;
-          })
-          .catch(function () {});
+      function monthYear(day) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(day || "")) return "";
+        return new Date(day + "T00:00:00Z").toLocaleDateString("en", { month: "short", year: "numeric", timeZone: "UTC" });
+      }
+      function showNotes(data) {
+        var box = document.querySelector(".visitor-notes[data-api]");
+        if (!box || !data || !data.notes || !data.notes.length) return;
+        var list = box.querySelector("ul");
+        data.notes.forEach(function (note) {
+          var item = document.createElement("li");
+          if (note.rating) {
+            var stars = document.createElement("p");
+            stars.className = "stars";
+            stars.setAttribute("role", "img");
+            stars.setAttribute("aria-label", note.rating + " of 5 stars");
+            stars.textContent = "★".repeat(note.rating) + "☆".repeat(5 - note.rating);
+            item.appendChild(stars);
+          }
+          var words = document.createElement("p");
+          words.textContent = note.message;
+          item.appendChild(words);
+          var by = document.createElement("p");
+          by.className = "by";
+          var when = monthYear(note.date);
+          by.textContent = (note.name || "A visitor") + (when ? " · " + when : "");
+          item.appendChild(by);
+          list.appendChild(item);
+        });
+        box.hidden = false;
+      }
+      var stats = document.querySelector(".live-stats[data-api]");
+      if (stats) {
+        var api = stats.dataset.api;
+        var asJson = function (r) { return r.ok ? r.json() : null; };
+        var nothing = function () { return null; };
+        Promise.all([
+          fetch(api + "/visits", { method: "POST", credentials: "omit", cache: "no-store" }).then(asJson).catch(nothing),
+          fetch(api + "/notes", { credentials: "omit" }).then(asJson).catch(nothing),
+        ]).then(function (results) {
+          var visits = results[0], notes = results[1];
+          var parts = [];
+          if (notes && notes.ratings && notes.ratings.count && notes.ratings.average != null) {
+            var count = notes.ratings.count;
+            parts.push("★ " + Number(notes.ratings.average).toFixed(1) + " from " + count + (count === 1 ? " note" : " notes"));
+          }
+          if (visits && visits.total) {
+            var since = monthYear(visits.since);
+            parts.push(visits.total.toLocaleString("en") + (visits.total === 1 ? " visit" : " visits") + (since ? " since " + since : ""));
+          }
+          if (parts.length) { stats.textContent = parts.join(" · "); stats.hidden = false; }
+          showNotes(notes);
+        });
       }
       var form = document.querySelector("form.feedback[data-api]");
       if (!form) return;
@@ -185,6 +231,7 @@
         var note = {};
         new FormData(form).forEach(function (value, key) { note[key] = value; });
         if (note.rating === "") delete note.rating; else note.rating = Number(note.rating);
+        note.consent = note.consent === "1";
         button.disabled = true;
         status.textContent = "Sending…";
         fetch(form.dataset.api + "/feedback", {

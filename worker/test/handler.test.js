@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { handleRequest, LIMITS } from "../src/handler.js";
 import { openDatabase } from "./d1.js";
 
-const SCHEMA = fileURLToPath(new URL("../schema.sql", import.meta.url));
+const MIGRATIONS = fileURLToPath(new URL("../migrations", import.meta.url));
 const SITE = "https://yowkylito.github.io";
 const CHROME = "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36";
 const DAY_ONE = "2026-10-24T10:00:00.000Z";
@@ -13,7 +13,7 @@ const DAY_TWO = "2026-10-25T09:00:00.000Z";
 let env;
 beforeEach(() => {
   env = {
-    DB: openDatabase(SCHEMA),
+    DB: openDatabase(MIGRATIONS),
     ALLOWED_ORIGINS: `${SITE}, http://localhost:8080`,
     SITE_URL: `${SITE}/AboutYowkey/`,
     ADMIN_TOKEN: "owner-secret",
@@ -36,6 +36,18 @@ const post = (path, payload, options = {}) =>
 const owner = (path, options = {}) => call(path, { ...options, headers: { Authorization: `Bearer ${env.ADMIN_TOKEN}`, ...options.headers } });
 
 const basic = (password, user = "me") => ({ Authorization: `Basic ${btoa(`${user}:${password}`)}` });
+
+/** One of the inbox page's buttons, pressed by the owner on the inbox page itself. */
+const act = (id, action, options = {}) =>
+  call(`/inbox/notes/${id}`, {
+    ...options,
+    method: "POST",
+    origin: "https://api.example",
+    headers: { ...basic(env.ADMIN_TOKEN), "Content-Type": "application/x-www-form-urlencoded", "Sec-Fetch-Site": "same-origin", ...options.headers },
+    body: `action=${action}`,
+  });
+
+const publicNotes = async (options = {}) => (await call("/notes", options)).json();
 
 /** Rows as plain objects: node:sqlite's have no prototype, which strict deep equality would reject. */
 const query = (sql) => env.DB.raw.prepare(sql).all().map((row) => ({ ...row }));
@@ -134,8 +146,93 @@ test("a note is stored trimmed, the optional fields null when left out, and neve
   const listed = await (await owner("/feedback")).json();
   assert.deepEqual(listed.visits, { total: 0, today: 0, since: null });
   assert.deepEqual(listed.items.map((item) => item.message), ["Second", "Nice site.\nHire me?"], "newest first");
-  assert.deepEqual(Object.keys(listed.items[0]).sort(), ["contact", "created_at", "id", "message", "name", "rating"]);
-  assert.deepEqual(listed.items[1], { id: 1, created_at: DAY_ONE, name: "Ada", contact: null, rating: 5, message: "Nice site.\nHire me?" });
+  assert.deepEqual(Object.keys(listed.items[0]).sort(), ["consent", "contact", "created_at", "hidden_at", "id", "message", "name", "published_at", "rating"]);
+  assert.deepEqual(listed.items[1], {
+    id: 1, created_at: DAY_ONE, name: "Ada", contact: null, rating: 5, message: "Nice site.\nHire me?", consent: 0, published_at: null, hidden_at: null,
+  });
+});
+
+test("the consent box is read however it arrives, and defaults to no", async () => {
+  const cases = [[true, 1], ["1", 1], ["on", 1], ["YES", 1], [false, 0], ["0", 0], ["", 0], [undefined, 0], ["maybe", 0]];
+  for (const [consent, stored] of cases) {
+    const payload = { message: `consent ${JSON.stringify(consent)}` };
+    if (consent !== undefined) payload.consent = consent;
+    assert.equal((await post("/feedback", payload, { address: `203.0.113.${stored + 10 + cases.indexOf([consent, stored])}` })).status, 201);
+  }
+  assert.deepEqual(feedbackRows().map((row) => row.consent), cases.map(([, stored]) => stored));
+  const form = await call("/feedback", {
+    method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "message=ticked&consent=on", address: "198.51.100.9",
+  });
+  assert.equal(form.status, 201);
+  assert.equal(feedbackRows().at(-1).consent, 1, "a ticked checkbox posts 'on'");
+});
+
+test("a note is public only with the visitor's tick and the owner's click, and the rating is the published notes'", async () => {
+  const empty = await call("/notes");
+  assert.equal(empty.headers.get("Cache-Control"), "public, max-age=60");
+  assert.equal(empty.headers.get("Access-Control-Allow-Origin"), SITE);
+  assert.deepEqual(await empty.json(), { visits: { total: 0, today: 0, since: null }, ratings: { count: 0, average: null }, notes: [] });
+
+  await post("/feedback", { name: "Ada", contact: "ada@example.com", rating: 5, message: "Great", consent: true });
+  await post("/feedback", { rating: 4, message: "Good", consent: "1" }, { address: "198.51.100.2" });
+  await post("/feedback", { name: "Troll", rating: 1, message: "Private rant", consent: false }, { address: "198.51.100.3" });
+  await post("/feedback", { message: "No stars", consent: true }, { address: "198.51.100.4" });
+  assert.deepEqual((await publicNotes()).notes, [], "nothing shows before the owner says so");
+
+  assert.equal((await act(1, "publish")).status, 303);
+  assert.equal((await act(2, "publish", { now: DAY_TWO })).status, 303);
+  assert.equal((await act(4, "publish", { now: DAY_TWO })).status, 303);
+  const shown = await publicNotes({ now: DAY_TWO });
+  assert.deepEqual(shown.ratings, { count: 2, average: 4.5 }, "a note without stars is shown but does not rate");
+  assert.deepEqual(shown.notes, [
+    { id: 4, name: null, rating: null, message: "No stars", date: "2026-10-25" },
+    { id: 2, name: null, rating: 4, message: "Good", date: "2026-10-25" },
+    { id: 1, name: "Ada", rating: 5, message: "Great", date: "2026-10-24" },
+  ]);
+  assert.ok(!JSON.stringify(shown).includes("ada@example.com"), "the contact is never public");
+
+  const refused = await act(3, "publish");
+  assert.equal(refused.status, 409, "no tick, no publishing");
+  assert.match(await refused.text(), /did not agree/);
+
+  assert.equal((await act(1, "hide")).status, 303);
+  const afterHide = await publicNotes();
+  assert.deepEqual(afterHide.ratings, { count: 1, average: 4 });
+  assert.deepEqual(afterHide.notes.map((note) => note.id), [4, 2]);
+  assert.equal((await act(1, "unhide")).status, 303);
+  assert.deepEqual((await publicNotes()).notes.map((note) => note.id), [4, 2, 1]);
+  assert.equal((await act(2, "unpublish")).status, 303);
+  assert.deepEqual((await publicNotes()).notes.map((note) => note.id), [4, 1]);
+
+  assert.equal((await act(3, "delete")).status, 303);
+  assert.deepEqual(feedbackRows().map((row) => row.id), [1, 2, 4]);
+  assert.equal((await act(1, "explode")).status, 400);
+  assert.equal((await act(99, "hide")).status, 404);
+});
+
+test("the inbox's buttons need the password and must be pressed on the inbox page itself", async () => {
+  await post("/feedback", { message: "x", consent: true });
+  const form = { "Content-Type": "application/x-www-form-urlencoded" };
+  const noAuth = await call("/inbox/notes/1", { method: "POST", headers: form, body: "action=publish", origin: "https://api.example" });
+  assert.equal(noAuth.status, 401);
+  const forged = await call("/inbox/notes/1", {
+    method: "POST", headers: { ...basic(env.ADMIN_TOKEN), ...form, "Sec-Fetch-Site": "cross-site" }, body: "action=publish", origin: "https://evil.example",
+  });
+  assert.equal(forged.status, 403, "a form on another site, with the browser's saved credentials");
+  const forgedOldBrowser = await call("/inbox/notes/1", {
+    method: "POST", headers: { ...basic(env.ADMIN_TOKEN), ...form }, body: "action=publish", origin: "https://evil.example",
+  });
+  assert.equal(forgedOldBrowser.status, 403, "no Sec-Fetch-Site: the Origin decides");
+  assert.equal(feedbackRows()[0].published_at, null);
+
+  const pressed = await act(1, "publish");
+  assert.equal(pressed.status, 303);
+  assert.equal(pressed.headers.get("Location"), "/inbox");
+  assert.equal(feedbackRows()[0].published_at, DAY_ONE);
+  const oldBrowser = await call("/inbox/notes/1", {
+    method: "POST", headers: { ...basic(env.ADMIN_TOKEN), ...form }, body: "action=hide", origin: "https://api.example",
+  });
+  assert.equal(oldBrowser.status, 303, "no Sec-Fetch-Site, but our own Origin");
 });
 
 test("a note is checked before it is kept, and the first problem is the answer", async () => {
@@ -232,15 +329,23 @@ test("the inbox asks for the password, then shows the notes and the visits, esca
 
   await call("/visits", { method: "POST" });
   await call("/visits", { method: "POST", now: DAY_TWO, address: "198.51.100.2" });
-  await post("/feedback", { name: "<b>Ada</b>", contact: "ada@example.com", rating: 3, message: "Great <script>alert(1)</script>" });
+  await post("/feedback", { name: "<b>Ada</b>", contact: "ada@example.com", rating: 3, message: "Great <script>alert(1)</script>", consent: true });
   await post("/feedback", { contact: "linkedin.com/in/ada", message: "No rating" });
+  await post("/feedback", { message: "Already up", consent: true }, { address: "198.51.100.5" });
+  await act(3, "publish");
 
   const open = await call("/inbox", { headers: basic(env.ADMIN_TOKEN, "whoever"), now: DAY_TWO });
   assert.equal(open.status, 200);
   assert.equal(open.headers.get("X-Robots-Tag"), "noindex");
   assert.equal(open.headers.get("Cache-Control"), "no-store");
   const page = await open.text();
-  assert.match(page, /2 visits since 2026-10-24 · 1 today \(2026-10-25, UTC\) · 2 notes/);
+  assert.match(page, /2 visits since 2026-10-24 · 1 today \(2026-10-25, UTC\) · 3 notes, 1 waiting/);
+  assert.match(page, /<strong>Waiting<\/strong>/, "the consented, unpublished note waits");
+  assert.match(page, /<span class="dim">Private<\/span>/, "the note without a tick is private");
+  assert.match(page, /Published<br>/);
+  assert.match(page, /<form method="post" action="\/inbox\/notes\/1">.*value="publish" class="primary"/s);
+  assert.match(page, /<form method="post" action="\/inbox\/notes\/2">.*value="publish" disabled/s);
+  assert.match(page, /<form method="post" action="\/inbox\/notes\/3">.*value="unpublish"/s);
   assert.match(page, /&lt;b&gt;Ada&lt;\/b&gt;/);
   assert.match(page, /Great &lt;script&gt;alert\(1\)&lt;\/script&gt;/);
   assert.doesNotMatch(page, /<script>alert/);

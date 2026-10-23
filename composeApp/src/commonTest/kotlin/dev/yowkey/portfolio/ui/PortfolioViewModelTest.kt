@@ -5,6 +5,9 @@ import dev.yowkey.portfolio.data.SiteApi
 import dev.yowkey.portfolio.data.SiteApiException
 import dev.yowkey.portfolio.model.FeedbackDraft
 import dev.yowkey.portfolio.model.Portfolio
+import dev.yowkey.portfolio.model.PublicNote
+import dev.yowkey.portfolio.model.RatingSummary
+import dev.yowkey.portfolio.model.SiteNotes
 import dev.yowkey.portfolio.model.VisitCount
 import dev.yowkey.portfolio.samplePortfolio
 import kotlinx.coroutines.CompletableDeferred
@@ -45,14 +48,21 @@ class PortfolioViewModelTest {
 
     private class FakeSiteApi : SiteApi {
         var visitResult: () -> VisitCount = { VisitCount(7, 1, "2026-10-24") }
+        var notesResult: () -> SiteNotes = { SiteNotes(VisitCount(7), RatingSummary(1, 5.0), listOf(PublicNote(1, "Ada", 5, "Great", "2026-10-24"))) }
         var sendResult: () -> Unit = {}
         val visitCalls = mutableListOf<String>()
+        val notesCalls = mutableListOf<String>()
         val sent = mutableListOf<Pair<String, FeedbackDraft>>()
         var gate: CompletableDeferred<Unit>? = null
 
         override suspend fun recordVisit(api: String): VisitCount {
             visitCalls += api
             return visitResult()
+        }
+
+        override suspend fun loadNotes(api: String): SiteNotes {
+            notesCalls += api
+            return notesResult()
         }
 
         override suspend fun sendFeedback(api: String, draft: FeedbackDraft) {
@@ -105,13 +115,36 @@ class PortfolioViewModelTest {
         val quiet = FakeSiteApi()
         PortfolioViewModel(FakeRepository { samplePortfolio() }, quiet).also { advanceUntilIdle() }
         assertEquals(emptyList(), quiet.visitCalls, "no api, no call")
+        assertEquals(emptyList(), quiet.notesCalls)
 
         val siteApi = FakeSiteApi()
         val viewModel = PortfolioViewModel(FakeRepository { withApi }, siteApi)
         assertNull(viewModel.visits.value)
+        assertNull(viewModel.notes.value)
         advanceUntilIdle()
         assertEquals(VisitCount(7, 1, "2026-10-24"), viewModel.visits.value)
         assertEquals(listOf("https://api.example"), siteApi.visitCalls)
+        assertEquals(listOf("https://api.example"), siteApi.notesCalls)
+        assertEquals(listOf("Ada"), viewModel.notes.value?.notes?.map { it.name })
+    }
+
+    @Test
+    fun thePublishedNotesAreLoadedOnceAndAFailureLeavesNone() = runTest(dispatcher) {
+        val repository = FakeRepository { throw IllegalStateException("first try") }
+        val siteApi = FakeSiteApi()
+        val viewModel = PortfolioViewModel(repository, siteApi)
+        advanceUntilIdle()
+        repository.result = { withApi }
+        viewModel.retry()
+        advanceUntilIdle()
+        assertEquals(1, siteApi.notesCalls.size)
+
+        val down = FakeSiteApi().apply { notesResult = { throw SiteApiException("No connection") } }
+        val offline = PortfolioViewModel(FakeRepository { withApi }, down)
+        advanceUntilIdle()
+        assertIs<PortfolioUiState.Ready>(offline.state.value)
+        assertNull(offline.notes.value)
+        assertEquals(VisitCount(7, 1, "2026-10-24"), offline.visits.value, "the count does not depend on the notes")
     }
 
     @Test
