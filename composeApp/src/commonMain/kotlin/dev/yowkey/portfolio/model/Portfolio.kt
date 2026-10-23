@@ -27,6 +27,16 @@ data class Profile(
     val location: String? = null,
     val email: String? = null,
     val availability: String? = null,
+    /** The hero's few headline numbers, strongest first. The parser caps the count so they stay above the fold. */
+    val proof: List<ProofPoint> = emptyList(),
+)
+
+/** One hero proof point: a short figure ([value], e.g. "53%") and the plain sentence that backs it. */
+@Immutable
+@Serializable
+data class ProofPoint(
+    val value: String,
+    val label: String,
 )
 
 @Immutable

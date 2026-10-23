@@ -51,6 +51,27 @@ class PortfolioParserTest {
     }
 
     @Test
+    fun proofPointsParseAndStayShortEnoughForTheHero() {
+        fun withProof(vararg points: Pair<String, String>) = validJson.replace(
+            "\"summary\": \"Builds things.\"",
+            "\"summary\": \"Builds things.\", \"proof\": [" +
+                points.joinToString { (value, label) -> "{ \"value\": \"$value\", \"label\": \"$label\" }" } + "]",
+        )
+        val parsed = PortfolioParser.parse(withProof("53%" to "of the code", "#1 of ~40" to "engineers"))
+        assertEquals(listOf("53%", "#1 of ~40"), parsed.profile.proof.map { it.value })
+        assertTrue(PortfolioParser.parse(validJson).profile.proof.isEmpty(), "proof is optional")
+
+        val tooMany = Array(PortfolioParser.MAX_PROOF_POINTS + 1) { "$it" to "label" }
+        listOf(
+            withProof(*tooMany),
+            withProof(" " to "label"),
+            withProof("1" to " "),
+            withProof("a figure far too long" to "label"),
+            withProof("1" to "x".repeat(PortfolioParser.MAX_PROOF_LABEL + 1)),
+        ).forEach { bad -> assertFailsWith<IllegalArgumentException> { PortfolioParser.parse(bad) } }
+    }
+
+    @Test
     fun rejectsNonHttpsLinks() {
         assertFailsWith<IllegalArgumentException> {
             PortfolioParser.parse(validJson.replace("https://github.com/a/b", "javascript:alert(1)"))

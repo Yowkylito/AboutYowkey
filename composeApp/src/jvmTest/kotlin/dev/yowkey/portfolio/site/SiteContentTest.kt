@@ -30,6 +30,25 @@ class SiteContentTest {
         portfolio.recognition.forEach { assertTrue(StaticHtml.escape(it.title) in page, "missing award ${it.title}") }
     }
 
+    /** The seven-second skim: every point is in the hero, ahead of the first section. */
+    @Test
+    fun heroShowsProofAvailabilityAndContact() {
+        val hero = page.substringBefore("</header>")
+        val proof = portfolio.profile.proof
+        assertTrue(proof.size >= 2, "the hero needs at least two proof points")
+        proof.forEach { assertTrue(StaticHtml.escape(it.label) in hero, "hero lacks proof ${it.value}") }
+        listOfNotNull(portfolio.profile.location, portfolio.profile.availability, portfolio.profile.email)
+            .forEach { assertTrue(StaticHtml.escape(it) in hero, "hero lacks $it") }
+    }
+
+    /** The CV carries a personal phone number; the site must never. */
+    @Test
+    fun noPhoneNumberIsPublished() {
+        val phone = Regex("""(\+?63|\b0)[\s-]?9\d{2}[\s-]?\d{3}[\s-]?\d{4}""")
+        val json = File(resources, "files/portfolio.json").readText()
+        listOf(json, page).forEach { assertFalse(phone.containsMatchIn(it), "a phone number: ${phone.find(it)?.value}") }
+    }
+
     @Test
     fun pageHasDiscoverabilityTags() {
         assertFalse("{{" in page)
