@@ -719,7 +719,8 @@
           "file": "calm-escape-booking.webp",
           "caption": "From a spa's page to the booking review in a few taps: today's first opening, then live times (demo data)",
           "width": 324,
-          "height": 720
+          "height": 720,
+          "video": true
         }
       ],
       "screenshots": [
