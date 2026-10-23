@@ -202,7 +202,7 @@ One-time setup: **Settings → Pages → Source: GitHub Actions**.
 `androidApp/` builds **Yowkey**, an APK for my own phone. It opens on the portfolio exactly as the site shows it,
 running natively. Long-press its icon and pick **Owner** to sign in (the password is the worker's `ADMIN_TOKEN`, see
 below): a dashboard of today's visits, LinkedIn and GitHub clicks, unread messages and who wants to hire me, the 30
-days of visits and their countries; the private messages (reply by email, archive, delete), the notes to hide or
+days of visits and their countries; the private messages (reply by email, archive, delete), the notes to pin, hide or
 delete, and the history of every alert and daily report. A new message, a new note and the 23:59 summary arrive as
 notifications. Once signed in, the app opens there, with **Portfolio** to go back to the site.
 
@@ -262,15 +262,17 @@ What it keeps, and nothing more:
 - **Visits**: one count per day. A visitor is counted once a day, told apart by a hash of the day, their address,
   their browser and a secret salt; the address itself is never stored, and the hashes are deleted the next day.
   Crawlers, link previews and CI's Lighthouse run read the count but are not counted.
-- **Notes**: what the form says (name and email are optional), the rating, the time, and the day's hash for a limit
-  of 5 notes per visitor per day. A hidden field catches bots that fill every field. The form says a note is public,
+- **Notes**: what the form says (name, email and how they know me are optional), the rating, the time, and the
+  day's hash for a limit of 5 notes per visitor per day. A hidden field catches bots that fill every field. The form says a note is public,
   and it is: it shows on the page as soon as it is sent.
-- **What the page shows**: every note, newest first, a page at a time, with the name (or "A visitor"), the stars and
-  the words, never the email. Above them, a dashboard: the average to one decimal and how many rated, and a bar per
-  number of stars with its count and share; a bar picks that star's notes. The ratings count every note you have not
-  hidden, including the few sent before notes were public without the visitor's tick: their words stay private, and
-  the dashboard says how many. Hiding a note takes it down (and its stars out of the count); deleting it removes it
-  for good.
+- **What the page shows**: every note, pinned ones first, then newest, a page at a time. A card has the name (or "A
+  visitor") and the stars on top, the date with any badge under them (Pinned; Colleague, Friend or Special someone),
+  then the words, never the email. Above them, a dashboard: the average to one decimal and how many rated, and a bar
+  per number of stars with its count and share. A bar opens a sheet of that star's notes, sorted by who wrote them
+  (all, colleagues, friends, a special someone, others: a note that does not say, like every older one, is an
+  other). The ratings count every note you have not hidden, including the few sent before notes were public without
+  the visitor's tick: their words stay private, and the dashboard and each star's sheet say how many. Hiding a note
+  takes it down (and its stars out of the count, and its pin off); deleting it removes it for good.
 
 Until `portfolio.json` names the backend, neither the count nor the form is on the page. Setting it up takes about
 ten minutes, once:
@@ -321,8 +323,8 @@ ten minutes, once:
 
 **Reading the notes, and taking one down**: open `https://aboutyowkey-api.<account>.workers.dev/inbox` in a browser;
 any user name, the password is `ADMIN_TOKEN`. It lists the notes newest first, with the visit totals and the last two
-weeks by day, and a button for each: **Hide** (off the site, but kept), **Unhide** and **Delete**. The app's Notes
-screen has the same. The page's buttons only work from the
+weeks by day, and a button for each: **Hide** (off the site, but kept), **Unhide**, **Pin** (first on the site, newest
+pin first; only for a note on the site) or **Unpin**, and **Delete**. The app's Notes screen has the same. The page's buttons only work from the
 page itself, so a form on some other site cannot act with your browser's saved password. From the terminal,
 `npm run inbox` prints the same table.
 

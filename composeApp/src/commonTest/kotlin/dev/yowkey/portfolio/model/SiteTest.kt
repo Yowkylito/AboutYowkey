@@ -32,10 +32,62 @@ class SiteTest {
     }
 
     @Test
-    fun aPublicNoteNamesItsVisitorOrNotAndItsMonth() {
-        assertEquals("Ada · Oct 2026", PublicNote(1, "Ada", 5, "Great", "2026-10-24").byLine)
-        assertEquals("A visitor · Oct 2026", PublicNote(2, null, null, "Fine", "2026-10-24").byLine)
-        assertEquals("A visitor", PublicNote(3, "  ", 4, "Ok").byLine, "a blank name and no date")
+    fun aNotesCardNamesItsWriterDatesItInFullAndBadgesOnlyAKnownRelation() {
+        val note = PublicNote(1, "Akkram", 5, "Solid", "2026-10-23", relation = "colleague", pinned = true)
+        assertEquals("Akkram", note.displayName)
+        assertEquals("Oct 23, 2026", note.dateLine)
+        assertEquals(Relation.Colleague, note.badge)
+        assertEquals(PublicNote.ANONYMOUS, PublicNote(2, " ", null, "Hi").displayName, "a blank name is no name")
+        assertNull(PublicNote(2, null, null, "Hi").dateLine)
+        assertNull(PublicNote(3, null, null, "Hi", "soon").dateLine, "an unreadable date is left out")
+        assertEquals(Relation.Special, PublicNote(4, null, null, "Hi", relation = " Special ").badge)
+        listOf(null, "other", "Other", "boss", "").forEach { assertNull(PublicNote(5, null, null, "Hi", relation = it).badge, "$it") }
+    }
+
+    @Test
+    fun fullDateReadsOnlyADate() {
+        assertEquals("Oct 23, 2026", fullDate("2026-10-23"))
+        assertEquals("Jan 5, 2027", fullDate("2027-01-05"), "no leading zero on the day")
+        listOf("2026-13-01", "2026-00-01", "2026-1-01", "2026-10-23T10:00", "yesterday", "").forEach { assertNull(fullDate(it), it) }
+    }
+
+    @Test
+    fun theRelationsAreTheBackendsFourWhateverTheirCase() {
+        assertEquals(listOf("colleague", "friend", "special", "other"), Relation.entries.map { it.wire })
+        assertEquals(listOf("Colleague", "Friend", "Special someone", "Other"), Relation.entries.map { it.label })
+        assertEquals(listOf("Colleagues", "Friends", "Special someone", "Others"), Relation.entries.map { it.plural })
+        assertEquals(Relation.Friend, Relation.of(" FRIEND "))
+        assertEquals(Relation.Colleague, Relation.of("Colleague"))
+        listOf(null, "", " ", "friends", "boss").forEach { assertNull(Relation.of(it), "$it") }
+    }
+
+    @Test
+    fun theSheetsWordsCountTheirNotesAndRatings() {
+        assertEquals("Show the 5-star notes", FeedbackCopy.openSheet(5))
+        assertEquals("1-star notes", FeedbackCopy.sheetTitle(1))
+        assertEquals("4 ratings · 1 note to read", FeedbackCopy.sheetSummary(4, 1))
+        assertEquals("1 rating · 0 notes to read", FeedbackCopy.sheetSummary(1, 0))
+        assertEquals(
+            "+1 private 5-star rating: sent before notes were public, so only its stars are here.",
+            FeedbackCopy.privateInSheet(1, 5),
+        )
+        assertEquals(
+            "+3 private 4-star ratings: sent before notes were public, so only their stars are here.",
+            FeedbackCopy.privateInSheet(3, 4),
+        )
+        assertEquals("No notes with 5 stars yet.", FeedbackCopy.noneInSheet(null, 5))
+        assertEquals("No notes from colleagues with 1 star yet.", FeedbackCopy.noneInSheet(Relation.Colleague, 1))
+        assertEquals("No notes from a special someone with 4 stars yet.", FeedbackCopy.noneInSheet(Relation.Special, 4))
+    }
+
+    @Test
+    fun theRatingCountsItsPrivateWordsStarByStar() {
+        val ratings = RatingSummary(4, 5.0, mapOf("5" to 4), keptPrivate = 3, privateStars = mapOf("5" to 3))
+        assertEquals(3, ratings.privateCountOf(5))
+        assertEquals(0, ratings.privateCountOf(2))
+        val notes = SiteNotes(VisitCount(1), ratings, relations = mapOf("colleague" to 1, "other" to 0))
+        assertEquals(1, notes.countOf(Relation.Colleague))
+        assertEquals(0, notes.countOf(Relation.Friend), "a relation the reply leaves out has none")
     }
 
     @Test
@@ -93,9 +145,23 @@ class SiteTest {
         assertEquals(listOf("The rating is 1 to 5."), FeedbackDraft(rating = 0, message = "x").problems)
     }
 
+    /** The backend's order: the relation is checked after the rating. Not saying is fine; anything unknown is not. */
+    @Test
+    fun aDraftsRelationIsOneOfTheFourOrNone() {
+        assertEquals(emptyList(), FeedbackDraft(message = "x", relation = " Friend ").problems)
+        assertEquals(emptyList(), FeedbackDraft(message = "x", relation = "  ").problems)
+        assertEquals(listOf("Pick one of the ways you know me."), FeedbackDraft(message = "x", relation = "boss").problems)
+        assertEquals(
+            listOf("Write a message first.", "The rating is 1 to 5.", "Pick one of the ways you know me."),
+            FeedbackDraft(rating = 6, message = "", relation = "family").problems,
+        )
+    }
+
     @Test
     fun normalizedTrimsEveryFieldAndKeepsTheConsent() {
         assertEquals(FeedbackDraft("Ada", "a@b.c", 3, "Hi", consent = true), FeedbackDraft(" Ada ", " a@b.c ", 3, "\nHi\n", consent = true).normalized())
+        assertEquals("colleague", FeedbackDraft(message = "Hi", relation = " Colleague ").normalized().relation, "the relation lowercase")
+        assertEquals("", FeedbackDraft(message = "Hi", relation = " ").normalized().relation)
     }
 
     @Test

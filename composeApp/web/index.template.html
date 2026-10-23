@@ -78,7 +78,8 @@
     article + article { margin-top: 16px; }
     a { color: var(--accent); font-weight: 600; }
     .shots { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0; }
-    .shots img { display: block; height: 200px; width: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--line); }
+    /* Never wider than the page: a wide shot on a phone is cropped to fit rather than pushing the page sideways. */
+    .shots img { display: block; height: 200px; width: auto; max-width: 100%; object-fit: cover; border: 1px solid var(--line); border-radius: 10px; background: var(--line); }
     .shots picture { display: block; }
     img.cover { display: block; margin: 0 auto 16px; border: 1px solid var(--line); background: var(--line); }
     img.cover.landscape { width: 100%; height: auto; border-radius: 12px; }
@@ -105,17 +106,17 @@
     }
     form.feedback button:disabled, form.message button:disabled { opacity: .6; cursor: default; }
     form.feedback .trap, form.message .trap { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
-    form.message label.topic { display: flex; align-items: center; gap: 10px; font-weight: 400; }
-    form.message label.topic input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
+    form.message label.topic, form.feedback label.relation { display: flex; align-items: center; gap: 10px; font-weight: 400; }
+    form.message label.topic input, form.feedback label.relation input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
     form.feedback .status, form.message .status { margin: 0; min-height: 1.6em; color: var(--muted); }
-    form.message fieldset { display: flex; flex-wrap: wrap; gap: 8px 20px; border: 0; margin: 0; padding: 0; }
-    form.message legend { padding: 0; margin: 0 0 6px; font-size: 15px; font-weight: 600; }
-    form.message legend .muted { font-weight: 400; }
+    form.message fieldset, form.feedback fieldset { display: flex; flex-wrap: wrap; gap: 8px 20px; border: 0; margin: 0; padding: 0; }
+    form.message legend, form.feedback legend { padding: 0; margin: 0 0 6px; font-size: 15px; font-weight: 600; }
+    form.message legend .muted, form.feedback legend .muted { font-weight: 400; }
     h3 .badge { vertical-align: middle; }
     .visitor-notes { margin: 40px 0 40px; }
     /* The rules below give these a display, which would beat the hidden attribute's; hidden must still hide them. */
     .visitor-notes [hidden] { display: none !important; }
-    /* The ratings dashboard: the average with its stars lit to the fraction, and a bar per number of stars, each a filter. */
+    /* The ratings dashboard: the average with its stars lit to the fraction, and a bar per number of stars, each opening its sheet. */
     .ratings {
       display: grid; grid-template-columns: minmax(180px, 36fr) 64fr; gap: 24px; align-items: center; margin: 16px 0 12px; padding: 32px;
       border: 1px solid var(--line); border-radius: 20px;
@@ -137,8 +138,6 @@
     }
     .bars button:hover { background: color-mix(in srgb, var(--ink) 5%, transparent); }
     .bars button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-    .bars button[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 14%, transparent); }
-    .bars.filtering button[aria-pressed="false"] { opacity: .45; }
     .bars .label { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
     .bars .label i { font-style: normal; font-size: 12px; color: var(--accent); }
     .bars .track { height: 10px; border-radius: 5px; background: var(--line); overflow: hidden; }
@@ -153,11 +152,11 @@
     .bars .n { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
     .bars .pct { text-align: right; color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
     .kept-private { color: var(--muted); font-size: 14px; margin: 0 0 12px; }
-    .list-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; color: var(--muted); margin: 0; min-height: 1.6em; }
-    .list-line button, .visitor-notes .more {
-      font: inherit; font-weight: 600; color: var(--accent); background: transparent; border: 0; padding: 8px 4px; cursor: pointer;
+    .list-line { color: var(--muted); margin: 0; min-height: 1.6em; }
+    .visitor-notes .more {
+      display: block; margin: 20px auto 0; padding: 10px 20px; font: inherit; font-weight: 600; color: var(--accent);
+      background: transparent; border: 1px solid var(--line-strong); border-radius: 10px; cursor: pointer;
     }
-    .visitor-notes .more { display: block; margin: 20px auto 0; padding: 10px 20px; border: 1px solid var(--line-strong); border-radius: 10px; }
     .visitor-notes .more:disabled { opacity: .6; cursor: default; }
     @media (max-width: 640px) {
       .ratings { grid-template-columns: 1fr; gap: 20px; padding: 20px; }
@@ -166,10 +165,73 @@
     }
     @media (prefers-reduced-motion: reduce) { .bars .fill, .bars button { transition: none; } }
     .notes { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
-    .notes li { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 20px; }
+    /* A note, as the app's card: the name and its stars, under them the date with the badges (pinned, how they know me), then the words. */
+    .notes li { display: flex; flex-direction: column; min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px 20px; }
     .notes li p { margin: 0; }
-    .notes .stars { color: var(--accent); letter-spacing: .08em; margin: 0 0 8px; }
-    .notes .by { color: var(--muted); font-size: 14px; margin: 10px 0 0; }
+    .notes .top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+    .notes .name { min-width: 0; font-weight: 700; overflow-wrap: anywhere; }
+    .notes .stars { flex: none; color: var(--accent); font-size: 15px; letter-spacing: .08em; }
+    .notes .stars .off, .sheet-stars .off { color: var(--line-strong); }
+    .notes .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-top: 2px; color: var(--muted); font-size: 14px; }
+    .notes .meta .badge { font-size: 12px; padding: 0 7px; }
+    .notes .meta .pinned { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+    .notes .words { margin-top: 10px; white-space: pre-line; overflow-wrap: anywhere; }
+    .notes li:focus { outline: none; }
+    .notes li:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    /*
+      A star's sheet: a modal <dialog> on the bottom edge, at most 640px wide and 85% of the height, its head (the
+      handle, the title, the close button, the sorter) staying put while its notes scroll under it. Shown only while
+      open, so a browser that predates <dialog> never draws it inline either.
+    */
+    .star-sheet {
+      position: fixed; inset: auto 0 0; width: min(640px, 100%); max-width: 100%; height: auto; max-height: 85vh; max-height: 85dvh;
+      margin: 0 auto; padding: 0; flex-direction: column; overflow: hidden;
+      color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-bottom: 0; border-radius: 20px 20px 0 0;
+      box-shadow: 0 -16px 48px rgb(0 0 0 / .18);
+    }
+    .star-sheet:not([open]) { display: none; }
+    .star-sheet[open] { display: flex; animation: sheet-up .34s cubic-bezier(.2, .8, .2, 1); }
+    /* Plain colours: older browsers do not let a backdrop inherit the theme's variables. */
+    .star-sheet::backdrop { background: rgb(9 9 11 / .45); animation: sheet-fade .25s ease; }
+    :root[data-theme="dark"] .star-sheet::backdrop { background: rgb(0 0 0 / .62); }
+    @keyframes sheet-up { from { transform: translateY(100%); } }
+    @keyframes sheet-fade { from { opacity: 0; } }
+    .sheet-top { flex: none; padding: 10px 20px 0; border-bottom: 1px solid var(--line); }
+    .star-sheet .handle { display: block; width: 40px; height: 5px; margin: 0 auto 14px; border-radius: 3px; background: var(--line-strong); }
+    .sheet-head { display: flex; align-items: flex-start; gap: 16px; }
+    .sheet-head > div { flex: 1; min-width: 0; }
+    .sheet-head p { margin: 0; }
+    .sheet-stars { color: var(--accent); font-size: 15px; line-height: 1.2; letter-spacing: .08em; }
+    .star-sheet h4 { margin: 4px 0 2px; font-size: 22px; line-height: 1.25; letter-spacing: -.01em; }
+    .star-sheet .summary { min-height: 1.6em; color: var(--muted); font-size: 15px; }
+    .star-sheet .close {
+      flex: none; display: grid; place-items: center; width: 40px; height: 40px; margin: -2px -6px 0 0; padding: 0;
+      color: var(--ink); background: color-mix(in srgb, var(--ink) 6%, transparent); border: 0; border-radius: 50%; cursor: pointer;
+    }
+    .star-sheet .close:hover { background: color-mix(in srgb, var(--ink) 11%, transparent); }
+    .star-sheet button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    /* The sorter: single-select chips, wrapping rather than scrolling sideways on a phone; the picked one a tint, like the bars. */
+    .star-sheet .relations { display: flex; flex-wrap: wrap; gap: 8px; padding: 16px 0; }
+    .star-sheet .relations button {
+      display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 14px;
+      font: inherit; font-size: 15px; font-weight: 600; color: var(--ink); background: transparent;
+      border: 1px solid var(--line-strong); border-radius: 999px; cursor: pointer; transition: background-color .15s;
+    }
+    .star-sheet .relations button[aria-pressed="false"]:hover:not(:disabled) { background: color-mix(in srgb, var(--ink) 5%, transparent); }
+    .star-sheet .relations .n { color: var(--muted); font-variant-numeric: tabular-nums; }
+    .star-sheet .relations button[aria-pressed="true"] { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); border-color: var(--accent); }
+    .star-sheet .relations button[aria-pressed="true"] .n { color: inherit; }
+    .star-sheet .relations button:disabled { opacity: .45; cursor: default; }
+    .sheet-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 16px 20px calc(28px + env(safe-area-inset-bottom, 0px)); }
+    .star-sheet .notes { grid-template-columns: 1fr; gap: 12px; margin: 0; transition: opacity .15s; }
+    .star-sheet .notes li { background: var(--bg); }
+    .star-sheet .notes[aria-busy="true"] { opacity: .55; }
+    .star-sheet .empty, .star-sheet .private-line { margin: 16px 0 0; color: var(--muted); font-size: 15px; text-align: center; }
+    .star-sheet .empty { margin: 8px 0 0; }
+    @media (prefers-reduced-motion: reduce) {
+      .star-sheet[open], .star-sheet::backdrop { animation: none; }
+      .star-sheet .relations button, .star-sheet .notes { transition: none; }
+    }
     /* Projects' two groups: an accent label ruled to the edge, as in the app. */
     .project-group + .project-group { margin-top: 64px; }
     h3.group { display: flex; align-items: center; gap: 12px; font-size: 14px; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
@@ -241,33 +303,86 @@
         if (!/^\d{4}-\d{2}-\d{2}$/.test(day || "")) return "";
         return new Date(day + "T00:00:00Z").toLocaleDateString("en", { month: "short", year: "numeric", timeZone: "UTC" });
       }
-      // The notes: the dashboard's numbers, a page of notes at a time, one star's or all, newest first. The same
-      // words as the app (FeedbackCopy).
+      // The notes: the dashboard's numbers, a page of notes at a time (pinned first, then newest, as the backend
+      // orders them), and a star's sheet, which a bar opens. The same words as the app (FeedbackCopy, Relation).
       var notesBox = document.querySelector(".visitor-notes[data-api]");
-      var browsing = { stars: null, last: null, loading: false };
+      var listed = { offset: 0, loading: false, seq: 0 };
+      var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      // Relation: the wire value, the label (a card's badge; Other never gets one) and the plural (a sorter chip).
+      var RELATIONS = [
+        ["colleague", "Colleague", "Colleagues"],
+        ["friend", "Friend", "Friends"],
+        ["special", "Special someone", "Special someone"],
+        ["other", "Other", "Others"],
+      ];
+      // FeedbackCopy.noneInSheet's words for each relation.
+      var FROM = { colleague: " from colleagues", friend: " from friends", special: " from a special someone", other: " from others" };
       function plural(n, one, many) { return n + " " + (n === 1 ? one : many); }
+      // "2026-10-23" → "Oct 23, 2026", as fullDate: the same months on every browser, whatever its locale.
+      function fullDate(day) {
+        var match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day || "");
+        var month = match && MONTHS[Number(match[2]) - 1];
+        return month ? month + " " + Number(match[3]) + ", " + match[1] : "";
+      }
+      // The relation worth a badge, as PublicNote.badge: a colleague, a friend, a special someone; not Other, not unsaid.
+      function badgeOf(relation) {
+        var wire = String(relation || "").trim().toLowerCase();
+        for (var i = 0; i < 3; i++) if (RELATIONS[i][0] === wire) return RELATIONS[i][1];
+        return null;
+      }
+      function element(tag, className, text) {
+        var node = document.createElement(tag);
+        if (className) node.className = className;
+        if (text != null) node.textContent = text;
+        return node;
+      }
+      // Five stars, the first [lit] in the accent.
+      function drawStars(node, lit) {
+        node.textContent = "★".repeat(lit);
+        if (lit < 5) node.appendChild(element("span", "off", "★".repeat(5 - lit)));
+      }
+      // A note as the app's card: the name (or "A visitor") and the stars; the date, "Pinned" and the relation; the words.
       function noteItem(note) {
-        var item = document.createElement("li");
-        if (note.rating) {
-          var stars = document.createElement("p");
-          stars.className = "stars";
+        var item = element("li");
+        var top = element("div", "top");
+        top.appendChild(element("strong", "name", String(note.name || "").trim() || "A visitor"));
+        var rating = Number(note.rating);
+        if (rating >= 1 && rating <= 5) {
+          var stars = element("span", "stars");
           stars.setAttribute("role", "img");
-          stars.setAttribute("aria-label", note.rating + " of 5 stars");
-          stars.textContent = "★".repeat(note.rating) + "☆".repeat(5 - note.rating);
-          item.appendChild(stars);
+          stars.setAttribute("aria-label", rating + " of 5 stars");
+          drawStars(stars, rating);
+          top.appendChild(stars);
         }
-        var words = document.createElement("p");
-        words.textContent = note.message;
-        item.appendChild(words);
-        var by = document.createElement("p");
-        by.className = "by";
-        var when = monthYear(note.date);
-        by.textContent = (note.name || "A visitor") + (when ? " · " + when : "");
-        item.appendChild(by);
+        item.appendChild(top);
+        var meta = element("p", "meta"), date = fullDate(note.date), badge = badgeOf(note.relation);
+        if (date) {
+          var time = element("time", null, date);
+          time.setAttribute("datetime", note.date);
+          meta.appendChild(time);
+        }
+        if (note.pinned) meta.appendChild(element("span", "badge pinned", "Pinned"));
+        if (badge) meta.appendChild(element("span", "badge", badge));
+        if (meta.childNodes.length) item.appendChild(meta);
+        item.appendChild(element("p", "words", note.message));
         return item;
       }
+      // Adds [notes] to [list], and gives back the first of them, for the focus to move to.
+      function appendNotes(list, notes) {
+        var first = null;
+        notes.forEach(function (note) { var item = noteItem(note); first = first || item; list.appendChild(item); });
+        return first;
+      }
+      // Once "Show more" had the focus, it keeps it; when nothing more is left and it hides, the focus goes to the
+      // first note it brought, never back to the page's top (nor out of the sheet).
+      function refocus(more, first) {
+        if (!more.hidden) return more.focus();
+        if (first) { first.tabIndex = -1; first.focus(); }
+      }
+      var siteRatings = null;
       function showRatings(r) {
         var board = notesBox.querySelector(".ratings");
+        siteRatings = r || null;
         if (!r || !r.count || r.average == null) { board.hidden = true; return; }
         var average = Number(r.average).toFixed(1);
         board.querySelector(".score strong").textContent = average;
@@ -280,7 +395,7 @@
           var percent = Math.round(r.count ? n / r.count * 100 : 0);
           button.querySelector(".n").textContent = n;
           button.querySelector(".pct").textContent = percent + "%";
-          button.setAttribute("aria-label", plural(stars, "star", "stars") + ": " + plural(n, "rating", "ratings") + ", " + percent + " percent");
+          button.setAttribute("aria-label", "Show the " + stars + "-star notes: " + plural(n, "rating", "ratings") + ", " + percent + " percent");
           var fill = button.querySelector(".fill");
           fill.style.minWidth = n ? "10px" : "0";
           // Set after the first paint, so the bars grow in from the left (the CSS skips it for reduced motion).
@@ -294,34 +409,19 @@
           : "Every rating counts. " + n + " came with notes sent privately, before notes were public: their stars are here, their words are not.";
         kept.hidden = !n;
       }
-      function showList(data, append) {
-        var list = notesBox.querySelector("ul.notes");
+      // The page's own list (the sheet has its own): the first page, or the next one after it when [append].
+      function showList(data, append, focused) {
+        var list = notesBox.querySelector(":scope > ul.notes");
         if (!append) list.textContent = "";
-        data.notes.forEach(function (note) { list.appendChild(noteItem(note)); });
-        if (data.notes.length) browsing.last = data.notes[data.notes.length - 1].id;
-        var more = notesBox.querySelector(".more");
+        var first = appendNotes(list, data.notes);
+        listed.offset = list.children.length;
+        var more = notesBox.querySelector(":scope > .more");
         more.hidden = !data.more;
         more.disabled = false;
         more.textContent = "Show more notes";
-        var line = notesBox.querySelector(".list-line"), stars = browsing.stars;
-        line.textContent = "";
-        var words = null;
-        if (stars && !list.children.length) words = "No public notes with " + plural(stars, "star", "stars") + " yet.";
-        else if (stars) words = plural(data.total, "note", "notes") + " with " + plural(stars, "star", "stars");
-        else if (!list.children.length && !(data.ratings && data.ratings.count)) words = "No notes yet. Be the first to leave one below.";
-        if (words) line.appendChild(document.createTextNode(words));
-        if (stars) {
-          var all = document.createElement("button");
-          all.type = "button";
-          all.textContent = "All notes";
-          all.addEventListener("click", function () { loadNotes(null, null, false); });
-          line.appendChild(all);
-        }
-        var bars = notesBox.querySelector(".bars");
-        bars.classList.toggle("filtering", !!stars);
-        Array.prototype.forEach.call(bars.querySelectorAll("button"), function (button) {
-          button.setAttribute("aria-pressed", String(Number(button.dataset.stars) === stars));
-        });
+        if (focused) refocus(more, first);
+        var empty = !list.children.length && !(data.ratings && data.ratings.count);
+        notesBox.querySelector(".list-line").textContent = empty ? "No notes yet. Be the first to leave one below." : "";
       }
       function showNotes(data) {
         if (!notesBox || !data || !data.notes) return;
@@ -329,35 +429,179 @@
         showList(data, false);
         notesBox.hidden = false;
       }
-      // A page of notes: [stars]'s or all, after the note [before] for the next page; [fresh] asks past the cache.
-      function loadNotes(stars, before, fresh) {
-        if (!notesBox || browsing.loading) return;
-        browsing.loading = true;
+      // A page of the notes from [offset] (0 for the first); [fresh] asks past the cache and redraws the dashboard,
+      // after a note is sent. A fresh first page wins over a page still on its way.
+      function loadNotes(offset, fresh) {
+        if (!notesBox || (offset && listed.loading)) return;
+        var seq = ++listed.seq;
+        listed.loading = true;
         var query = [];
-        if (stars) query.push("stars=" + stars);
-        if (before) query.push("before=" + before);
+        if (offset) query.push("offset=" + offset);
         if (fresh) query.push("fresh=" + Date.now());
-        if (before) { var more = notesBox.querySelector(".more"); more.disabled = true; more.textContent = "Loading…"; }
+        var more = notesBox.querySelector(":scope > .more");
+        var focused = !!offset && document.activeElement === more;
+        if (offset) { more.disabled = true; more.textContent = "Loading…"; }
         fetch(notesBox.dataset.api + "/notes" + (query.length ? "?" + query.join("&") : ""), { credentials: "omit" })
           .then(function (r) { return r.ok ? r.json() : null; })
           .catch(function () { return null; })
           .then(function (data) {
-            browsing.loading = false;
-            if (!data || !data.notes) return;
-            browsing.stars = stars;
+            if (seq !== listed.seq) return;
+            listed.loading = false;
+            if (!data || !data.notes) {
+              more.disabled = false;
+              more.textContent = "Show more notes";
+              if (focused) more.focus();
+              return;
+            }
             if (fresh) showRatings(data.ratings);
-            showList(data, !!before);
+            showList(data, !!offset, focused);
             notesBox.hidden = false;
           });
       }
+      // A star's sheet: its bar opens it on All, a chip asks for one relation's notes, "Show more" for the next page.
+      // Only the latest ask is drawn, so an answer that comes late never lands over a newer pick.
+      var sheet = notesBox && notesBox.querySelector("dialog.star-sheet");
+      var picked = { stars: 0, relation: "", offset: 0, seq: 0, opener: null };
+      function inSheet(selector) { return sheet.querySelector(selector); }
+      function eachChip(action) { Array.prototype.forEach.call(sheet.querySelectorAll(".relations button"), action); }
+      function fillSheet(data, append, focused) {
+        var stars = picked.stars, relation = picked.relation;
+        var counts = data.relations || {}, ratings = data.ratings || {}, readable = 0;
+        RELATIONS.forEach(function (r) { readable += counts[r[0]] || 0; });
+        var rated = (ratings.stars && ratings.stars[stars]) || 0;
+        inSheet(".summary").textContent = plural(rated, "rating", "ratings") + " · " + plural(readable, "note", "notes") + " to read";
+        eachChip(function (chip) {
+          var wire = chip.dataset.relation, n = wire ? counts[wire] || 0 : readable;
+          chip.querySelector(".n").textContent = n;
+          chip.setAttribute("aria-pressed", String(wire === relation));
+          // A relation with nothing to read is not worth a tap; All always is, if only for the private line.
+          chip.disabled = !!wire && !n && wire !== relation;
+        });
+        var list = inSheet("ul.notes");
+        if (!append) list.textContent = "";
+        var first = appendNotes(list, data.notes);
+        list.removeAttribute("aria-busy");
+        picked.offset = list.children.length;
+        var more = inSheet(".more");
+        more.hidden = !data.more;
+        more.disabled = false;
+        more.textContent = "Show more notes";
+        if (focused) refocus(more, first);
+        var empty = inSheet(".empty");
+        empty.textContent = "No notes" + (FROM[relation] || "") + " with " + plural(stars, "star", "stars") + " yet.";
+        empty.hidden = list.children.length > 0;
+        // FeedbackCopy.privateInSheet, on All only: the private words belong to no relation.
+        var kept = (ratings.privateStars && ratings.privateStars[stars]) || 0;
+        var line = inSheet(".private-line");
+        line.textContent = "+" + kept + " private " + stars + "-star " + (kept === 1 ? "rating" : "ratings") +
+          ": sent before notes were public, so only " + (kept === 1 ? "its stars are" : "their stars are") + " here.";
+        line.hidden = !kept || !!relation;
+      }
+      function loadSheet(append) {
+        var seq = ++picked.seq;
+        var query = ["stars=" + picked.stars];
+        if (picked.relation) query.push("relation=" + picked.relation);
+        if (append) query.push("offset=" + picked.offset);
+        var list = inSheet("ul.notes"), more = inSheet(".more");
+        var focused = append && document.activeElement === more;
+        more.disabled = true;
+        if (append) more.textContent = "Loading…"; else list.setAttribute("aria-busy", "true");
+        fetch(notesBox.dataset.api + "/notes?" + query.join("&"), { credentials: "omit" })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .catch(function () { return null; })
+          .then(function (data) {
+            if (seq !== picked.seq) return;
+            if (data && data.notes) return fillSheet(data, append, focused);
+            more.disabled = false;
+            more.textContent = "Show more notes";
+            if (append) return focused && more.focus();
+            list.removeAttribute("aria-busy");
+            list.textContent = "";
+            more.hidden = true;
+            inSheet(".private-line").hidden = true;
+            var empty = inSheet(".empty");
+            empty.textContent = "The notes could not be loaded. Check the connection and try again.";
+            empty.hidden = false;
+          });
+      }
+      function openSheet(bar) {
+        var stars = Number(bar.dataset.stars);
+        picked.stars = stars;
+        picked.relation = "";
+        picked.offset = 0;
+        picked.opener = bar;
+        // What the dashboard already knows, at once; the rest when the backend answers.
+        drawStars(inSheet(".sheet-stars"), stars);
+        inSheet("h4").textContent = stars + "-star notes";
+        var rated = (siteRatings && siteRatings.stars && siteRatings.stars[stars]) || 0;
+        inSheet(".summary").textContent = plural(rated, "rating", "ratings");
+        eachChip(function (chip) {
+          chip.setAttribute("aria-pressed", String(!chip.dataset.relation));
+          chip.querySelector(".n").textContent = "";
+          chip.disabled = !!chip.dataset.relation;
+        });
+        inSheet("ul.notes").textContent = "";
+        inSheet(".more").hidden = true;
+        inSheet(".private-line").hidden = true;
+        var empty = inSheet(".empty");
+        empty.textContent = "Loading…";
+        empty.hidden = false;
+        inSheet(".sheet-body").scrollTop = 0;
+        // A browser that predates <dialog> still shows it (the CSS draws any open one), only not modal.
+        if (typeof sheet.showModal === "function") { if (!sheet.open) sheet.showModal(); } else sheet.setAttribute("open", "");
+        loadSheet(false);
+      }
+      function closeSheet() {
+        if (!sheet.hasAttribute("open")) return;
+        if (typeof sheet.close === "function") sheet.close(); else { sheet.removeAttribute("open"); sheetClosed(); }
+      }
+      // However it closed (the button, Esc, the backdrop), focus goes back to the bar that opened it: Safari never
+      // focuses a clicked button, so the browser's own return could land on the page's top.
+      function sheetClosed() {
+        picked.seq++;
+        if (picked.opener && !document.body.classList.contains("app-ready")) picked.opener.focus();
+      }
+      // A click on the backdrop lands on the dialog itself, outside its box; one that only ends there (a text
+      // selection dragged out of the sheet) does not close it.
+      function onBackdrop(event) {
+        if (event.target !== sheet) return false;
+        var box = sheet.getBoundingClientRect();
+        return event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom;
+      }
       if (notesBox) {
-        Array.prototype.forEach.call(notesBox.querySelectorAll(".bars button"), function (button) {
-          button.addEventListener("click", function () {
-            var stars = Number(button.dataset.stars);
-            loadNotes(browsing.stars === stars ? null : stars, null, false);
+        Array.prototype.forEach.call(notesBox.querySelectorAll(".bars button"), function (bar) {
+          bar.addEventListener("click", function () { if (sheet) openSheet(bar); });
+        });
+        notesBox.querySelector(":scope > .more").addEventListener("click", function () { loadNotes(listed.offset, false); });
+      }
+      if (sheet) {
+        eachChip(function (chip) {
+          chip.addEventListener("click", function () {
+            if (chip.dataset.relation === picked.relation) return;
+            picked.relation = chip.dataset.relation;
+            picked.offset = 0;
+            eachChip(function (other) { other.setAttribute("aria-pressed", String(other === chip)); });
+            inSheet(".sheet-body").scrollTop = 0;
+            loadSheet(false);
           });
         });
-        notesBox.querySelector(".more").addEventListener("click", function () { loadNotes(browsing.stars, browsing.last, false); });
+        inSheet(".more").addEventListener("click", function () { loadSheet(true); });
+        inSheet(".close").addEventListener("click", closeSheet);
+        sheet.addEventListener("close", sheetClosed);
+        var pressedOutside = false;
+        sheet.addEventListener("pointerdown", function (event) { pressedOutside = onBackdrop(event); });
+        sheet.addEventListener("click", function (event) {
+          if (pressedOutside && onBackdrop(event)) closeSheet();
+          pressedOutside = false;
+        });
+        // Esc closes a modal <dialog> by itself; the stand-in for older browsers needs telling.
+        sheet.addEventListener("keydown", function (event) {
+          if (event.key === "Escape" && typeof sheet.showModal !== "function") closeSheet();
+        });
+        // Once the app has drawn over the page, a sheet left open would float over it and keep it inert: close it.
+        new MutationObserver(function () {
+          if (document.body.classList.contains("app-ready")) closeSheet();
+        }).observe(document.body, { attributes: true, attributeFilter: ["class"] });
       }
       var stats = document.querySelector(".live-stats[data-api]");
       if (stats) {
@@ -389,6 +633,7 @@
         var status = form.querySelector(".status");
         var button = form.querySelector("button");
         var note = {};
+        // The relation comes along only when one is picked, as with the plain form: none picked is not saying.
         new FormData(form).forEach(function (value, key) { note[key] = value; });
         if (note.rating === "") delete note.rating; else note.rating = Number(note.rating);
         note.consent = note.consent === "1";
@@ -399,7 +644,7 @@
         })
           .then(function (r) { return r.json().then(function (body) { return { ok: r.ok, body: body }; }); })
           .then(function (r) {
-            if (r.ok) { form.reset(); status.textContent = "Thanks, your note is up."; loadNotes(null, null, true); }
+            if (r.ok) { form.reset(); status.textContent = "Thanks, your note is up."; loadNotes(0, true); }
             else { status.textContent = (r.body && r.body.error) || "The note could not be sent. Try again, or email me."; }
           })
           .catch(function () { status.textContent = "The note could not be sent. Check the connection and try again."; })

@@ -1,10 +1,13 @@
 package dev.yowkey.portfolio.site
 
 import dev.yowkey.portfolio.data.PortfolioParser
+import dev.yowkey.portfolio.model.FeedbackCopy
 import dev.yowkey.portfolio.model.GalleryItem
 import dev.yowkey.portfolio.model.MessageCopy
 import dev.yowkey.portfolio.model.Portfolio
 import dev.yowkey.portfolio.model.Project
+import dev.yowkey.portfolio.model.PublicNote
+import dev.yowkey.portfolio.model.Relation
 import dev.yowkey.portfolio.model.RepoVisibility
 import dev.yowkey.portfolio.model.trackingKey
 import dev.yowkey.portfolio.ui.image.AnimatedClip
@@ -275,6 +278,23 @@ class SiteContentTest {
         assertTrue("navigator.sendBeacon(link.dataset.api + \"/clicks\", JSON.stringify({ link: name }))" in page)
         assertTrue("addEventListener(\"auxclick\"" in page, "a middle click counts too")
         assertTrue(MessageCopy.THANKS in page, "the static form thanks the visitor as the app does")
+    }
+
+    /**
+     * The template's script draws the note cards and the star sheet in the model's words, which it copies: each
+     * relation's label and plural, the empty sheet's "from colleagues" and the rest, the badge and the buttons.
+     */
+    @Test
+    fun theNotesScriptSpeaksTheModelsWords() {
+        Relation.entries.forEach {
+            assertTrue("[\"${it.wire}\", \"${it.label}\", \"${it.plural}\"]" in page, "the script's ${it.wire}")
+            val from = FeedbackCopy.noneInSheet(it, 5).removePrefix("No notes").substringBefore(" with ")
+            assertTrue("${it.wire}: \"$from\"" in page, "the script's \"$from\"")
+        }
+        listOf(FeedbackCopy.PINNED, FeedbackCopy.MORE, FeedbackCopy.LOADING_MORE, PublicNote.ANONYMOUS).forEach {
+            assertTrue("\"$it\"" in page, "the script lacks \"$it\"")
+        }
+        assertTrue("\" to read\"" in page && "\"-star notes\"" in page, "the sheet's title and summary")
     }
 
     /** The card's lead (the cover clip, else the cover) opens its article, ahead of the title. */

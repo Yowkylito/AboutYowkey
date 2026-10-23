@@ -4,6 +4,7 @@ import dev.yowkey.portfolio.model.FeedbackDraft
 import dev.yowkey.portfolio.model.MessageDraft
 import dev.yowkey.portfolio.model.PublicNote
 import dev.yowkey.portfolio.model.RatingSummary
+import dev.yowkey.portfolio.model.Relation
 import dev.yowkey.portfolio.model.SiteNotes
 import dev.yowkey.portfolio.model.VisitCount
 import kotlinx.coroutines.test.runTest
@@ -53,12 +54,12 @@ class HttpSiteApiTest {
     }
 
     @Test
-    fun theNotesAskForAStarAPageAfterAndPastTheCacheAndReadTheRatingStarByStar() = runTest {
+    fun theNotesAskForAStarARelationAPageInAndPastTheCacheAndReadTheRatingStarByStar() = runTest {
         val reply = """{"visits":{"total":3},"ratings":{"count":4,"average":4.5,"stars":{"1":0,"2":0,"3":1,"4":0,"5":3},"private":1},""" +
             """"notes":[{"id":9,"rating":5,"message":"Great"}],"total":3,"more":true}"""
         val transport = FakeTransport(HttpReply(200, reply))
-        val notes = HttpSiteApi(transport, true).loadNotes(api, stars = 5, before = 12)
-        assertEquals("https://api.example/notes?stars=5&before=12", transport.calls.single().second)
+        val notes = HttpSiteApi(transport, true).loadNotes(api, stars = 5, relation = "colleague", offset = 12)
+        assertEquals("https://api.example/notes?stars=5&relation=colleague&offset=12", transport.calls.single().second)
         assertEquals(3, notes.ratings.countOf(5))
         assertEquals(0.75f, notes.ratings.shareOf(5))
         assertEquals("25%", notes.ratings.percentOf(3))
@@ -66,8 +67,35 @@ class HttpSiteApiTest {
         assertEquals(3, notes.total)
         assertEquals(true, notes.more)
 
+        HttpSiteApi(transport, true).loadNotes(api, stars = 4, relation = " Friend ", offset = 0)
+        assertEquals("https://api.example/notes?stars=4&relation=friend", transport.calls.last().second, "a first page names no offset; the relation goes lowercase")
+        HttpSiteApi(transport, true).loadNotes(api, relation = " ", offset = 24)
+        assertEquals("https://api.example/notes?offset=24", transport.calls.last().second, "a blank relation is none")
         HttpSiteApi(transport, true).loadNotes(api, fresh = true)
         assertTrue(Regex("""https://api\.example/notes\?fresh=\d+""").matches(transport.calls.last().second), transport.calls.last().second)
+        HttpSiteApi(transport, true).loadNotes(api, stars = 5, relation = "other", offset = 12, fresh = true)
+        val last = transport.calls.last().second
+        assertTrue(Regex("""https://api\.example/notes\?stars=5&relation=other&offset=12&fresh=\d+""").matches(last), last)
+    }
+
+    /** The contract's reply: each note's relation and pin, the private ratings star by star, the sorter's counts. */
+    @Test
+    fun theNotesReadTheirRelationPinAndTheSortersCounts() = runTest {
+        val reply = """{"visits":{"total":3},"ratings":{"count":4,"average":5,"stars":{"1":0,"2":0,"3":0,"4":0,"5":4},"private":3,""" +
+            """"privateStars":{"1":0,"2":0,"3":0,"4":0,"5":3}},"notes":[{"id":7,"name":"Akkram","rating":5,"message":"Solid",""" +
+            """"date":"2026-10-23","relation":"colleague","pinned":true},{"id":6,"message":"Hi","relation":null}],"total":2,"more":false,""" +
+            """"relations":{"colleague":1,"friend":0,"special":0,"other":1}}"""
+        val notes = HttpSiteApi(FakeTransport(HttpReply(200, reply)), true).loadNotes(api, stars = 5)
+        assertEquals(PublicNote(7, "Akkram", 5, "Solid", "2026-10-23", relation = "colleague", pinned = true), notes.notes.first())
+        assertEquals(PublicNote(6, message = "Hi"), notes.notes.last(), "an older note: no relation, not pinned")
+        assertEquals(3, notes.ratings.privateCountOf(5))
+        assertEquals(0, notes.ratings.privateCountOf(4))
+        assertEquals(1, notes.countOf(Relation.Colleague))
+        assertEquals(0, notes.countOf(Relation.Special))
+        assertEquals(1, notes.countOf(Relation.Other))
+        val bare = HttpSiteApi(FakeTransport(HttpReply(200, """{"visits":{"total":1}}""")), true).loadNotes(api)
+        assertEquals(0, bare.countOf(Relation.Friend), "a reply without counts counts none")
+        assertEquals(0, bare.ratings.privateCountOf(5))
     }
 
     @Test
@@ -75,6 +103,18 @@ class HttpSiteApiTest {
         val transport = FakeTransport(HttpReply(201, """{"ok":true}"""))
         HttpSiteApi(transport, true).sendFeedback(api, FeedbackDraft(message = "Hi"))
         assertEquals("""{"message":"Hi","consent":true}""", transport.calls.single().third, "the form says it is public; the default is sent too")
+    }
+
+    @Test
+    fun aNoteSaysHowItsWriterKnowsTheOwnerInLowercaseOrNotAtAll() = runTest {
+        val transport = FakeTransport(HttpReply(201, """{"ok":true}"""))
+        HttpSiteApi(transport, true).sendFeedback(api, FeedbackDraft(message = "Hi", relation = " Friend "))
+        assertEquals("""{"message":"Hi","consent":true,"relation":"friend"}""", transport.calls.single().third)
+        HttpSiteApi(transport, true).sendFeedback(api, FeedbackDraft(message = "Hi", relation = "  "))
+        assertEquals("""{"message":"Hi","consent":true}""", transport.calls.last().third, "not saying is left out")
+        val e = assertFailsWith<SiteApiException> { HttpSiteApi(transport, true).sendFeedback(api, FeedbackDraft(message = "Hi", relation = "boss")) }
+        assertEquals("Pick one of the ways you know me.", e.message)
+        assertEquals(2, transport.calls.size, "an unknown relation never leaves")
     }
 
     @Test

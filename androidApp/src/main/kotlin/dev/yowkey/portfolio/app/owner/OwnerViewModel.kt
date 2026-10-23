@@ -258,9 +258,12 @@ class OwnerViewModel(
             when (action) {
                 NoteAction.Publish -> "Back on the site."
                 NoteAction.Unpublish -> "Taken off the site."
-                NoteAction.Hide -> "Hidden."
+                // Hiding unpins (the worker clears the pin), which the owner should not have to discover.
+                NoteAction.Hide -> if (note.isPinned) "Hidden, and no longer pinned." else "Hidden."
                 NoteAction.Unhide -> "No longer hidden."
                 NoteAction.Delete -> "Note deleted."
+                NoteAction.Pin -> "Pinned: it comes first on the site."
+                NoteAction.Unpin -> "Unpinned."
             }
         }
     }

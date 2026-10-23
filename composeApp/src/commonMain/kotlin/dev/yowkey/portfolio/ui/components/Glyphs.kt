@@ -8,6 +8,7 @@ import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -16,6 +17,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.yowkey.portfolio.model.PlatformKind
@@ -163,6 +165,53 @@ fun ThemeGlyph(sun: Boolean, color: Color, modifier: Modifier = Modifier, glyphS
                 val cut = Path().apply { addOval(Rect(c + Offset(r * 0.6f, -r * 0.6f), r * 0.9f)) }
                 val moon = Path().apply { op(disc, cut, PathOperation.Difference) }
                 onDrawBehind { drawPath(moon, color, style = stroke) }
+            }
+        },
+    )
+}
+
+/**
+ * A push pin, leaning as if just pressed in, for a pinned note's badge: a round head on a short body, a wide collar,
+ * and the needle, filled so it still reads at 12 dp.
+ */
+@Composable
+fun PinGlyph(color: Color, modifier: Modifier = Modifier, glyphSize: Dp = 12.dp) {
+    Spacer(
+        modifier.size(glyphSize).drawWithCache {
+            val w = size.width
+            val h = size.height
+            val pin = Path().apply {
+                addRoundRect(RoundRect(Rect(w * 0.34f, h * 0.04f, w * 0.66f, h * 0.18f), CornerRadius(w * 0.07f)))
+                addRect(Rect(w * 0.39f, h * 0.16f, w * 0.61f, h * 0.44f))
+                // The collar flares out from the body, the way a pin's plastic does.
+                moveTo(w * 0.39f, h * 0.42f)
+                lineTo(w * 0.61f, h * 0.42f)
+                lineTo(w * 0.8f, h * 0.6f)
+                lineTo(w * 0.2f, h * 0.6f)
+                close()
+            }
+            val needle = 1.3.dp.toPx()
+            onDrawBehind {
+                rotate(35f) {
+                    drawPath(pin, color)
+                    drawLine(color, Offset(w * 0.5f, h * 0.6f), Offset(w * 0.5f, h * 0.96f), needle, StrokeCap.Round)
+                }
+            }
+        },
+    )
+}
+
+/** A cross, for the star sheet's close button. */
+@Composable
+fun CloseGlyph(color: Color, modifier: Modifier = Modifier, glyphSize: Dp = 18.dp) {
+    Spacer(
+        modifier.size(glyphSize).drawWithCache {
+            val stroke = 1.8.dp.toPx()
+            val a = size.width * 0.24f
+            val b = size.width * 0.76f
+            onDrawBehind {
+                drawLine(color, Offset(a, a), Offset(b, b), stroke, StrokeCap.Round)
+                drawLine(color, Offset(b, a), Offset(a, b), stroke, StrokeCap.Round)
             }
         },
     )

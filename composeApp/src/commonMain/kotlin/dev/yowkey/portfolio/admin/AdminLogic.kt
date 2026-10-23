@@ -33,11 +33,25 @@ fun AdminMessage.after(action: MessageAction, now: String): AdminMessage? = when
 fun AdminNote.after(action: NoteAction, now: String): AdminNote? = when (action) {
     // The 1.0 app's Publish and Unpublish are the worker's unhide and hide now, notes being public as they arrive.
     NoteAction.Publish -> copy(publishedAt = publishedAt ?: now, hiddenAt = null)
-    NoteAction.Unpublish -> copy(hiddenAt = now)
-    NoteAction.Hide -> copy(hiddenAt = now)
+    // A hidden note is off the site, so its pin goes with it; unhiding does not bring the pin back.
+    NoteAction.Unpublish, NoteAction.Hide -> copy(hiddenAt = now, pinnedAt = null)
     NoteAction.Unhide -> copy(hiddenAt = null)
     NoteAction.Delete -> null
+    // The worker refuses to pin a note that is not on the site, and the app offers Pin on those only.
+    NoteAction.Pin -> copy(pinnedAt = now)
+    NoteAction.Unpin -> copy(pinnedAt = null)
 }
+
+/**
+ * [notes] in the site's order: the pinned first, the newest pin first, then the rest newest first (the worker's
+ * `ORDER BY pinned_at IS NULL, pinned_at DESC, id DESC`), so a pin made on the phone moves the note without a reload.
+ */
+fun pinnedFirst(notes: List<AdminNote>): List<AdminNote> =
+    notes.sortedWith(
+        compareBy<AdminNote> { !it.isPinned }
+            .thenByDescending { it.pinnedAt.orEmpty() }
+            .thenByDescending { it.id },
+    )
 
 /** One bar of the dashboard's visits chart. */
 @Immutable

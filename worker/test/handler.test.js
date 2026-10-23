@@ -169,9 +169,10 @@ test("a note is stored trimmed, the optional fields null when left out, and neve
   const listed = await (await owner("/feedback")).json();
   assert.deepEqual(listed.visits, { total: 0, today: 0, since: null });
   assert.deepEqual(listed.items.map((item) => item.message), ["Second", "Nice site.\nHire me?"], "newest first");
-  assert.deepEqual(Object.keys(listed.items[0]).sort(), ["consent", "contact", "created_at", "hidden_at", "id", "message", "name", "published_at", "rating"]);
+  assert.deepEqual(Object.keys(listed.items[0]).sort(), ["consent", "contact", "created_at", "hidden_at", "id", "message", "name", "pinned_at", "published_at", "rating", "relation"]);
   assert.deepEqual(listed.items[1], {
     id: 1, created_at: DAY_ONE, name: "Ada", contact: null, rating: 5, message: "Nice site.\nHire me?", consent: 0, published_at: null, hidden_at: null,
+    relation: null, pinned_at: null,
   });
 });
 
@@ -196,10 +197,11 @@ test("a note is public as it arrives; the rating counts every star not hidden, a
   assert.equal(empty.headers.get("Access-Control-Allow-Origin"), SITE);
   assert.deepEqual(await empty.json(), {
     visits: { total: 0, today: 0, since: null },
-    ratings: { count: 0, average: null, stars: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }, private: 0 },
+    ratings: { count: 0, average: null, stars: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }, private: 0, privateStars: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } },
     notes: [],
     total: 0,
     more: false,
+    relations: { colleague: 0, friend: 0, special: 0, other: 0 },
   });
 
   await post("/feedback", { name: "Ada", contact: "ada@example.com", rating: 5, message: "Great", consent: true });
@@ -207,12 +209,14 @@ test("a note is public as it arrives; the rating counts every star not hidden, a
   await post("/feedback", { name: "Quiet", rating: 1, message: "Before notes were public", consent: false }, { address: "198.51.100.3" });
   await post("/feedback", { message: "No stars", consent: true }, { address: "198.51.100.4", now: DAY_TWO });
   const shown = await publicNotes({ now: DAY_TWO });
-  assert.deepEqual(shown.ratings, { count: 3, average: 3.3, stars: { 1: 1, 2: 0, 3: 0, 4: 1, 5: 1 }, private: 1 },
+  assert.deepEqual(shown.ratings, {
+    count: 3, average: 3.3, stars: { 1: 1, 2: 0, 3: 0, 4: 1, 5: 1 }, private: 1, privateStars: { 1: 1, 2: 0, 3: 0, 4: 0, 5: 0 },
+  },
     "a note without stars does not rate; a private note's stars do, and are counted as private");
   assert.deepEqual(shown.notes, [
-    { id: 4, name: null, rating: null, message: "No stars", date: "2026-10-25" },
-    { id: 2, name: null, rating: 4, message: "Good", date: "2026-10-25" },
-    { id: 1, name: "Ada", rating: 5, message: "Great", date: "2026-10-24" },
+    { id: 4, name: null, rating: null, message: "No stars", date: "2026-10-25", relation: null, pinned: false },
+    { id: 2, name: null, rating: 4, message: "Good", date: "2026-10-25", relation: null, pinned: false },
+    { id: 1, name: "Ada", rating: 5, message: "Great", date: "2026-10-24", relation: null, pinned: false },
   ], "no owner's click needed; the private note's words never show");
   assert.equal(shown.total, 3);
   assert.equal(shown.more, false);
@@ -224,7 +228,9 @@ test("a note is public as it arrives; the rating counts every star not hidden, a
 
   assert.equal((await act(1, "hide")).status, 303);
   const afterHide = await publicNotes();
-  assert.deepEqual(afterHide.ratings, { count: 2, average: 2.5, stars: { 1: 1, 2: 0, 3: 0, 4: 1, 5: 0 }, private: 1 }, "hidden: shown nowhere, counted nowhere");
+  assert.deepEqual(afterHide.ratings, {
+    count: 2, average: 2.5, stars: { 1: 1, 2: 0, 3: 0, 4: 1, 5: 0 }, private: 1, privateStars: { 1: 1, 2: 0, 3: 0, 4: 0, 5: 0 },
+  }, "hidden: shown nowhere, counted nowhere");
   assert.deepEqual(afterHide.notes.map((note) => note.id), [4, 2]);
   assert.equal((await act(1, "unhide")).status, 303);
   assert.deepEqual((await publicNotes()).notes.map((note) => note.id), [4, 2, 1]);
@@ -689,7 +695,7 @@ test("the app acts on notes with the inbox's rules: 404, 409 without consent, 40
 
   const listed = await appJson("/admin/feedback");
   assert.deepEqual(listed.items.map((item) => item.id), [2, 1], "newest first");
-  assert.deepEqual(Object.keys(listed.items[0]).sort(), ["consent", "contact", "created_at", "hidden_at", "id", "message", "name", "published_at", "rating"]);
+  assert.deepEqual(Object.keys(listed.items[0]).sort(), ["consent", "contact", "created_at", "hidden_at", "id", "message", "name", "pinned_at", "published_at", "rating", "relation"]);
   assert.equal((await appJson("/admin/feedback?limit=1")).items.length, 1);
 
   const published = await act(1, "publish", { now: DAY_TWO });
@@ -930,6 +936,224 @@ test("the Worker's entry point hands the cron its scheduled time, and requests t
   assert.deepEqual(query("SELECT day FROM daily_reports"), [{ day: "2026-10-24" }]);
   const health = await worker.fetch(new Request("https://api.example/"), env, ctx);
   assert.deepEqual(await health.json(), { ok: true, service: "aboutyowkey-api" });
+});
+
+// ---- Relations and pins ----
+
+/** A note as the new form sends it: public, with how the writer knows the owner. */
+const note = (fields, address, options = {}) => post("/feedback", { consent: true, ...fields }, { address, ...options });
+const noteAct = (id, action, options) => app(`/admin/feedback/${id}`, { method: "POST", payload: { action }, ...options });
+const ids = (answer) => answer.notes.map((entry) => entry.id);
+
+test("a note may say how the writer knows the owner: any case, stored lowercase, null when not said", async () => {
+  const cases = [["Colleague", "colleague"], [" FRIEND ", "friend"], ["special", "special"], ["other", "other"], ["", null], [null, null], [undefined, null]];
+  for (const [i, [relation, stored]] of cases.entries()) {
+    const payload = { message: `said ${JSON.stringify(relation)}`, consent: true };
+    if (relation !== undefined) payload.relation = relation;
+    assert.equal((await post("/feedback", payload, { address: `198.51.100.${i + 1}` })).status, 201, `${relation} → ${stored}`);
+  }
+  assert.deepEqual(feedbackRows().map((row) => row.relation), cases.map(([, stored]) => stored));
+
+  const form = await call("/feedback", {
+    method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "message=From+the+form&relation=Friend&consent=on", address: "198.51.100.50",
+  });
+  assert.equal(form.status, 201);
+  assert.match(await form.text(), /Thank you/);
+  assert.equal(feedbackRows().at(-1).relation, "friend", "a plain form post sends it too");
+});
+
+test("a relation the form does not offer is refused with the contract's sentence, after the rating's", async () => {
+  for (const relation of ["boss", "colleagues", "special someone", 5]) {
+    const response = await post("/feedback", { message: "ok", relation });
+    assert.equal(response.status, 400, String(relation));
+    assert.deepEqual(await response.json(), { error: "Pick one of the ways you know me.", problems: ["Pick one of the ways you know me."] });
+  }
+  assert.equal((await (await post("/feedback", { message: "ok", relation: ["friend"] })).json()).error, "Each field is text.");
+  assert.deepEqual(
+    (await (await post("/feedback", { message: "", rating: 9, relation: "boss" })).json()).problems,
+    ["Write a message first.", "The rating is 1 to 5.", "Pick one of the ways you know me."],
+    "the order of FeedbackDraft.problems",
+  );
+  const form = await call("/feedback", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "message=Hi&relation=boss" });
+  assert.equal(form.status, 400);
+  assert.match(await form.text(), /Pick one of the ways you know me\./);
+  assert.equal(feedbackRows().length, 0, "nothing of the above was kept");
+});
+
+test("a star's sheet: its notes by relation (not said is other), the sorter's counts, and the whole site's rating", async () => {
+  await note({ rating: 5, relation: "colleague", message: "1" }, "198.51.100.1");
+  await note({ rating: 5, relation: "friend", message: "2" }, "198.51.100.2");
+  await note({ rating: 5, message: "3: did not say" }, "198.51.100.3");
+  await note({ rating: 5, relation: "other", message: "4" }, "198.51.100.4");
+  await note({ rating: 5, relation: "colleague", message: "5: private", consent: false }, "198.51.100.5");
+  await note({ rating: 4, relation: "colleague", message: "6" }, "198.51.100.6");
+  await note({ rating: 5, relation: "special", message: "7: hidden" }, "198.51.100.7");
+  await note({ rating: 3, message: "8: private", consent: false }, "198.51.100.8");
+  await noteAct(7, "hide");
+
+  const sheet = async (query) => (await call(`/notes?${query}`)).json();
+  const fives = await sheet("stars=5");
+  assert.deepEqual(ids(fives), [4, 3, 2, 1]);
+  assert.equal(fives.total, 4);
+  assert.equal(fives.more, false);
+  assert.deepEqual(fives.relations, { colleague: 1, friend: 1, special: 0, other: 2 }, "the public ones only; not said counts as other");
+  assert.deepEqual(fives.notes.map((entry) => entry.relation), ["other", null, "friend", "colleague"], "a note keeps what it said, null included");
+  assert.deepEqual(fives.ratings, {
+    count: 7, average: 4.6, stars: { 1: 0, 2: 0, 3: 1, 4: 1, 5: 5 }, private: 2, privateStars: { 1: 0, 2: 0, 3: 1, 4: 0, 5: 1 },
+  }, "the rating is the whole site's, whatever the list asks for");
+
+  const others = await sheet("relation=other");
+  assert.deepEqual([ids(others), others.total], [[4, 3], 2], "other is other or not said, of any star");
+  assert.deepEqual(others.relations, { colleague: 2, friend: 1, special: 0, other: 2 }, "the counts never depend on the relation asked for");
+  assert.deepEqual(others.ratings, fives.ratings);
+  const colleagues = await sheet("stars=5&relation=colleague");
+  assert.deepEqual([ids(colleagues), colleagues.total], [[1], 1], "both filters at once");
+  assert.deepEqual(colleagues.relations, fives.relations, "the star's counts, for the sorter beside the list");
+  assert.deepEqual(ids(await sheet("relation=%20Colleague%20")), [6, 1], "any case, as the app's Relation.of reads it");
+  const none = await sheet("stars=4&relation=friend");
+  assert.deepEqual([none.notes, none.total, none.more], [[], 0, false]);
+  assert.deepEqual(none.relations, { colleague: 1, friend: 0, special: 0, other: 0 });
+  for (const ignored of ["relation=boss", "relation=", "relation=other'%20OR%201=1--", "stars=0&relation=special%20someone"]) {
+    assert.deepEqual(ids(await sheet(ignored)), [6, 4, 3, 2, 1], `${ignored} is ignored`);
+  }
+});
+
+test("the notes page by offset, with how many match and whether more follow", async () => {
+  for (let i = 1; i <= 15; i++) await note({ rating: (i % 5) + 1, message: `Note ${i}` }, `198.51.100.${i}`);
+  const page = async (query) => (await call(`/notes?${query}`)).json();
+  const first = await page("offset=0&limit=5");
+  assert.deepEqual([ids(first), first.total, first.more], [[15, 14, 13, 12, 11], 15, true]);
+  const last = await page("offset=10&limit=5");
+  assert.deepEqual([ids(last), last.total, last.more], [[5, 4, 3, 2, 1], 15, false]);
+  assert.deepEqual(ids(await page("offset=12")), [3, 2, 1], "the default page size from there");
+  const past = await page("offset=15");
+  assert.deepEqual([past.notes, past.total, past.more], [[], 15, false]);
+  for (const ignored of ["offset=100001", "offset=-1", "offset=two"]) {
+    const answer = await page(ignored);
+    assert.deepEqual([answer.notes.length, answer.notes[0].id, answer.more], [LIMITS.notesPage, 15, true], `${ignored} is the first page`);
+  }
+  const fives = await page("stars=5&offset=1&limit=1");
+  assert.deepEqual([ids(fives), fives.total, fives.more], [[9], 3, true]);
+  const lastFive = await page("stars=5&offset=2&limit=1");
+  assert.deepEqual([ids(lastFive), lastFive.more], [[4], false]);
+});
+
+test("pinned notes come first, the newest pin first, then the newest notes; the 1.1 app's later pages leave them out", async () => {
+  for (let i = 1; i <= 5; i++) await note({ rating: 5, message: `Note ${i}`, relation: i % 2 ? "friend" : "colleague" }, `198.51.100.${i}`);
+  assert.equal((await noteAct(2, "pin", { now: DAY_ONE })).status, 200);
+  assert.equal((await noteAct(4, "pin", { now: DAY_TWO })).status, 200);
+  const listed = await publicNotes();
+  assert.deepEqual(ids(listed), [4, 2, 5, 3, 1]);
+  assert.deepEqual(listed.notes.map((entry) => entry.pinned), [true, true, false, false, false]);
+  assert.ok(!("pinned_at" in listed.notes[0]), "the site learns that a note is pinned, not when");
+
+  assert.equal((await noteAct(2, "pin", { now: "2026-10-26T09:00:00.000Z" })).status, 200);
+  assert.deepEqual(ids(await publicNotes()), [4, 2, 5, 3, 1], "a second pin keeps the first time");
+  const page = async (query) => (await call(`/notes?${query}`)).json();
+  assert.deepEqual(ids(await page("limit=2")), [4, 2]);
+  assert.deepEqual(ids(await page("offset=2&limit=2")), [5, 3]);
+  assert.deepEqual(ids(await page("relation=friend")), [5, 3, 1]);
+  assert.deepEqual(ids(await page("relation=colleague&stars=5")), [4, 2], "a sheet lists its pins first too");
+
+  const legacy = await page("before=5");
+  assert.deepEqual([ids(legacy), legacy.more], [[3, 1], false], "by id, without the pins its first page already showed");
+  const legacyPage = await page("before=5&limit=1");
+  assert.deepEqual([ids(legacyPage), legacyPage.more], [[3], true]);
+
+  assert.equal((await noteAct(4, "unpin")).status, 200);
+  assert.deepEqual(ids(await publicNotes()), [2, 5, 4, 3, 1]);
+});
+
+test("only a note on the site can be pinned; hiding unpins it; the app and the inbox list relation and pinned_at", async () => {
+  await note({ name: "Ada", rating: 5, relation: "colleague", message: "Public" }, "198.51.100.1");
+  await note({ message: "Private", consent: false }, "198.51.100.2");
+  await note({ message: "Hidden" }, "198.51.100.3");
+  await noteAct(3, "hide");
+  const pinnedAt = () => feedbackRows().map((row) => row.pinned_at);
+
+  for (const id of [2, 3]) {
+    const refused = await noteAct(id, "pin");
+    assert.equal(refused.status, 409, `note ${id}`);
+    assert.deepEqual(await refused.json(), { error: "Only a note on the site can be pinned." });
+  }
+  const fromInbox = await act(2, "pin");
+  assert.equal(fromInbox.status, 409);
+  assert.match(await fromInbox.text(), /Only a note on the site can be pinned\./);
+  assert.equal((await noteAct(99, "pin")).status, 404);
+  assert.deepEqual(pinnedAt(), [null, null, null]);
+
+  assert.deepEqual(await (await noteAct(1, "pin")).json(), { ok: true });
+  const byId = (items) => Object.fromEntries(items.map(({ id, relation, pinned_at }) => [id, { relation, pinned_at }]));
+  assert.deepEqual(byId((await appJson("/admin/feedback")).items), {
+    1: { relation: "colleague", pinned_at: DAY_ONE },
+    2: { relation: null, pinned_at: null },
+    3: { relation: null, pinned_at: null },
+  });
+  assert.equal(byId((await (await owner("/feedback")).json()).items)[1].pinned_at, DAY_ONE, "the old owner's list too");
+
+  assert.equal((await noteAct(1, "hide")).status, 200);
+  assert.deepEqual(pinnedAt(), [null, null, null], "hiding unpins");
+  assert.equal((await noteAct(1, "unhide")).status, 200);
+  assert.deepEqual((await publicNotes()).notes.map((entry) => entry.pinned), [false], "and unhiding does not pin it again");
+
+  assert.equal((await act(1, "pin")).status, 303, "the inbox's Pin");
+  assert.equal(pinnedAt()[0], DAY_ONE);
+  assert.equal((await act(1, "unpin")).status, 303, "and Unpin");
+  assert.equal(pinnedAt()[0], null);
+  assert.equal((await noteAct(1, "unpin")).status, 200, "unpinning a note that is not pinned is fine");
+  await noteAct(1, "pin");
+  assert.equal((await noteAct(1, "unpublish")).status, 200);
+  assert.equal(pinnedAt()[0], null, "the 1.0 app's Unpublish hides, so it unpins too");
+  const forged = await act(1, "pin", { headers: { "Sec-Fetch-Site": "cross-site" } });
+  assert.equal(forged.status, 403, "Pin follows the inbox's same-origin rule");
+});
+
+test("the owner's lists put the pinned notes first too, so an old pin is never past the limit", async () => {
+  for (let i = 1; i <= 4; i++) await note({ message: `Note ${i}` }, `198.51.100.${i}`);
+  await noteAct(1, "pin", { now: DAY_ONE });
+  await noteAct(3, "pin", { now: DAY_TWO });
+  assert.deepEqual((await appJson("/admin/feedback")).items.map((item) => item.id), [3, 1, 4, 2], "newest pin first, then newest first");
+  assert.deepEqual((await appJson("/admin/feedback?limit=2")).items.map((item) => item.id), [3, 1]);
+  assert.deepEqual((await (await owner("/feedback?limit=1")).json()).items.map((item) => item.id), [3], "the old owner's list too");
+  const page = await (await call("/inbox", { headers: basic(env.ADMIN_TOKEN) })).text();
+  const rows = [...page.matchAll(/action="\/inbox\/notes\/(\d+)"/g)].map((match) => Number(match[1]));
+  assert.deepEqual(rows, [3, 1, 4, 2], "and the inbox's table");
+});
+
+test("a note's alert says who it is from when the relation has a badge", async () => {
+  await note({ rating: 5, relation: "colleague", message: "One" }, "198.51.100.1");
+  await note({ relation: "Friend", message: "Two" }, "198.51.100.2");
+  await note({ rating: 4, relation: "special", message: "Three" }, "198.51.100.3");
+  await note({ rating: 3, relation: "other", message: "Four" }, "198.51.100.4");
+  await note({ rating: 2, message: "Five" }, "198.51.100.5");
+  assert.deepEqual(notificationRows().map((row) => row.title), [
+    "New note (★5) · Colleague",
+    "New note · Friend",
+    "New note (★4) · Special someone",
+    "New note (★3)",
+    "New note (★2)",
+  ]);
+});
+
+test("the inbox shows the relation beside the name, Pinned in the status, and Pin or Unpin on the notes on the site", async () => {
+  await note({ name: "Ada", rating: 5, relation: "colleague", message: "Pinned one" }, "198.51.100.1");
+  await note({ relation: "special", message: "No name" }, "198.51.100.2");
+  await note({ name: "Old", message: "Private", consent: false }, "198.51.100.3");
+  await note({ name: "Gone", relation: "other", message: "Hidden" }, "198.51.100.4");
+  await noteAct(1, "pin", { now: DAY_TWO });
+  await noteAct(4, "hide");
+
+  const page = await (await call("/inbox", { headers: basic(env.ADMIN_TOKEN) })).text();
+  assert.match(page, /<td>Ada <span class="relation">Colleague<\/span><\/td>/);
+  assert.match(page, /<td> <span class="relation">Special someone<\/span><\/td>/);
+  assert.match(page, /<td>Gone <span class="relation">Other<\/span><\/td>/);
+  assert.match(page, /<td>Old<\/td>/, "nothing when they did not say");
+  assert.match(page, /<strong>On the site<\/strong><br>Pinned<br><span class="dim">2026-10-25 09:00 UTC<\/span>/);
+  assert.equal(page.match(/Pinned<br>/g).length, 1);
+  assert.match(page, /action="\/inbox\/notes\/1"><button name="action" value="hide">Hide<\/button><button name="action" value="unpin">Unpin<\/button><button name="action" value="delete"/);
+  assert.match(page, /action="\/inbox\/notes\/2"><button name="action" value="hide">Hide<\/button><button name="action" value="pin">Pin<\/button><button name="action" value="delete"/);
+  assert.match(page, /action="\/inbox\/notes\/3"><button name="action" value="hide">Hide<\/button><button name="action" value="delete"/, "a private note cannot be pinned");
+  assert.match(page, /action="\/inbox\/notes\/4"><button name="action" value="unhide">Unhide<\/button><button name="action" value="delete"/, "nor a hidden one");
 });
 
 // ---- Push ----

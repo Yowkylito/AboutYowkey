@@ -25,12 +25,20 @@ interface SiteApi {
     suspend fun recordVisit(api: String): VisitCount
 
     /**
-     * The rating, star by star, and a page of the public notes, newest first: all of them, or only [stars]'s; the
-     * notes older than [before] (an id) for the next page. [fresh] skips the browser's copy (the backend lets it keep
-     * one for 15 seconds), for the list a visitor has just added a note to.
+     * The rating, star by star, and a page of the public notes, pinned first, then newest first: all of them, or only
+     * [stars]'s, and of those only [relation]'s (a [dev.yowkey.portfolio.model.Relation]'s wire value; `other` takes
+     * in the notes that say nothing too); the page starting [offset] notes in, for the next one. By offset, not
+     * after an id, because the pinned notes break the order by id. [fresh] skips the browser's copy (the backend
+     * lets it keep one for 15 seconds), for a list a visitor has just added a note to.
      * @throws SiteApiException when the server cannot be reached or answers with an error
      */
-    suspend fun loadNotes(api: String, stars: Int? = null, before: Long? = null, fresh: Boolean = false): SiteNotes
+    suspend fun loadNotes(
+        api: String,
+        stars: Int? = null,
+        relation: String? = null,
+        offset: Int = 0,
+        fresh: Boolean = false,
+    ): SiteNotes
 
     /**
      * Puts [draft] in the owner's inbox.
@@ -103,10 +111,12 @@ class HttpSiteApi(
         }
     }
 
-    override suspend fun loadNotes(api: String, stars: Int?, before: Long?, fresh: Boolean): SiteNotes {
+    override suspend fun loadNotes(api: String, stars: Int?, relation: String?, offset: Int, fresh: Boolean): SiteNotes {
         val query = listOfNotNull(
             stars?.let { "stars=$it" },
-            before?.let { "before=$it" },
+            relation?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }?.let { "relation=$it" },
+            // Left out at 0: each first page keeps a single address, and so a single cached copy.
+            offset.takeIf { it > 0 }?.let { "offset=$it" },
             // A new value each time, so no copy of an earlier answer, from this page load or the last, can match.
             if (fresh) "fresh=${Random.nextInt(1, Int.MAX_VALUE)}" else null,
         )
