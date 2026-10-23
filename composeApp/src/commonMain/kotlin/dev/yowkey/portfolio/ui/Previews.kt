@@ -7,6 +7,7 @@ import dev.yowkey.portfolio.model.Link
 import dev.yowkey.portfolio.model.Portfolio
 import dev.yowkey.portfolio.model.Profile
 import dev.yowkey.portfolio.model.Project
+import dev.yowkey.portfolio.model.RepoVisibility
 import dev.yowkey.portfolio.model.Screenshot
 import dev.yowkey.portfolio.model.Service
 import dev.yowkey.portfolio.model.SkillGroup
@@ -24,7 +25,7 @@ private val previewPortfolio = Portfolio(
     ),
     services = listOf(Service("Android apps", "From first screen to Play Store.")),
     projects = listOf(
-        Project("a", "Short", "One line.", stack = listOf("Kotlin")),
+        Project("a", "Short", "One line.", stack = listOf("Kotlin"), visibility = RepoVisibility.Private),
         Project(
             id = "b",
             title = "A project title long enough that it has to wrap onto a second line and then get cut off",
@@ -32,7 +33,11 @@ private val previewPortfolio = Portfolio(
             highlights = listOf("A highlight that also runs quite long and wraps across lines"),
             stack = List(9) { "Library $it" },
             links = listOf(Link("Source", "https://github.com")),
+            period = "Jan – Mar 2026",
+            visibility = RepoVisibility.Public,
             // No loader in previews, so these show as their sized placeholders.
+            cover = Screenshot("splash.webp", "A phone splash screen", 1080, 2400),
+            clips = listOf(Screenshot("ride.webp", "A short clip", 720, 405)),
             screenshots = listOf(
                 Screenshot("phone.webp", "A phone screen", 1080, 2400),
                 Screenshot("desktop.webp", "A desktop screen", 1920, 1080),

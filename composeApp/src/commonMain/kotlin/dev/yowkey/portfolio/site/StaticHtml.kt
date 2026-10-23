@@ -2,6 +2,7 @@ package dev.yowkey.portfolio.site
 
 import dev.yowkey.portfolio.model.Link
 import dev.yowkey.portfolio.model.Portfolio
+import dev.yowkey.portfolio.model.RepoVisibility
 import dev.yowkey.portfolio.model.Screenshot
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
@@ -60,11 +61,19 @@ object StaticHtml {
 
         if (portfolio.projects.isNotEmpty()) {
             appendLine("<section id=\"projects\"><h2>Projects</h2>")
+            if (portfolio.projects.any { it.visibility == RepoVisibility.Private }) {
+                appendLine("<p class=\"note\">${escape(RepoVisibility.PRIVATE_NOTE)}</p>")
+            }
             portfolio.projects.forEach { project ->
-                appendLine("<article><h3>${escape(project.title)}</h3>")
-                val meta = listOfNotNull(project.role, project.period)
-                if (meta.isNotEmpty()) appendLine("<p class=\"muted\">${meta.joinToString(" · ") { escape(it) }}</p>")
-                screenshots(project.screenshots)
+                appendLine("<article>")
+                project.cover?.let { cover(it) }
+                appendLine("<h3>${escape(project.title)}</h3>")
+                val meta = listOfNotNull(
+                    listOfNotNull(project.role, project.period).takeIf { it.isNotEmpty() }?.joinToString(" · ") { escape(it) },
+                    project.visibility?.let { "<span class=\"badge\">${escape(it.badge)}</span>" },
+                )
+                if (meta.isNotEmpty()) appendLine("<p class=\"muted\">${meta.joinToString(" ")}</p>")
+                gallery(project.clips, project.screenshots)
                 appendLine("<p>${escape(project.summary)}</p>")
                 list(project.highlights)
                 if (project.stack.isNotEmpty()) {
@@ -112,19 +121,40 @@ object StaticHtml {
         appendLine("</section>")
     }
 
-    /** Thumbnails linking to the full image; width/height let the browser reserve the space (no layout shift). */
-    private fun StringBuilder.screenshots(shots: List<Screenshot>) {
-        if (shots.isEmpty()) return
+    /** The project's splash screen first, as on the card: its hero-sized thumbnail, linking to the full image. */
+    private fun StringBuilder.cover(cover: Screenshot) {
+        val orientation = if (cover.aspectRatio < 1f) "portrait" else "landscape"
+        appendLine(
+            "<a href=\"${resourceUrl(cover.fullPath)}\"><img class=\"cover $orientation\" " +
+                "src=\"${resourceUrl(cover.thumbPath)}\" ${imgAttributes(cover)}></a>",
+        )
+    }
+
+    /**
+     * Clips, then thumbnails linking to the full image. A clip is the animated WebP itself, which every browser
+     * that runs this page animates natively; under reduced motion the `<source>` swaps in its still poster.
+     */
+    private fun StringBuilder.gallery(clips: List<Screenshot>, shots: List<Screenshot>) {
+        if (clips.isEmpty() && shots.isEmpty()) return
         appendLine("<div class=\"shots\">")
+        clips.forEach { clip ->
+            appendLine(
+                "<picture><source media=\"(prefers-reduced-motion: reduce)\" srcset=\"${resourceUrl(clip.posterPath)}\">" +
+                    "<img src=\"${resourceUrl(clip.fullPath)}\" ${imgAttributes(clip)}></picture>",
+            )
+        }
         shots.forEach { shot ->
             appendLine(
                 "<a href=\"${resourceUrl(shot.fullPath)}\"><img src=\"${resourceUrl(shot.thumbPath)}\" " +
-                    "alt=\"${escape(shot.caption)}\" width=\"${shot.width}\" height=\"${shot.height}\" " +
-                    "loading=\"lazy\" decoding=\"async\"></a>",
+                    "${imgAttributes(shot)}></a>",
             )
         }
         appendLine("</div>")
     }
+
+    /** Alt text and the intrinsic size, so the browser reserves the space before loading (no layout shift). */
+    private fun imgAttributes(shot: Screenshot) =
+        "alt=\"${escape(shot.caption)}\" width=\"${shot.width}\" height=\"${shot.height}\" loading=\"lazy\" decoding=\"async\""
 
     /** Where Compose resources land in the Wasm distribution, relative to index.html. */
     fun resourceUrl(path: String) = "$RESOURCES_ROOT/$path"

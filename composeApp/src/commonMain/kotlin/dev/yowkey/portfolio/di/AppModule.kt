@@ -5,8 +5,12 @@ import dev.yowkey.portfolio.data.ResourcePortfolioRepository
 import dev.yowkey.portfolio.resources.Res
 import androidx.compose.ui.graphics.ImageBitmap
 import dev.yowkey.portfolio.ui.PortfolioViewModel
+import dev.yowkey.portfolio.model.GalleryItem
+import dev.yowkey.portfolio.ui.image.AnimatedClip
 import dev.yowkey.portfolio.ui.image.LruLoader
 import dev.yowkey.portfolio.ui.image.ScreenshotImages
+import dev.yowkey.portfolio.ui.image.ViewerMedia
+import dev.yowkey.portfolio.ui.image.byteCount
 import org.jetbrains.compose.resources.decodeToImageBitmap
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -23,12 +27,20 @@ val appModule = module {
         )
     }
     single {
-        val decode: suspend (String) -> ImageBitmap = { path -> Res.readBytes(path).decodeToImageBitmap() }
         ScreenshotImages(
-            // Thumbnails are ~200dp tall and small; every one on the page fits.
-            thumbnails = LruLoader(capacity = 40, dispatcher = get(), load = decode),
-            // Full-size images are several MB decoded; keep the viewer's page and its neighbours.
-            fullSize = LruLoader(capacity = 3, dispatcher = get(), load = decode),
+            thumbnails = LruLoader(
+                capacity = ScreenshotImages.THUMBNAIL_BUDGET,
+                dispatcher = get(),
+                weigh = ImageBitmap::byteCount,
+            ) { path -> Res.readBytes(path).decodeToImageBitmap() },
+            viewer = LruLoader<GalleryItem, ViewerMedia>(
+                capacity = ScreenshotImages.VIEWER_BUDGET,
+                dispatcher = get(),
+                weigh = ViewerMedia::byteCount,
+            ) { item ->
+                val bytes = Res.readBytes(item.shot.fullPath)
+                if (item.isClip) AnimatedClip.decode(bytes) else ViewerMedia.Still(bytes.decodeToImageBitmap())
+            },
         )
     }
     viewModelOf(::PortfolioViewModel)

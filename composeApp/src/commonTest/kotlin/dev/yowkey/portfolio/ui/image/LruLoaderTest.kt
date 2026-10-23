@@ -25,4 +25,27 @@ class LruLoaderTest {
         loader.get("b")
         assertEquals(listOf("a", "b", "c", "b"), loads, "a was served from cache; b had to load again")
     }
+
+    /** As the viewer cache weighs them: a still is big, a clip (file + one frame) is a fraction of it. */
+    @Test
+    fun weighsEntriesAgainstOneBudget() = runTest {
+        val weights = mapOf("still-1" to 6L, "still-2" to 6L, "clip" to 2L, "huge" to 30L)
+        val loader = LruLoader<String, String>(
+            capacity = 14,
+            dispatcher = StandardTestDispatcher(testScheduler),
+            weigh = { weights.getValue(it) },
+        ) { it }
+
+        loader.get("still-1")
+        loader.get("clip")
+        loader.get("still-2")
+        assertEquals(14L, loader.cachedWeight(), "6 + 2 + 6 fits exactly")
+        loader.get("clip") // touch
+        loader.get("still-1") // touch, from cache
+        assertEquals(listOf("still-2", "clip", "still-1"), loader.cachedKeys())
+
+        loader.get("huge")
+        assertEquals(listOf("huge"), loader.cachedKeys(), "over budget alone, but kept: its caller is drawing it")
+        assertEquals(30L, loader.cachedWeight())
+    }
 }

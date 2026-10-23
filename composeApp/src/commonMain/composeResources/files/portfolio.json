@@ -37,6 +37,7 @@
   "projects": [
     {
       "id": "pawffice",
+      "visibility": "private",
       "title": "Pawffice",
       "summary": "A local-first, multi-agent AI workspace for the desktop, presented as a 3D town where a crew of cats takes your prompts.",
       "period": "Aug 2026 – Present",
@@ -46,6 +47,9 @@
         "13 P0 build-blocking tests guard the cost and security rules"
       ],
       "stack": ["Rust", "Tauri 2", "SQLite", "TypeScript", "JavaScript", "SVG"],
+      "clips": [
+        { "file": "pawffice-ride.webp", "caption": "The crew rides along in your car while Pumpkin and Earl Whiskers answer in the crew thread", "width": 480, "height": 271 }
+      ],
       "screenshots": [
         { "file": "pawffice-town.webp", "caption": "The town: walk your cat around while the crew thread on the right takes prompts", "width": 1600, "height": 900 },
         { "file": "pawffice-crew-answer.webp", "caption": "Crew members answer in the thread, each in their own role", "width": 1600, "height": 900 },
@@ -55,6 +59,7 @@
     },
     {
       "id": "vistago",
+      "visibility": "private",
       "title": "Vistago",
       "summary": "An offline-first AI travel companion for Android: plan trips, translate through the camera, and keep travel memories, with or without a connection.",
       "period": "Aug – Sep 2026",
@@ -73,6 +78,7 @@
     },
     {
       "id": "eagles-watch",
+      "visibility": "public",
       "title": "The Eagle's Watch",
       "summary": "A civic transparency app that lists Philippine public infrastructure projects with their contracts, schedules, reported progress and source documents, so citizens can check what public money is building.",
       "highlights": [
@@ -117,6 +123,7 @@
     },
     {
       "id": "about-yowkey",
+      "visibility": "public",
       "title": "This portfolio",
       "summary": "A Compose Multiplatform app running in your browser through Kotlin/WebAssembly, with a crawlable HTML version generated from the same content at build time.",
       "period": "Oct 2026",

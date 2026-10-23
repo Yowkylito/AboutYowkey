@@ -29,7 +29,10 @@ apply; what does is below. `[x]` done, `[ ]` open, `N/A` with the reason.
 | Render | Long titles, long text, many tags | Titles ellipsize at 2 lines; tags wrap (`FlowRow`); see `LongProjectCardPreview` |
 | Navigate | Double-tap Retry | Second tap ignored while a load is in flight (tested) |
 | Screenshots | Image slow or missing | Slot is sized from the JSON's width/height before loading, so nothing jumps; a failed image keeps its placeholder. Tests fail the build if a listed file is missing |
-| Screenshots | Page weight | Cards load thumbnails only (budget 62 KB each); full images (254 KB) load when the viewer opens. Decoded bitmaps are cached LRU: 40 thumbnails, 3 full-size |
+| Screenshots | Page weight | Cards load thumbnails, cover heroes and clip posters only (budget 62 KB each); full images (254 KB) and clips (700 KB) load when the viewer opens them |
+| Screenshots | Memory | Two LRU caches weighed in decoded bytes (4 B/pixel), not counts. Card images: 24 MB (today's ~5 MB of thumbnails plus room for a 960×540 cover hero per project). Viewer: 18 MB, three 1600×900 stills (the open page and its neighbours). A clip counts as its encoded file plus **one** decoded frame, because it is decoded a frame at a time into one reusable bitmap: the current clip (480×271, 54 frames) is 0.69 MB + 0.52 MB = 1.2 MB, where decoding every frame would be 28 MB |
+| Clips | Decode cost | Decoded on the UI thread inside the frame clock (Wasm has one thread): measured 7.0–8.0 ms a frame on average, 12.6 ms worst, in Chrome 156. Inside 16 ms at 60 Hz; at 120 Hz a decode frame can overrun 8 ms, 12 times a second. Paused while the pager is swiped, off the settled page, in a background tab, and under reduced motion (a still of frame 0) |
+| Clips | Over budget | `prepare_screenshots.py --clip` keeps quality at 50 or more and shrinks the frame instead; a busy 4.5 s stretch of the Pawffice trailer came out at 480 px. Calmer or shorter stretches keep more pixels |
 | Resize | Window or rotation changes size class | Layout re-derives columns from `WindowSizeClass` live |
 
 ## 4. Database

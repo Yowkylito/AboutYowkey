@@ -50,6 +50,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import dev.yowkey.portfolio.model.Portfolio
 import dev.yowkey.portfolio.model.Project
+import dev.yowkey.portfolio.model.RepoVisibility
+import dev.yowkey.portfolio.ui.sections.SectionNote
 import dev.yowkey.portfolio.ui.components.SectionHeader
 import dev.yowkey.portfolio.ui.components.rememberRevealProgress
 import dev.yowkey.portfolio.ui.image.ScreenshotViewer
@@ -162,7 +164,10 @@ fun PortfolioPage(portfolio: Portfolio, platformLabel: String, modifier: Modifie
     val reducedMotion = LocalReducedMotion.current
     var viewer by remember { mutableStateOf<ViewerRequest?>(null) }
     val openScreenshot: (Project, Int) -> Unit = remember {
-        { project, index -> viewer = ViewerRequest(project.title, project.screenshots, index) }
+        { project, index -> viewer = ViewerRequest(project.title, project.gallery, index) }
+    }
+    val projectsNote = remember(portfolio) {
+        RepoVisibility.PRIVATE_NOTE.takeIf { portfolio.projects.any { it.visibility == RepoVisibility.Private } }
     }
 
     viewer?.let { ScreenshotViewer(it, onDismiss = { viewer = null }) }
@@ -198,7 +203,7 @@ fun PortfolioPage(portfolio: Portfolio, platformLabel: String, modifier: Modifie
                             .padding(horizontal = layout.gutter)
                             .padding(top = item.topSpacing(layout)),
                     ) {
-                        PageRow(item, layout, platformLabel, numbered.indexOf(item.section) + 1, navigate, openScreenshot)
+                        PageRow(item, layout, platformLabel, numbered.indexOf(item.section) + 1, projectsNote, navigate, openScreenshot)
                     }
                 }
             }
@@ -220,6 +225,7 @@ private fun PageRow(
     layout: PageLayout,
     platformLabel: String,
     number: Int,
+    projectsNote: String?,
     onNavigate: (Section) -> Unit,
     onOpenScreenshot: (Project, Int) -> Unit,
 ) {
@@ -236,7 +242,7 @@ private fun PageRow(
         is PageItem.Services -> SectionFrame(item, number, layout) {
             CardRow(item.columns, item.services.size) { i, m -> ServiceCard(item.services[i], m) }
         }
-        is PageItem.Projects -> SectionFrame(item, number, layout) {
+        is PageItem.Projects -> SectionFrame(item, number, layout, note = projectsNote) {
             CardRow(item.columns, item.projects.size) { i, m ->
                 val project = item.projects[i]
                 ProjectCard(project, onOpenScreenshot = { onOpenScreenshot(project, it) }, modifier = m)
@@ -258,13 +264,27 @@ private fun PageRow(
     }
 }
 
-/** Wide windows put the section header in a left rail beside its rows; narrower ones stack it on top. */
+/**
+ * Wide windows put the section header in a left rail beside its rows; narrower ones stack it on top. A [note]
+ * goes under the header in either case, and only on the row that shows the header.
+ */
 @Composable
-private fun SectionFrame(item: PageItem, number: Int, layout: PageLayout, content: @Composable () -> Unit) {
+private fun SectionFrame(
+    item: PageItem,
+    number: Int,
+    layout: PageLayout,
+    note: String? = null,
+    content: @Composable () -> Unit,
+) {
+    val headerNote = note?.takeIf { item.showsHeader }
     if (layout.wideSections) {
         Row(Modifier.fillMaxWidth()) {
-            Box(Modifier.width(240.dp)) {
+            Column(Modifier.width(240.dp).padding(end = 24.dp)) {
                 if (item.showsHeader) SectionHeader(number, item.section.title)
+                headerNote?.let {
+                    Spacer(Modifier.height(16.dp))
+                    SectionNote(it)
+                }
             }
             Box(Modifier.weight(1f)) { content() }
         }
@@ -272,6 +292,10 @@ private fun SectionFrame(item: PageItem, number: Int, layout: PageLayout, conten
         Column(Modifier.fillMaxWidth()) {
             if (item.showsHeader) {
                 SectionHeader(number, item.section.title)
+                headerNote?.let {
+                    Spacer(Modifier.height(12.dp))
+                    SectionNote(it)
+                }
                 Spacer(Modifier.height(28.dp))
             }
             content()

@@ -1,16 +1,36 @@
-"""Turn raw screenshots into the WebP pairs the site ships.
+"""Turn raw screenshots, covers and screen recordings into the WebP files the site ships.
 
     python scripts/prepare_screenshots.py <source.png> <name> [<source.png> <name> ...]
+    python scripts/prepare_screenshots.py --cover <source.png> <name>
+    python scripts/prepare_screenshots.py --clip <source.mp4 | frames-folder> <name> [--start S] [--duration S] [--fps N]
 
-For each source this writes, into composeApp/src/commonMain/composeResources/files/screens/:
-  <name>.webp        full size for the viewer, long edge at most 1600 px, at most 254 KB
-  <name>.thumb.webp  card thumbnail at 2x its on-card height, at most 62 KB
+Everything is written into composeApp/src/commonMain/composeResources/files/screens/.
 
-and prints the JSON fields (file, width, height) to paste into portfolio.json. The budgets match
-SiteContentTest, which fails the build if a file outgrows them.
+Screenshots (the default):
+  <name>.webp          full size for the viewer, long edge at most 1600 px, at most 254 KB
+  <name>.thumb.webp    card thumbnail at 2x its on-card height, at most 62 KB
+
+--cover, the project's splash screen at the top of its card:
+  <name>.webp          full size for the viewer, as for screenshots
+  <name>.thumb.webp    the card's hero image: 960 px wide for landscape (480dp at 2x), 640 px tall for portrait
+                       (the 320dp phone frame at 2x), at most 62 KB
+
+--clip, a short animated highlight:
+  <name>.webp          animated WebP for the viewer: at most 6 s, 12 fps, long edge 720 px, 700 KB
+  <name>.poster.webp   its first frame as the card thumbnail, same size rules as a screenshot thumbnail
+
+  The source is an mp4 (decoded by ffmpeg, which must be on PATH; --start and --duration pick the stretch,
+  default the first 5 s) or a folder of PNG frames in name order (--fps is their frame rate, default 12; frames
+  are dropped evenly to reach at most 12 fps).
+
+Each run prints the JSON fields to paste into portfolio.json; write the caption yourself (it is also the alt
+text). The budgets match SiteContentTest, which fails the build if a file outgrows them.
 """
 import io
+import shutil
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 from PIL import Image
@@ -22,6 +42,13 @@ THUMB_BUDGET = 62 * 1024
 # The card shows portrait thumbnails 200dp tall and landscape ones 124dp tall (ScreenshotStrip); 2x for dense screens.
 THUMB_HEIGHT_PORTRAIT = 400
 THUMB_HEIGHT_LANDSCAPE = 248
+# The cover fills the card's width (at most ~480dp) when landscape, or a 320dp-tall phone frame when portrait.
+COVER_THUMB_WIDTH_LANDSCAPE = 960
+COVER_THUMB_HEIGHT_PORTRAIT = 640
+CLIP_MAX_SECONDS = 6.0
+CLIP_MAX_FPS = 12
+CLIP_LONG_EDGE = 720
+CLIP_BUDGET = 700 * 1024
 
 
 def encode_within(image: Image.Image, budget: int) -> bytes:
@@ -33,27 +60,140 @@ def encode_within(image: Image.Image, budget: int) -> bytes:
     raise SystemExit(f"cannot fit under {budget // 1024} KB even at low quality; crop or shrink the source")
 
 
-def prepare(source: Path, name: str) -> None:
-    image = Image.open(source).convert("RGB")
-    scale = min(1.0, FULL_LONG_EDGE / max(image.size))
-    full = image.resize((round(image.width * scale), round(image.height * scale)), Image.LANCZOS)
-    thumb_height = THUMB_HEIGHT_PORTRAIT if full.height > full.width else THUMB_HEIGHT_LANDSCAPE
-    thumb = full.resize((round(full.width * thumb_height / full.height), thumb_height), Image.LANCZOS)
+def fit_long_edge(image: Image.Image, long_edge: int) -> Image.Image:
+    scale = min(1.0, long_edge / max(image.size))
+    if scale == 1.0:
+        return image
+    return image.resize((round(image.width * scale), round(image.height * scale)), Image.LANCZOS)
 
+
+def resize_to_height(image: Image.Image, height: int) -> Image.Image:
+    return image.resize((round(image.width * height / image.height), height), Image.LANCZOS)
+
+
+def card_thumbnail(image: Image.Image) -> Image.Image:
+    return resize_to_height(image, THUMB_HEIGHT_PORTRAIT if image.height > image.width else THUMB_HEIGHT_LANDSCAPE)
+
+
+def cover_thumbnail(image: Image.Image) -> Image.Image:
+    if image.height > image.width:
+        return resize_to_height(image, min(COVER_THUMB_HEIGHT_PORTRAIT, image.height))
+    width = min(COVER_THUMB_WIDTH_LANDSCAPE, image.width)
+    return image.resize((width, round(image.height * width / image.width)), Image.LANCZOS)
+
+
+def prepare_still(source: Path, name: str, thumbnail) -> None:
+    full = fit_long_edge(Image.open(source).convert("RGB"), FULL_LONG_EDGE)
     full_bytes = encode_within(full, FULL_BUDGET)
-    thumb_bytes = encode_within(thumb, THUMB_BUDGET)
+    thumb_bytes = encode_within(thumbnail(full), THUMB_BUDGET)
     (OUT / f"{name}.webp").write_bytes(full_bytes)
     (OUT / f"{name}.thumb.webp").write_bytes(thumb_bytes)
     print(
-        f'{{ "file": "{name}.webp", "width": {full.width}, "height": {full.height} }}'
+        f'{{ "file": "{name}.webp", "caption": "", "width": {full.width}, "height": {full.height} }}'
         f"  # {len(full_bytes) // 1024} KB + thumb {len(thumb_bytes) // 1024} KB"
     )
 
 
+def video_frames(source: Path, start: float, duration: float, workdir: Path) -> list[Path]:
+    if shutil.which("ffmpeg") is None:
+        raise SystemExit("ffmpeg is not on PATH; it decodes the mp4")
+    # ffmpeg drops the frame rate and downscales, so Pillow only ever holds clip-sized frames.
+    edge = CLIP_LONG_EDGE
+    scale = f"scale='if(gt(iw,ih),min({edge},iw),-2)':'if(gt(iw,ih),-2,min({edge},ih))':flags=lanczos"
+    subprocess.run(
+        [
+            "ffmpeg", "-v", "error", "-y", "-ss", f"{start}", "-t", f"{duration}", "-i", str(source),
+            "-vf", f"fps={CLIP_MAX_FPS},{scale}", "-an", str(workdir / "frame-%04d.png"),
+        ],
+        check=True,
+    )
+    return sorted(workdir.glob("frame-*.png"))
+
+
+def folder_frames(folder: Path, source_fps: float) -> tuple[list[Path], float]:
+    frames = sorted(folder.glob("*.png"))
+    if not frames:
+        raise SystemExit(f"no PNG frames in {folder}")
+    step = max(1, -(-int(source_fps) // CLIP_MAX_FPS))  # ceil, so the result never exceeds 12 fps
+    return frames[::step], source_fps / step
+
+
+def encode_clip(frames: list[Image.Image], fps: float) -> tuple[bytes, Image.Image]:
+    """
+    Lossy animated WebP within the budget. Quality stays at 50 or above (below it moving 3D scenes smear), so a
+    clip that does not fit is made smaller instead, by the factor its size overshoots (bytes grow roughly with
+    pixel count). Each encode of a few seconds takes tens of seconds, so the estimate saves blind retries.
+    """
+    frame_ms = round(1000 / fps)
+    current = frames
+    while True:
+        size = 0
+        for quality in (60, 50):
+            buffer = io.BytesIO()
+            current[0].save(
+                buffer, "WEBP", save_all=True, append_images=current[1:], duration=frame_ms, loop=0,
+                quality=quality, method=4,
+            )
+            size = buffer.tell()
+            if size <= CLIP_BUDGET:
+                return buffer.getvalue(), current[0]
+        long_edge = round(max(current[0].size) * min(0.95, (CLIP_BUDGET / size) ** 0.5 * 0.97))
+        if long_edge < 360:
+            raise SystemExit(f"cannot fit the clip under {CLIP_BUDGET // 1024} KB; use a shorter or calmer stretch")
+        print(f"  {size // 1024} KB at quality 50; retrying with the long edge at {long_edge} px", flush=True)
+        current = [fit_long_edge(frame, long_edge) for frame in frames]
+
+
+def prepare_clip(source: Path, name: str, start: float, duration: float, source_fps: float) -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        if source.is_dir():
+            paths, fps = folder_frames(source, source_fps)
+        else:
+            paths, fps = video_frames(source, start, duration, Path(tmp)), CLIP_MAX_FPS
+        if not paths:
+            raise SystemExit("no frames decoded; check --start against the video's length")
+        seconds = len(paths) / fps
+        if seconds > CLIP_MAX_SECONDS + 1e-6:
+            raise SystemExit(f"the clip is {seconds:.1f} s; at most {CLIP_MAX_SECONDS:.0f} s")
+        frames = [fit_long_edge(Image.open(path).convert("RGB"), CLIP_LONG_EDGE) for path in paths]
+
+    clip_bytes, first = encode_clip(frames, fps)
+    poster_bytes = encode_within(card_thumbnail(first), THUMB_BUDGET)
+    (OUT / f"{name}.webp").write_bytes(clip_bytes)
+    (OUT / f"{name}.poster.webp").write_bytes(poster_bytes)
+    print(
+        f'{{ "file": "{name}.webp", "caption": "", "width": {first.width}, "height": {first.height} }}'
+        f"  # {len(clip_bytes) // 1024} KB, {len(frames)} frames, {seconds:.1f} s at {fps:g} fps"
+        f" + poster {len(poster_bytes) // 1024} KB"
+    )
+
+
+def option(args: list[str], flag: str, default: float) -> float:
+    if flag not in args:
+        return default
+    index = args.index(flag)
+    value = float(args[index + 1])
+    del args[index:index + 2]
+    return value
+
+
 if __name__ == "__main__":
     args = sys.argv[1:]
-    if not args or len(args) % 2:
-        raise SystemExit(__doc__)
     OUT.mkdir(parents=True, exist_ok=True)
-    for source, name in zip(args[::2], args[1::2]):
-        prepare(Path(source), name)
+    if args[:1] == ["--clip"]:
+        rest = args[1:]
+        start = option(rest, "--start", 0.0)
+        duration = option(rest, "--duration", 5.0)
+        fps = option(rest, "--fps", CLIP_MAX_FPS)
+        if len(rest) != 2 or not 0 < duration <= CLIP_MAX_SECONDS:
+            raise SystemExit(__doc__)
+        prepare_clip(Path(rest[0]), rest[1], start, duration, fps)
+    elif args[:1] == ["--cover"]:
+        if len(args) != 3:
+            raise SystemExit(__doc__)
+        prepare_still(Path(args[1]), args[2], cover_thumbnail)
+    else:
+        if not args or len(args) % 2:
+            raise SystemExit(__doc__)
+        for source, name in zip(args[::2], args[1::2]):
+            prepare_still(Path(source), name, card_thumbnail)

@@ -31,6 +31,10 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import dev.yowkey.portfolio.model.GalleryItem
 import dev.yowkey.portfolio.model.Award
 import dev.yowkey.portfolio.model.Experience
 import dev.yowkey.portfolio.model.Link
@@ -44,6 +48,8 @@ import dev.yowkey.portfolio.ui.image.ScreenshotImage
 import dev.yowkey.portfolio.ui.components.Bullet
 import dev.yowkey.portfolio.ui.components.LinkButton
 import dev.yowkey.portfolio.ui.components.OutlinedCard
+import dev.yowkey.portfolio.ui.components.PlayGlyph
+import dev.yowkey.portfolio.ui.components.StatusBadge
 import dev.yowkey.portfolio.ui.components.Tag
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -115,33 +121,49 @@ fun ServiceCard(service: Service, modifier: Modifier = Modifier) {
 /**
  * An even grid of thumbnails across the card's width: four per row for phone screens, two for desktop ones.
  * A grid rather than a sideways scroller, because a mouse wheel cannot reach a hidden horizontal row. Each slot
- * takes its height from the image's aspect ratio, so the layout is final before any image loads.
+ * takes its height from the image's aspect ratio, so the layout is final before any image loads. Clips show
+ * their poster with a play mark.
  *
  * Plain weighted Rows, not FlowRow: FlowRow decides line breaks before applying weights, and an unbounded
  * aspectRatio claims the whole line, so every image wrapped onto its own row. Rows also answer the intrinsic
  * size queries CardRow makes for equal-height cards, which BoxWithConstraints cannot.
+ *
+ * @param firstIndex the gallery index of `items[0]`, so [onOpen] gets gallery indices (1 when a cover leads)
  */
 @Composable
-fun ScreenshotStrip(screenshots: List<Screenshot>, onOpen: (index: Int) -> Unit, modifier: Modifier = Modifier) {
+fun ScreenshotStrip(
+    items: List<GalleryItem>,
+    onOpen: (index: Int) -> Unit,
+    modifier: Modifier = Modifier,
+    firstIndex: Int = 0,
+) {
     val loader = LocalScreenshotImages.current?.thumbnails
     val outline = MaterialTheme.colorScheme.outlineVariant
-    val perRow = if (screenshots.all { it.aspectRatio < 1f }) 4 else 2
+    val perRow = if (items.all { it.shot.aspectRatio < 1f }) 4 else 2
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        screenshots.chunked(perRow).forEachIndexed { row, chunk ->
+        items.chunked(perRow).forEachIndexed { row, chunk ->
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                chunk.forEachIndexed { column, shot ->
-                    val index = row * perRow + column
-                    ScreenshotImage(
-                        path = shot.thumbPath,
-                        contentDescription = shot.caption,
-                        loader = loader,
-                        modifier = Modifier
+                chunk.forEachIndexed { column, item ->
+                    val index = firstIndex + row * perRow + column
+                    Box(
+                        Modifier
                             .weight(1f)
-                            .aspectRatio(shot.aspectRatio)
+                            .aspectRatio(item.shot.aspectRatio)
                             .clip(RoundedCornerShape(10.dp))
                             .border(1.dp, outline, RoundedCornerShape(10.dp))
-                            .clickable(onClickLabel = "View larger", role = Role.Button) { onOpen(index) },
-                    )
+                            .clickable(onClickLabel = if (item.isClip) "Play clip" else "View larger", role = Role.Button) {
+                                onOpen(index)
+                            },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        ScreenshotImage(
+                            path = item.cardPath,
+                            contentDescription = item.shot.caption,
+                            loader = loader,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                        if (item.isClip) PlayGlyph()
+                    }
                 }
                 repeat(perRow - chunk.size) { Spacer(Modifier.weight(1f)) }
             }
@@ -149,13 +171,60 @@ fun ScreenshotStrip(screenshots: List<Screenshot>, onOpen: (index: Int) -> Unit,
     }
 }
 
+/**
+ * The project's splash screen, large, above its thumbnails. A landscape cover spans the card; a portrait one sits
+ * centred in a phone-like frame [PortraitCoverHeight] tall. Both are sized from the JSON's width and height, so
+ * nothing moves when the image arrives.
+ */
+@Composable
+fun ProjectCover(cover: Screenshot, onOpen: () -> Unit, modifier: Modifier = Modifier) {
+    val loader = LocalScreenshotImages.current?.thumbnails
+    val portrait = cover.aspectRatio < 1f
+    val shape = RoundedCornerShape(if (portrait) 26.dp else 12.dp)
+    Box(modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        val frame = if (portrait) {
+            Modifier
+                .height(PortraitCoverHeight)
+                .aspectRatio(cover.aspectRatio)
+                .border(5.dp, MaterialTheme.colorScheme.outline, shape)
+                .padding(5.dp)
+                .clip(RoundedCornerShape(21.dp))
+        } else {
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(cover.aspectRatio)
+                .clip(shape)
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape)
+        }
+        ScreenshotImage(
+            path = cover.thumbPath,
+            contentDescription = cover.caption,
+            loader = loader,
+            modifier = frame.clickable(onClickLabel = "View larger", role = Role.Button, onClick = onOpen),
+        )
+    }
+}
+
+/** Tall enough to read a phone screen on the card, short enough that the card is not all cover. */
+private val PortraitCoverHeight = 320.dp
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ProjectCard(project: Project, onOpenScreenshot: (index: Int) -> Unit, modifier: Modifier = Modifier) {
+    val gallery = remember(project) { project.gallery }
+    val strip = remember(gallery) { gallery.filter { it.kind != GalleryItem.Kind.Cover } }
     OutlinedCard(modifier) {
         Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            if (project.screenshots.isNotEmpty()) {
-                ScreenshotStrip(project.screenshots, onOpenScreenshot, Modifier.padding(bottom = 6.dp))
+            project.cover?.let { cover ->
+                ProjectCover(cover, onOpen = { onOpenScreenshot(0) }, Modifier.padding(bottom = 2.dp))
+            }
+            if (strip.isNotEmpty()) {
+                ScreenshotStrip(
+                    items = strip,
+                    onOpen = onOpenScreenshot,
+                    modifier = Modifier.padding(bottom = 6.dp),
+                    firstIndex = gallery.size - strip.size,
+                )
             }
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
@@ -166,8 +235,17 @@ fun ProjectCard(project: Project, onOpenScreenshot: (index: Int) -> Unit, modifi
                     overflow = TextOverflow.Ellipsis,
                 )
                 val meta = listOfNotNull(project.role, project.period).joinToString(" · ")
-                if (meta.isNotEmpty()) {
-                    Text(meta.uppercase(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                if (meta.isNotEmpty() || project.visibility != null) {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        itemVerticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        if (meta.isNotEmpty()) {
+                            Text(meta.uppercase(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                        }
+                        project.visibility?.let { StatusBadge(it.badge) }
+                    }
                 }
             }
             Text(project.summary, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
@@ -185,6 +263,17 @@ fun ProjectCard(project: Project, onOpenScreenshot: (index: Int) -> Unit, modifi
             }
         }
     }
+}
+
+/** A short note under a section's header, such as why some projects have no source link. */
+@Composable
+fun SectionNote(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = modifier.widthIn(max = 640.dp),
+    )
 }
 
 /** A timeline entry; the rail is drawn, not composed, and stops at the last job. */

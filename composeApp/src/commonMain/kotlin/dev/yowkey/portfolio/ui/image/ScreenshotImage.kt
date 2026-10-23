@@ -19,13 +19,35 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import dev.yowkey.portfolio.model.GalleryItem
 import kotlinx.coroutines.CancellationException
 
-/** Card thumbnails and full-size viewer images, cached separately so a few big images never evict the strip. */
+/**
+ * Card images and viewer media, cached separately so a few big images never evict the strip. Both are weighed
+ * in decoded bytes (see [ViewerMedia.byteCount]).
+ *
+ * @property thumbnails card thumbnails, clip posters and cover heroes, keyed by path
+ * @property viewer full-size stills and clips, keyed by gallery item so the loader knows which decoder to use
+ */
 class ScreenshotImages(
     val thumbnails: LruLoader<String, ImageBitmap>,
-    val fullSize: LruLoader<String, ImageBitmap>,
-)
+    val viewer: LruLoader<GalleryItem, ViewerMedia>,
+) {
+    companion object {
+        /**
+         * Every thumbnail on the page is ~5 MB decoded today; this leaves room for a cover hero per project
+         * (960×540, 2 MB each) without scrolling back re-decoding them.
+         */
+        const val THUMBNAIL_BUDGET: Long = 24L * 1024 * 1024
+
+        /**
+         * Three of the largest full-size stills (1600×900, 5.8 MB each): the viewer's page and both neighbours.
+         * A clip weighs its encoded file plus one decoded frame (~1.2 MB for the current one), so it costs less
+         * than one still and shares the same budget.
+         */
+        const val VIEWER_BUDGET: Long = 18L * 1024 * 1024
+    }
+}
 
 /** Null in previews and tests: images then stay as their sized placeholder. */
 val LocalScreenshotImages = staticCompositionLocalOf<ScreenshotImages?> { null }
@@ -52,16 +74,27 @@ fun ScreenshotImage(
             null // a missing image keeps its placeholder; the tests guard that every listed file ships
         }
     }
+    FadingImage(bitmap, contentDescription, modifier, contentScale)
+}
+
+/** [image] fading in over a placeholder of the caller's size; the placeholder alone while [image] is null. */
+@Composable
+internal fun FadingImage(
+    image: ImageBitmap?,
+    contentDescription: String,
+    modifier: Modifier = Modifier,
+    contentScale: ContentScale = ContentScale.Crop,
+) {
     Box(
         modifier
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .semantics { this.contentDescription = contentDescription },
     ) {
-        bitmap?.let { image ->
-            val alpha = remember(image) { Animatable(0f) }
-            LaunchedEffect(image) { alpha.animateTo(1f, tween(220)) }
+        image?.let { loaded ->
+            val alpha = remember(loaded) { Animatable(0f) }
+            LaunchedEffect(loaded) { alpha.animateTo(1f, tween(220)) }
             Image(
-                bitmap = image,
+                bitmap = loaded,
                 contentDescription = null, // described once, on the container
                 contentScale = contentScale,
                 modifier = Modifier.fillMaxSize().graphicsLayer { this.alpha = alpha.value },

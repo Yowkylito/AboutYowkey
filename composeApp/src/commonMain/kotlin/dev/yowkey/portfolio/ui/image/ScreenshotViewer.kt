@@ -35,16 +35,16 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import dev.yowkey.portfolio.model.Screenshot
+import dev.yowkey.portfolio.model.GalleryItem
+import dev.yowkey.portfolio.ui.theme.LocalReducedMotion
 import kotlinx.coroutines.launch
 
-/** What the viewer is showing: one project's screenshots, opened at [start]. */
+/** What the viewer is showing: one project's gallery (cover → clips → screenshots), opened at [start]. */
 @Immutable
-data class ViewerRequest(val title: String, val screenshots: List<Screenshot>, val start: Int)
+data class ViewerRequest(val title: String, val items: List<GalleryItem>, val start: Int)
 
 private val Scrim = Color(0xF20B0D10)
 private val OnScrim = Color(0xFFECEDEF)
@@ -52,15 +52,17 @@ private val OnScrimMuted = Color(0xFFB4BAC4)
 
 /**
  * Full-screen screenshot viewer: swipe or arrow keys to page, Escape / Close / a tap on the backdrop to leave.
- * Only the visible page and its neighbours are composed, so only they load full-size images.
+ * Only the visible page and its neighbours are composed, so only they load full-size images. A clip plays only
+ * on the settled page and not while a swipe is moving (its decoding would compete with the swipe's frames), and
+ * never under reduced motion; paging away stops its decoding.
  */
 @Composable
 fun ScreenshotViewer(request: ViewerRequest, onDismiss: () -> Unit) {
-    val shots = request.screenshots
+    val shots = request.items
     val pager = rememberPagerState(initialPage = request.start) { shots.size }
     val scope = rememberCoroutineScope()
     val focus = remember { FocusRequester() }
-    val loader = LocalScreenshotImages.current?.fullSize
+    val reducedMotion = LocalReducedMotion.current
     fun go(delta: Int) {
         val target = (pager.currentPage + delta).coerceIn(0, shots.lastIndex)
         scope.launch { pager.animateScrollToPage(target) }
@@ -94,10 +96,11 @@ fun ScreenshotViewer(request: ViewerRequest, onDismiss: () -> Unit) {
             }
             HorizontalPager(
                 state = pager,
-                key = { shots[it].file },
+                key = { shots[it].shot.file },
                 modifier = Modifier.weight(1f).fillMaxWidth(),
             ) { page ->
-                val shot = shots[page]
+                val item = shots[page]
+                val shot = item.shot
                 Box(
                     Modifier
                         .fillMaxSize()
@@ -105,11 +108,9 @@ fun ScreenshotViewer(request: ViewerRequest, onDismiss: () -> Unit) {
                         .padding(horizontal = 16.dp, vertical = 8.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    ScreenshotImage(
-                        path = shot.fullPath,
-                        contentDescription = shot.caption,
-                        loader = loader,
-                        contentScale = ContentScale.Fit,
+                    ViewerMediaImage(
+                        item = item,
+                        playing = !reducedMotion && pager.settledPage == page && !pager.isScrollInProgress,
                         modifier = Modifier
                             .aspectRatio(shot.aspectRatio, matchHeightConstraintsFirst = shot.aspectRatio < 1f)
                             .clip(RoundedCornerShape(12.dp))
@@ -124,7 +125,7 @@ fun ScreenshotViewer(request: ViewerRequest, onDismiss: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
-                    shots[pager.currentPage].caption,
+                    shots[pager.currentPage].shot.caption,
                     style = MaterialTheme.typography.bodyMedium,
                     color = OnScrim,
                     modifier = Modifier.widthIn(max = 640.dp),

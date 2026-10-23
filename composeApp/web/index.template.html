@@ -28,10 +28,14 @@
   <script type="application/ld+json">{{jsonLd}}</script>
   <style>
     :root {
-      --bg: #F7F5F0; --surface: #FFFFFF; --ink: #16181D; --muted: #545A66; --line: #E4E0D7; --accent: #C2410C;
+      --bg: #F7F5F0; --surface: #FFFFFF; --ink: #16181D; --muted: #545A66; --line: #E4E0D7; --line-strong: #CFCAC0;
+      --accent: #C2410C;
     }
     @media (prefers-color-scheme: dark) {
-      :root { --bg: #0E1014; --surface: #161A20; --ink: #ECEDEF; --muted: #9AA1AD; --line: #262B33; --accent: #FB923C; }
+      :root {
+        --bg: #0E1014; --surface: #161A20; --ink: #ECEDEF; --muted: #9AA1AD; --line: #262B33; --line-strong: #3A414C;
+        --accent: #FB923C;
+      }
     }
     * { box-sizing: border-box; }
     /*
@@ -59,6 +63,12 @@
     a { color: var(--accent); font-weight: 600; }
     .shots { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0; }
     .shots img { display: block; height: 200px; width: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--line); }
+    .shots picture { display: block; }
+    img.cover { display: block; margin: 0 auto 16px; border: 1px solid var(--line); background: var(--line); }
+    img.cover.landscape { width: 100%; height: auto; border-radius: 12px; }
+    img.cover.portrait { height: 320px; width: auto; border: 5px solid var(--line-strong); border-radius: 26px; }
+    .note { color: var(--muted); max-width: 640px; margin: -8px 0 24px; }
+    .badge { display: inline-block; font-size: 13px; font-weight: 600; line-height: 1.4; padding: 1px 8px; border: 1px solid var(--line-strong); border-radius: 6px; color: var(--muted); white-space: nowrap; }
     .links a { display: inline-block; margin: 0 16px 8px 0; padding: 12px 0; }
     #app { position: fixed; inset: 0; opacity: 0; pointer-events: none; transition: opacity .25s ease; }
     .loading-bar {

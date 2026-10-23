@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -23,12 +24,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.center
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import dev.yowkey.portfolio.model.Link
 
 private val EaseOutCubic = CubicBezierEasing(0.33f, 1f, 0.68f, 1f)
@@ -93,6 +99,52 @@ fun Tag(text: String, modifier: Modifier = Modifier) {
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
         )
     }
+}
+
+/**
+ * A small status label, such as a project's repository visibility. Outlined rather than filled, so it reads as a
+ * fact about the card and not as one more stack [Tag]; not interactive either. onSurfaceVariant on the card
+ * surface is 7.0:1 in light and 6.6:1 in dark, so it clears AA at this size.
+ */
+@Composable
+fun StatusBadge(text: String, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(6.dp),
+        color = Color.Transparent,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 0.2.sp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+        )
+    }
+}
+
+/**
+ * The play mark over a clip's poster: a dark disc with a white triangle, legible on any image. Drawn, not an
+ * icon font; the path is built once per size in `drawWithCache`.
+ */
+@Composable
+fun PlayGlyph(modifier: Modifier = Modifier) {
+    Spacer(
+        modifier.size(40.dp).drawWithCache {
+            val r = size.minDimension / 2
+            val center = size.center
+            val triangle = Path().apply {
+                moveTo(center.x - r * 0.28f, center.y - r * 0.4f)
+                lineTo(center.x + r * 0.45f, center.y)
+                lineTo(center.x - r * 0.28f, center.y + r * 0.4f)
+                close()
+            }
+            onDrawBehind {
+                drawCircle(Color.Black.copy(alpha = 0.6f), radius = r)
+                drawPath(triangle, Color.White)
+            }
+        },
+    )
 }
 
 @Composable

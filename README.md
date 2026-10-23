@@ -29,6 +29,37 @@ This writes `<name>.webp` (full size, for the viewer) and `<name>.thumb.webp` (f
 project's `screenshots` list with a `caption` (the caption is also the image's alt text). Tests fail if a listed
 image is missing or over budget, or if a file in `screens/` is not listed.
 
+### A cover, a highlight clip, and the repo badge
+
+```bash
+python scripts/prepare_screenshots.py --cover path/to/splash.png vistago-cover
+python scripts/prepare_screenshots.py --clip path/to/demo.mp4 vistago-trip --start 12 --duration 4.5
+python scripts/prepare_screenshots.py --clip path/to/png-frames/ vistago-trip --fps 30
+```
+
+- **Cover**: the splash screen shown large at the top of the card (full card width when landscape, a 320dp phone
+  frame when portrait). Same files as a screenshot, with a bigger `.thumb.webp` for the card.
+- **Clip**: a short animated WebP (at most 6 s, 12 fps, 720 px on the long edge, 700 KB) plus a `.poster.webp`
+  still (its first frame) for the card. The source is an mp4 (ffmpeg must be on PATH; pick the stretch with
+  `--start`/`--duration`, default the first 5 s) or a folder of PNG frames. If the clip is over budget the script
+  makes it smaller rather than blurrier, so pick a calm stretch, or a shorter one, to keep it sharp. The card shows
+  the poster with a play mark; the viewer plays it in a loop (a still under reduced motion); the static page
+  animates it natively.
+- **Visibility**: `"public"` or `"private"`. The card shows a "Public repo" / "Private repo" badge, and if any
+  project is private a note under the Projects header says why its source is not linked. Leave it out for no badge.
+
+The viewer pages through cover → clips → screenshots, in that order.
+
+```json
+{
+  "id": "vistago",
+  "visibility": "private",
+  "cover": { "file": "vistago-cover.webp", "caption": "…", "width": 739, "height": 1600 },
+  "clips": [{ "file": "vistago-trip.webp", "caption": "…", "width": 720, "height": 405 }],
+  "screenshots": [{ "file": "vistago-ask.webp", "caption": "…", "width": 739, "height": 1600 }]
+}
+```
+
 ## How the page loads
 
 A Compose app on the web draws into a `<canvas>`, which search engines, link previews and screen readers can't read,

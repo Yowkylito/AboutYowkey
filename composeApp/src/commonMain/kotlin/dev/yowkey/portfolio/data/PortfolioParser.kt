@@ -34,18 +34,28 @@ object PortfolioParser {
 
         val links = portfolio.links + portfolio.projects.flatMap { it.links }
         links.forEach(::validateLink)
-        portfolio.projects.flatMap { it.screenshots }.forEach(::validateScreenshot)
+        // `visibility` needs no check here: it decodes to an enum, so anything but "public" / "private" (or no key)
+        // already failed above, naming the value and its path.
+        portfolio.projects.forEach { project ->
+            val gallery = project.gallery
+            gallery.forEach { validateScreenshot(it.shot) }
+            // The viewer's pager keys its pages by file, and one file cannot be both a still and a clip.
+            val repeated = gallery.groupBy { it.shot.file }.filterValues { it.size > 1 }.keys
+            require(repeated.isEmpty()) { "project ${project.id} lists the same file twice: $repeated" }
+        }
     }
 
+    /** Covers, clips and screenshots alike: the file name rules keep every path inside `files/screens/`. */
     private fun validateScreenshot(shot: Screenshot) {
         require(SCREENSHOT_FILE.matches(shot.file)) {
-            "screenshot file must be a plain name ending in .webp (no folders, no .thumb), got ${shot.file}"
+            "screenshot file must be a plain name ending in .webp (no folders, no .thumb or .poster), got ${shot.file}"
         }
         require(shot.width > 0 && shot.height > 0) { "screenshot ${shot.file} needs its pixel width and height" }
         require(shot.caption.isNotBlank()) { "screenshot ${shot.file} needs a caption; it is also the alt text" }
     }
 
-    private val SCREENSHOT_FILE = Regex("[a-z0-9][a-z0-9-]*(?<!\\.thumb)\\.webp")
+    // No dots before the extension, so `x.thumb.webp` and `x.poster.webp` (the generated twins) are rejected too.
+    private val SCREENSHOT_FILE = Regex("[a-z0-9][a-z0-9-]*\\.webp")
 
     private fun validateLink(link: Link) {
         require(link.label.isNotBlank()) { "a link has a blank label: ${link.url}" }
