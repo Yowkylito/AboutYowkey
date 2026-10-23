@@ -2,6 +2,7 @@ package dev.yowkey.portfolio.admin
 
 import dev.yowkey.portfolio.data.HttpReply
 import dev.yowkey.portfolio.data.SiteApiException
+import dev.yowkey.portfolio.model.Relation
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -91,7 +92,10 @@ class AdminApiTest {
     fun notesReadTheirConsentWhetherNumberOrBoolean() = runTest {
         val notes = api(FakeTransport(HttpReply(200, NOTES))).notes()
         assertEquals(
-            AdminNote(12, "2026-10-23T08:15:00.000Z", "Ada", "ada@example.com", 5, "Great work", true, "2026-10-23T09:00:00.000Z", null),
+            AdminNote(
+                12, "2026-10-23T08:15:00.000Z", "Ada", "ada@example.com", 5, "Great work", true, "2026-10-23T09:00:00.000Z", null,
+                relation = "colleague", pinnedAt = "2026-10-23T10:00:00.000Z",
+            ),
             notes[0],
         )
         assertFalse(notes[1].consent, "0 is no")
@@ -101,6 +105,54 @@ class AdminApiTest {
         assertFalse(notes[1].isPublic, "no consent: private for good")
         assertFalse(notes[2].isPublic, "hidden")
         assertTrue(notes[2].isHidden)
+    }
+
+    @Test
+    fun notesReadHowTheWriterKnowsTheOwnerAndTheirPin() = runTest {
+        val notes = api(FakeTransport(HttpReply(200, NOTES))).notes()
+        with(notes[0]) {
+            assertTrue(isPinned)
+            assertEquals(Relation.Colleague, relationKind)
+            assertEquals(Relation.Colleague, badge)
+        }
+        with(notes[1]) {
+            assertFalse(isPinned, "no pinned_at at all: an older worker")
+            assertNull(relation, "no relation at all: an older worker, or a note from before the question")
+            assertNull(relationKind)
+            assertNull(badge)
+        }
+        with(notes[2]) {
+            assertNull(pinnedAt, "pinned_at null: not pinned")
+            assertFalse(isPinned)
+            assertEquals(Relation.Other, relationKind, "the case is not the worker's but is read")
+            assertNull(badge, "Other gets no tag")
+        }
+        assertEquals(Relation.Special, AdminNote(1, relation = "special").badge)
+        assertEquals(Relation.Friend, AdminNote(1, relation = "friend").badge)
+        assertNull(AdminNote(1, relation = "cousin").relationKind, "one this app does not know is none")
+        assertNull(AdminNote(1, relation = "").badge)
+    }
+
+    @Test
+    fun pinAndUnpinPostTheirWordToTheNote() = runTest {
+        val transport = FakeTransport()
+        api(transport).act(note = 12, action = NoteAction.Pin)
+        api(transport).act(note = 12, action = NoteAction.Unpin)
+        assertEquals(
+            listOf(
+                Call("POST", "https://api.example/admin/feedback/12", """{"action":"pin"}""", mapOf("Authorization" to "Bearer s3cret")),
+                Call("POST", "https://api.example/admin/feedback/12", """{"action":"unpin"}""", mapOf("Authorization" to "Bearer s3cret")),
+            ),
+            transport.calls,
+        )
+    }
+
+    @Test
+    fun aPinTheWorkerRefusesIsItsSentence() = runTest {
+        val conflict = FakeTransport(HttpReply(409, """{"error":"Only a note on the site can be pinned."}"""))
+        val e = assertFailsWith<AdminApiException> { api(conflict).act(note = 10, action = NoteAction.Pin) }
+        assertEquals("Only a note on the site can be pinned.", e.message)
+        assertEquals(409, e.status)
     }
 
     @Test
@@ -140,7 +192,7 @@ class AdminApiTest {
             transport.calls,
         )
         assertEquals(
-            listOf("publish", "unpublish", "hide", "unhide", "delete"),
+            listOf("publish", "unpublish", "hide", "unhide", "delete", "pin", "unpin"),
             NoteAction.entries.map { it.wire },
         )
         assertEquals(listOf("read", "unread", "archive", "unarchive", "delete"), MessageAction.entries.map { it.wire })
@@ -258,11 +310,13 @@ class AdminApiTest {
 
         const val NOTES = """{ "items": [
             { "id": 12, "created_at": "2026-10-23T08:15:00.000Z", "name": "Ada", "contact": "ada@example.com", "rating": 5,
-              "message": "Great work", "consent": 1, "published_at": "2026-10-23T09:00:00.000Z", "hidden_at": null },
+              "message": "Great work", "consent": 1, "published_at": "2026-10-23T09:00:00.000Z", "hidden_at": null,
+              "relation": "colleague", "pinned_at": "2026-10-23T10:00:00.000Z" },
             { "id": 11, "created_at": "2026-10-22T08:15:00.000Z", "name": null, "contact": null, "rating": null,
               "message": "Hi", "consent": 0, "published_at": null, "hidden_at": null },
             { "id": 10, "created_at": "2026-10-21T08:15:00.000Z", "name": "Bo", "contact": "", "rating": 3,
-              "message": "Nice", "consent": true, "published_at": null, "hidden_at": "2026-10-22T01:00:00.000Z" } ] }"""
+              "message": "Nice", "consent": true, "published_at": null, "hidden_at": "2026-10-22T01:00:00.000Z",
+              "relation": "Other", "pinned_at": null } ] }"""
 
         const val MESSAGES = """{ "items": [
             { "id": 34, "created_at": "2026-10-23T10:00:00.000Z", "name": "Grace", "contact": "grace@example.com", "topic": "job",

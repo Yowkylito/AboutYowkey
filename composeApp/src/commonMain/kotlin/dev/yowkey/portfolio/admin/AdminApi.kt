@@ -35,7 +35,10 @@ class AdminApi(
     suspend fun notes(limit: Int = 100): List<AdminNote> =
         get("/admin/feedback?limit=${limit.coerceIn(1, 500)}", Items.serializer(AdminNote.serializer())).items
 
-    /** @throws AdminApiException with the worker's sentence: no such note (404), or no consent to publish (409) */
+    /**
+     * @throws AdminApiException with the worker's sentence: no such note (404), or no consent to publish, or a pin
+     *   on a note that is not on the site, hidden from the inbox page meanwhile, say (409)
+     */
     suspend fun act(note: Long, action: NoteAction) {
         send("POST", "/admin/feedback/$note", AdminJson.encodeToString(ActionBody.serializer(), ActionBody(action.wire)))
     }

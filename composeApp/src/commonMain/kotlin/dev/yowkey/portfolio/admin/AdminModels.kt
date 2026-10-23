@@ -2,6 +2,7 @@ package dev.yowkey.portfolio.admin
 
 import androidx.compose.runtime.Immutable
 import dev.yowkey.portfolio.model.MessageTopic
+import dev.yowkey.portfolio.model.Relation
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -86,6 +87,10 @@ data class AdminNote(
     @Serializable(with = FlagSerializer::class) val consent: Boolean = false,
     @SerialName("published_at") val publishedAt: String? = null,
     @SerialName("hidden_at") val hiddenAt: String? = null,
+    /** How the writer knows the owner, a [Relation]'s wire value; null when they did not say (and for older notes). */
+    val relation: String? = null,
+    /** When the owner pinned it; null when it is not pinned. Only a public note can be. */
+    @SerialName("pinned_at") val pinnedAt: String? = null,
 ) {
     val isHidden: Boolean get() = hiddenAt != null
 
@@ -94,6 +99,15 @@ data class AdminNote(
      * visitor's tick ([consent] false) keeps its words private for good; only its stars count.
      */
     val isPublic: Boolean get() = consent && !isHidden
+
+    /** Pinned: it comes before the others on the site, and in the app's list. */
+    val isPinned: Boolean get() = pinnedAt != null
+
+    /** The [Relation] the note names; null when it names none, or one this app does not know. */
+    val relationKind: Relation? get() = Relation.of(relation)
+
+    /** The relation worth a tag, as the site's cards have it: a colleague, a friend, a special someone; not "Other". */
+    val badge: Relation? get() = relationKind?.takeIf { it != Relation.Other }
 }
 
 /** A private message to the owner (`GET /admin/messages`). */
@@ -184,13 +198,18 @@ data class DailyReport(
     @SerialName("created_at") val createdAt: String? = null,
 )
 
-/** What `POST /admin/feedback/:id` can do to a note; [wire] is the body's `action`. */
+/**
+ * What `POST /admin/feedback/:id` can do to a note; [wire] is the body's `action`. The worker pins only a public
+ * note (409 otherwise), and hiding one unpins it.
+ */
 enum class NoteAction(val wire: String) {
     Publish("publish"),
     Unpublish("unpublish"),
     Hide("hide"),
     Unhide("unhide"),
     Delete("delete"),
+    Pin("pin"),
+    Unpin("unpin"),
 }
 
 /** What `POST /admin/messages/:id` can do to a message; [wire] is the body's `action`. */
