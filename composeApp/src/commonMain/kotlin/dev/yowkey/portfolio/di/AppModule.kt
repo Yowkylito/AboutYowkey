@@ -41,6 +41,11 @@ val appModule = module {
                 val bytes = Res.readBytes(item.shot.fullPath)
                 if (item.isClip) AnimatedClip.decode(bytes) else ViewerMedia.Still(bytes.decodeToImageBitmap())
             },
+            covers = LruLoader(
+                capacity = ScreenshotImages.COVER_CLIP_BUDGET,
+                dispatcher = get(),
+                weigh = AnimatedClip::byteCount,
+            ) { path -> AnimatedClip.decode(Res.readBytes(path)) },
         )
     }
     viewModelOf(::PortfolioViewModel)

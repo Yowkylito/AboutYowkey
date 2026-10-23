@@ -73,6 +73,20 @@
     .note { color: var(--muted); max-width: 640px; margin: -8px 0 24px; }
     .badge { display: inline-block; font-size: 13px; font-weight: 600; line-height: 1.4; padding: 1px 8px; border: 1px solid var(--line-strong); border-radius: 6px; color: var(--muted); white-space: nowrap; }
     .links a { display: inline-block; margin: 0 16px 8px 0; padding: 12px 0; }
+    article { scroll-margin-top: 24px; }
+    .tagline { font-size: 19px; line-height: 1.45; margin: 8px 0 4px; }
+    .facts { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 12px 0; font-size: 15px; }
+    .facts dt { color: var(--muted); font-weight: 600; }
+    .facts dd { margin: 0; }
+    .engineering { border-top: 1px solid var(--line); margin-top: 20px; padding-top: 16px; }
+    .engineering h4 { font-size: 17px; margin: 0 0 8px; }
+    .engineering h5 { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); margin: 20px 0 8px; }
+    .engineering code { font: 600 14px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace; color: var(--accent); }
+    .modules, .modules ul { margin: 0; padding-left: 20px; }
+    .modules ul { color: var(--muted); font-size: 15px; }
+    .decisions dt { font-weight: 600; margin-top: 10px; }
+    .decisions dd { margin: 2px 0 0; color: var(--muted); }
+    .quality { padding-left: 20px; }
     #app { position: fixed; inset: 0; opacity: 0; pointer-events: none; transition: opacity .25s ease; }
     .loading-bar {
       position: fixed; top: 0; left: 0; height: 3px; width: 40%; background: var(--accent);
@@ -98,6 +112,19 @@
     </main>
   </div>
   <div id="app" aria-hidden="true"></div>
+  <script>
+    // A deep link into the app (#/projects/<id>) lands on that project's article here too, before the app (or
+    // without it, on browsers that cannot run it).
+    (function () {
+      function reveal() {
+        var match = /^#\/projects\/([a-z0-9][a-z0-9-]*)\/?$/.exec(location.hash);
+        var article = match && document.getElementById("project-" + match[1]);
+        if (article && !document.body.classList.contains("app-ready")) article.scrollIntoView();
+      }
+      reveal();
+      window.addEventListener("hashchange", reveal);
+    })();
+  </script>
   <script>
     (function () {
       // A minimal module declaring a GC struct type: validates only where WasmGC (required by Kotlin/Wasm) exists.

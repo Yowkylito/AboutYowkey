@@ -28,10 +28,16 @@ import kotlinx.coroutines.CancellationException
  *
  * @property thumbnails card thumbnails, clip posters and cover heroes, keyed by path
  * @property viewer full-size stills and clips, keyed by gallery item so the loader knows which decoder to use
+ * @property covers cover clips playing on cards and on the detail screen, keyed by path. Their own cache, so
+ *   scrolling past a column of animated covers never evicts the viewer's open page, and a separate instance from
+ *   the viewer's, so the two never step one clip's bitmap at once
+ * @property decodeGate shared by every clip player: one frame decode per display frame (see [ClipDecodeGate])
  */
 class ScreenshotImages(
     val thumbnails: LruLoader<String, ImageBitmap>,
     val viewer: LruLoader<GalleryItem, ViewerMedia>,
+    val covers: LruLoader<String, AnimatedClip>,
+    val decodeGate: ClipDecodeGate = ClipDecodeGate(),
 ) {
     companion object {
         /**
@@ -46,6 +52,13 @@ class ScreenshotImages(
          * than one still and shares the same budget.
          */
         const val VIEWER_BUDGET: Long = 18L * 1024 * 1024
+
+        /**
+         * Four cover clips at the script's limits (700 KB encoded + one 720×405 frame, 1.9 MB each): the two that
+         * may play at once and the two last scrolled past, so scrolling back resumes them without a re-download
+         * or re-parse. Today's clips weigh 0.94–1.17 MB each (see READINESS.md).
+         */
+        const val COVER_CLIP_BUDGET: Long = 8L * 1024 * 1024
     }
 }
 

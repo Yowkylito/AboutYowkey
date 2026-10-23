@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -22,7 +21,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -31,14 +29,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import dev.yowkey.portfolio.model.GalleryItem
 import dev.yowkey.portfolio.model.Award
 import dev.yowkey.portfolio.model.Experience
 import dev.yowkey.portfolio.model.Link
-import dev.yowkey.portfolio.model.Project
-import dev.yowkey.portfolio.model.Screenshot
 import dev.yowkey.portfolio.model.Service
 import dev.yowkey.portfolio.model.SkillGroup
 import dev.yowkey.portfolio.ui.image.LocalScreenshotImages
@@ -47,7 +42,6 @@ import dev.yowkey.portfolio.ui.components.Bullet
 import dev.yowkey.portfolio.ui.components.LinkButton
 import dev.yowkey.portfolio.ui.components.OutlinedCard
 import dev.yowkey.portfolio.ui.components.PlayGlyph
-import dev.yowkey.portfolio.ui.components.StatusBadge
 import dev.yowkey.portfolio.ui.components.Tag
 
 /** Lays out one row of an equal-height card grid; short rows keep their column width. */
@@ -123,100 +117,6 @@ fun ScreenshotStrip(
                     }
                 }
                 repeat(perRow - chunk.size) { Spacer(Modifier.weight(1f)) }
-            }
-        }
-    }
-}
-
-/**
- * The project's splash screen, large, above its thumbnails. A landscape cover spans the card; a portrait one sits
- * centred in a phone-like frame [PortraitCoverHeight] tall. Both are sized from the JSON's width and height, so
- * nothing moves when the image arrives.
- */
-@Composable
-fun ProjectCover(cover: Screenshot, onOpen: () -> Unit, modifier: Modifier = Modifier) {
-    val loader = LocalScreenshotImages.current?.thumbnails
-    val portrait = cover.aspectRatio < 1f
-    val shape = RoundedCornerShape(if (portrait) 26.dp else 12.dp)
-    Box(modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-        val frame = if (portrait) {
-            Modifier
-                .height(PortraitCoverHeight)
-                .aspectRatio(cover.aspectRatio)
-                .border(5.dp, MaterialTheme.colorScheme.outline, shape)
-                .padding(5.dp)
-                .clip(RoundedCornerShape(21.dp))
-        } else {
-            Modifier
-                .fillMaxWidth()
-                .aspectRatio(cover.aspectRatio)
-                .clip(shape)
-                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape)
-        }
-        ScreenshotImage(
-            path = cover.thumbPath,
-            contentDescription = cover.caption,
-            loader = loader,
-            modifier = frame.clickable(onClickLabel = "View larger", role = Role.Button, onClick = onOpen),
-        )
-    }
-}
-
-/** Tall enough to read a phone screen on the card, short enough that the card is not all cover. */
-private val PortraitCoverHeight = 320.dp
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-fun ProjectCard(project: Project, onOpenScreenshot: (index: Int) -> Unit, modifier: Modifier = Modifier) {
-    val gallery = remember(project) { project.gallery }
-    val strip = remember(gallery) { gallery.filter { it.kind != GalleryItem.Kind.Cover } }
-    OutlinedCard(modifier) {
-        Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            project.cover?.let { cover ->
-                ProjectCover(cover, onOpen = { onOpenScreenshot(0) }, Modifier.padding(bottom = 2.dp))
-            }
-            if (strip.isNotEmpty()) {
-                ScreenshotStrip(
-                    items = strip,
-                    onOpen = onOpenScreenshot,
-                    modifier = Modifier.padding(bottom = 6.dp),
-                    firstIndex = gallery.size - strip.size,
-                )
-            }
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    project.title,
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                val meta = listOfNotNull(project.role, project.period).joinToString(" · ")
-                if (meta.isNotEmpty() || project.visibility != null) {
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                        itemVerticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        if (meta.isNotEmpty()) {
-                            Text(meta.uppercase(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                        }
-                        project.visibility?.let { StatusBadge(it.badge) }
-                    }
-                }
-            }
-            Text(project.summary, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
-            if (project.highlights.isNotEmpty()) {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { project.highlights.forEach { Bullet(it) } }
-            }
-            Spacer(Modifier.weight(1f))
-            if (project.stack.isNotEmpty()) {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    project.stack.forEach { Tag(it) }
-                }
-            }
-            if (project.links.isNotEmpty()) {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { project.links.forEach { LinkButton(it) } }
             }
         }
     }

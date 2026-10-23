@@ -402,6 +402,7 @@
       "id": "about-yowkey",
       "visibility": "public",
       "title": "This portfolio",
+      "tagline": "One Compose UI compiled to WebAssembly, with crawlable HTML built from the same JSON",
       "summary": "A Compose Multiplatform app running in your browser through Kotlin/WebAssembly, with a crawlable HTML version generated from the same content at build time.",
       "period": "Oct 2026",
       "highlights": [
@@ -426,7 +427,99 @@
           "width": 800,
           "height": 600
         }
-      ]
+      ],
+      "engineering": {
+        "builtWith": [
+          "Compose Multiplatform",
+          "Kotlin/Wasm",
+          "Koin",
+          "kotlinx.serialization"
+        ],
+        "platforms": [
+          "Web"
+        ],
+        "architecture": "One Gradle module in one-way layers: UI, ViewModel, repository, parser, model. All content is one JSON file, validated by the same parser in the app and in the build task that renders the crawlable HTML. The browser paints that HTML first, loads the Wasm app behind it and swaps to the canvas once Compose has drawn; a small hash router gives every project its own link.",
+        "decisions": [
+          {
+            "title": "Crawlable HTML first, canvas second",
+            "detail": "A canvas is invisible to search engines and screen readers, and the runtime is megabytes. The build renders the same JSON to HTML, which paints first and stays the page where WasmGC is missing."
+          },
+          {
+            "title": "Clips decoded one frame at a time",
+            "detail": "Skia's Codec decodes animated WebP into one reusable bitmap inside the frame clock: about 1.2 MB a clip instead of 28 MB, and a shared gate allows one decode per display frame."
+          },
+          {
+            "title": "Content mistakes fail the build",
+            "detail": "The app's parser also runs in Gradle, and tests check every listed image against its budget, so a broken link, missing alt text, an oversized image or a module cycle stops the deploy."
+          },
+          {
+            "title": "A hand-rolled router, no library",
+            "detail": "Two screens do not need a navigation library: an expect/actual navigator keeps #/projects/<id> links and browser Back on the web, and a plain back stack on the desktop."
+          }
+        ],
+        "modules": [
+          {
+            "name": "wasmJsMain",
+            "role": "Browser entry, hash router and the HTML hand-off",
+            "dependsOn": [
+              "di",
+              "ui"
+            ]
+          },
+          {
+            "name": "jvmMain",
+            "role": "Desktop window and the build's HTML generator",
+            "dependsOn": [
+              "di",
+              "ui",
+              "site",
+              "data"
+            ]
+          },
+          {
+            "name": "di",
+            "role": "Koin wiring: dispatcher, repository, image caches",
+            "dependsOn": [
+              "data",
+              "ui",
+              "model"
+            ]
+          },
+          {
+            "name": "ui",
+            "role": "Stateless Compose screens, ViewModel and router",
+            "dependsOn": [
+              "data",
+              "model"
+            ]
+          },
+          {
+            "name": "site",
+            "role": "Crawlable HTML, sitemap and robots.txt",
+            "dependsOn": [
+              "model"
+            ]
+          },
+          {
+            "name": "data",
+            "role": "Loads and validates portfolio.json",
+            "dependsOn": [
+              "model"
+            ]
+          },
+          {
+            "name": "model",
+            "role": "Serializable content types and the module graph",
+            "dependsOn": []
+          }
+        ],
+        "quality": [
+          "83 unit tests on the JVM, run on every push and pull request",
+          "Image, clip and content budgets checked by tests before each deploy",
+          "gitleaks secret scan over the full git history",
+          "Lighthouse CI against the live site after every deploy"
+        ]
+      }
     }
   ],
   "experience": [

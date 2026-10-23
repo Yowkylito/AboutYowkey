@@ -1,7 +1,9 @@
 package dev.yowkey.portfolio.site
 
+import dev.yowkey.portfolio.model.Engineering
 import dev.yowkey.portfolio.model.Link
 import dev.yowkey.portfolio.model.Portfolio
+import dev.yowkey.portfolio.model.Project
 import dev.yowkey.portfolio.model.RepoVisibility
 import dev.yowkey.portfolio.model.Screenshot
 import kotlinx.serialization.json.JsonArray
@@ -65,24 +67,7 @@ object StaticHtml {
             if (portfolio.projects.any { it.visibility == RepoVisibility.Private }) {
                 appendLine("<p class=\"note\">${escape(RepoVisibility.PRIVATE_NOTE)}</p>")
             }
-            portfolio.projects.forEach { project ->
-                appendLine("<article>")
-                project.cover?.let { cover(it) }
-                appendLine("<h3>${escape(project.title)}</h3>")
-                val meta = listOfNotNull(
-                    listOfNotNull(project.role, project.period).takeIf { it.isNotEmpty() }?.joinToString(" · ") { escape(it) },
-                    project.visibility?.let { "<span class=\"badge\">${escape(it.badge)}</span>" },
-                )
-                if (meta.isNotEmpty()) appendLine("<p class=\"muted\">${meta.joinToString(" ")}</p>")
-                gallery(project.clips, project.screenshots)
-                appendLine("<p>${escape(project.summary)}</p>")
-                list(project.highlights)
-                if (project.stack.isNotEmpty()) {
-                    appendLine("<p class=\"muted\">${project.stack.joinToString(" · ") { escape(it) }}</p>")
-                }
-                links(project.links)
-                appendLine("</article>")
-            }
+            portfolio.projects.forEach { project(it) }
             appendLine("</section>")
         }
 
@@ -108,34 +93,117 @@ object StaticHtml {
         appendLine("</section>")
     }
 
+    /**
+     * One project, with everything the app splits between its card and its detail screen. The card's answers come
+     * first, in the card's order (media, title, meta, one line, summary, what it is built with and runs on), so a
+     * crawler or a skim reads the same summary; the detail follows (highlights, gallery, engineering, stack, links).
+     * The id is the app's deep link target too: `#/projects/<id>` scrolls here on this page.
+     */
+    private fun StringBuilder.project(project: Project) {
+        appendLine("<article id=\"${escape(project.anchor)}\">")
+        project.coverClip?.let { clip(it, "cover ${orientation(it)}") } ?: project.cover?.let { cover(it) }
+        appendLine("<h3>${escape(project.title)}</h3>")
+        val meta = listOfNotNull(
+            listOfNotNull(project.role, project.period).takeIf { it.isNotEmpty() }?.joinToString(" · ") { escape(it) },
+            project.visibility?.let { "<span class=\"badge\">${escape(it.badge)}</span>" },
+        )
+        if (meta.isNotEmpty()) appendLine("<p class=\"muted\">${meta.joinToString(" ")}</p>")
+        project.tagline?.let { appendLine("<p class=\"tagline\">${escape(it)}</p>") }
+        appendLine("<p>${escape(project.summary)}</p>")
+        project.engineering?.let { facts(it) }
+        list(project.highlights)
+        // With a cover clip leading, the still cover joins the gallery, so every image the app shows is here.
+        gallery(listOfNotNull(project.cover.takeIf { project.coverClip != null }), project.clips, project.screenshots)
+        project.engineering?.let { engineering(it) }
+        if (project.stack.isNotEmpty()) {
+            appendLine("<p class=\"muted\">${project.stack.joinToString(" · ") { escape(it) }}</p>")
+        }
+        links(project.links)
+        appendLine("</article>")
+    }
+
+    /** "Built with" and "Runs on", as a definition list right under the summary, where the card has its chips. */
+    private fun StringBuilder.facts(engineering: Engineering) {
+        val rows = listOf("Built with" to engineering.builtWith, "Runs on" to engineering.platforms).filter { it.second.isNotEmpty() }
+        if (rows.isEmpty()) return
+        appendLine("<dl class=\"facts\">")
+        rows.forEach { (term, items) ->
+            appendLine("<dt>$term</dt><dd>${items.joinToString(" · ") { escape(it) }}</dd>")
+        }
+        appendLine("</dl>")
+    }
+
+    /**
+     * The detail screen's "How it's built": the architecture paragraph, the modules as a nested list (each module,
+     * then what it depends on), the decisions as a definition list, and the quality checklist.
+     */
+    private fun StringBuilder.engineering(engineering: Engineering) {
+        val hasBody = engineering.architecture != null || engineering.modules.isNotEmpty() ||
+            engineering.decisions.isNotEmpty() || engineering.quality.isNotEmpty()
+        if (!hasBody) return
+        appendLine("<div class=\"engineering\">")
+        appendLine("<h4>How it&#39;s built</h4>")
+        engineering.architecture?.let { appendLine("<p>${escape(it)}</p>") }
+        if (engineering.modules.isNotEmpty()) {
+            appendLine("<h5>Modules</h5>")
+            appendLine("<ul class=\"modules\">")
+            engineering.modules.forEach { module ->
+                append("<li><code>${escape(module.name)}</code> ${escape(module.role)}")
+                if (module.dependsOn.isNotEmpty()) {
+                    append("<ul>")
+                    module.dependsOn.forEach { append("<li>depends on <code>${escape(it)}</code></li>") }
+                    append("</ul>")
+                }
+                appendLine("</li>")
+            }
+            appendLine("</ul>")
+        }
+        if (engineering.decisions.isNotEmpty()) {
+            appendLine("<h5>Key decisions</h5>")
+            appendLine("<dl class=\"decisions\">")
+            engineering.decisions.forEach { appendLine("<dt>${escape(it.title)}</dt><dd>${escape(it.detail)}</dd>") }
+            appendLine("</dl>")
+        }
+        if (engineering.quality.isNotEmpty()) {
+            appendLine("<h5>Quality</h5>")
+            appendLine("<ul class=\"quality\">${engineering.quality.joinToString("") { "<li>${escape(it)}</li>" }}</ul>")
+        }
+        appendLine("</div>")
+    }
+
+    private fun orientation(shot: Screenshot) = if (shot.aspectRatio < 1f) "portrait" else "landscape"
+
     /** The project's splash screen first, as on the card: its hero-sized thumbnail, linking to the full image. */
     private fun StringBuilder.cover(cover: Screenshot) {
-        val orientation = if (cover.aspectRatio < 1f) "portrait" else "landscape"
         appendLine(
-            "<a href=\"${resourceUrl(cover.fullPath)}\"><img class=\"cover $orientation\" " +
+            "<a href=\"${resourceUrl(cover.fullPath)}\"><img class=\"cover ${orientation(cover)}\" " +
                 "src=\"${resourceUrl(cover.thumbPath)}\" ${imgAttributes(cover)}></a>",
         )
     }
 
     /**
-     * Clips, then thumbnails linking to the full image. A clip is the animated WebP itself, which every browser
-     * that runs this page animates natively; under reduced motion the `<source>` swaps in its still poster.
+     * A clip is the animated WebP itself, which every browser that runs this page animates natively; under reduced
+     * motion the `<source>` swaps in its still poster. [imgClass] styles a cover clip like a cover.
      */
-    private fun StringBuilder.gallery(clips: List<Screenshot>, shots: List<Screenshot>) {
-        if (clips.isEmpty() && shots.isEmpty()) return
+    private fun StringBuilder.clip(clip: Screenshot, imgClass: String? = null) {
+        val classAttribute = imgClass?.let { "class=\"$it\" " }.orEmpty()
+        appendLine(
+            "<picture><source media=\"(prefers-reduced-motion: reduce)\" srcset=\"${resourceUrl(clip.posterPath)}\">" +
+                "<img ${classAttribute}src=\"${resourceUrl(clip.fullPath)}\" ${imgAttributes(clip)}></picture>",
+        )
+    }
+
+    /** Stills (thumbnails linking to the full image) for [leading], then clips, then screenshots. */
+    private fun StringBuilder.gallery(leading: List<Screenshot>, clips: List<Screenshot>, shots: List<Screenshot>) {
+        if (leading.isEmpty() && clips.isEmpty() && shots.isEmpty()) return
         appendLine("<div class=\"shots\">")
-        clips.forEach { clip ->
-            appendLine(
-                "<picture><source media=\"(prefers-reduced-motion: reduce)\" srcset=\"${resourceUrl(clip.posterPath)}\">" +
-                    "<img src=\"${resourceUrl(clip.fullPath)}\" ${imgAttributes(clip)}></picture>",
-            )
-        }
-        shots.forEach { shot ->
-            appendLine(
-                "<a href=\"${resourceUrl(shot.fullPath)}\"><img src=\"${resourceUrl(shot.thumbPath)}\" " +
-                    "${imgAttributes(shot)}></a>",
-            )
-        }
+        fun still(shot: Screenshot) = appendLine(
+            "<a href=\"${resourceUrl(shot.fullPath)}\"><img src=\"${resourceUrl(shot.thumbPath)}\" " +
+                "${imgAttributes(shot)}></a>",
+        )
+        leading.forEach(::still)
+        clips.forEach { clip(it) }
+        shots.forEach(::still)
         appendLine("</div>")
     }
 
