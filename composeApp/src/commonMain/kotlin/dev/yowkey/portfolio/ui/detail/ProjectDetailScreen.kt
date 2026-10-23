@@ -78,6 +78,7 @@ import dev.yowkey.portfolio.ui.image.ViewerRequest
 import dev.yowkey.portfolio.ui.sections.MediaFrame
 import dev.yowkey.portfolio.ui.sections.ProjectHeading
 import dev.yowkey.portfolio.ui.sections.ScreenshotStrip
+import dev.yowkey.portfolio.ui.components.PlayPauseButton
 import dev.yowkey.portfolio.ui.theme.LocalReducedMotion
 import dev.yowkey.portfolio.ui.theme.PortfolioTheme
 
@@ -128,7 +129,10 @@ fun ProjectDetailScreen(
                 .padding(horizontal = layout.gutter)
                 .padding(top = if (layout.compact) 20.dp else 40.dp, bottom = 96.dp)
             val leadIndex = lead?.let { gallery.indexOf(it) } ?: 0
-            val playing = !reducedMotion && viewer == null
+            // Under reduced motion the hero clip waits for the reader's Play instead of starting on its own.
+            var chosenToPlay by remember(project) { mutableStateOf(false) }
+            val playing = (!reducedMotion || chosenToPlay) && viewer == null
+            val togglePlay: (() -> Unit)? = if (reducedMotion && lead?.isClip == true) ({ chosenToPlay = !chosenToPlay }) else null
             if (twoColumns) {
                 // The media column stays in view while the longer text column scrolls past it, until both end
                 // together. The offset is read in the layer, so scrolling moves it without recomposing anything.
@@ -144,7 +148,7 @@ fun ProjectDetailScreen(
                             },
                         verticalArrangement = Arrangement.spacedBy(28.dp),
                     ) {
-                        DetailMedia(lead!!, playing, compact = false, onOpen = { openViewer(leadIndex) })
+                        DetailMedia(lead!!, playing, compact = false, onOpen = { openViewer(leadIndex) }, onTogglePlay = togglePlay)
                         GallerySection(strip, gallery.indexOf(strip.firstOrNull()), openViewer)
                     }
                     Spacer(Modifier.width(48.dp))
@@ -154,7 +158,7 @@ fun ProjectDetailScreen(
                 }
             } else {
                 Column(content, verticalArrangement = Arrangement.spacedBy(SectionGap)) {
-                    lead?.let { DetailMedia(it, playing, compact = layout.compact, onOpen = { openViewer(leadIndex) }) }
+                    lead?.let { DetailMedia(it, playing, compact = layout.compact, onOpen = { openViewer(leadIndex) }, onTogglePlay = togglePlay) }
                     DetailText(project, compact = layout.compact, onBack = onBack, gallery = {
                         GallerySection(strip, gallery.indexOf(strip.firstOrNull()), openViewer)
                     })
@@ -326,7 +330,13 @@ private fun SubSection(title: String, content: @Composable () -> Unit) {
  * or the full-size still. Tapping it opens the viewer there.
  */
 @Composable
-private fun DetailMedia(item: GalleryItem, playing: Boolean, compact: Boolean, onOpen: () -> Unit) {
+private fun DetailMedia(
+    item: GalleryItem,
+    playing: Boolean,
+    compact: Boolean,
+    onOpen: () -> Unit,
+    onTogglePlay: (() -> Unit)? = null,
+) {
     val scheme = MaterialTheme.colorScheme
     val wash = scheme.primary.copy(alpha = 0.10f).compositeOver(scheme.surfaceVariant)
     val base = scheme.surfaceVariant
@@ -360,6 +370,7 @@ private fun DetailMedia(item: GalleryItem, playing: Boolean, compact: Boolean, o
                 ViewerMediaImage(item, playing = false, modifier = frame)
             }
         }
+        onTogglePlay?.let { toggle -> PlayPauseButton(playing = playing, onToggle = toggle) }
     }
 }
 

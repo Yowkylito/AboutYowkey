@@ -161,33 +161,30 @@ class SiteContentTest {
     }
 
     /**
-     * A cover clip, tested with media that ships today: Vistago's launch clip moved from `clips` to `coverClip`.
-     * Kept out of portfolio.json; this proves the parser, the static page and the player accept it as a cover.
+     * Every project's animated splash cover: it leads the card and the static article, keeps the still cover and its
+     * poster for reduced motion, and decodes and loops in the card's one reusable bitmap.
      */
     @Test
-    fun anExistingClipWorksAsACoverClip() {
-        val vistago = portfolio.projects.first { it.id == "vistago" }
-        val clip = vistago.clips.first()
-        val fixture = portfolio.copy(
-            projects = portfolio.projects.map { if (it.id == "vistago") it.copy(coverClip = clip, clips = it.clips.drop(1)) else it },
-        )
-        val reparsed = PortfolioParser.parse(Json.encodeToString(Portfolio.serializer(), fixture))
-        val project = reparsed.projects.first { it.id == "vistago" }
-        assertEquals(clip, project.coverClip)
-        assertEquals(GalleryItem.Kind.CoverClip, project.leadMedia?.kind)
-        assertEquals(listOf(GalleryItem.Kind.Cover, GalleryItem.Kind.CoverClip), project.gallery.take(2).map { it.kind })
-
+    fun everyCoverClipLeadsItsProjectAndPlays() {
+        val withClip = portfolio.projects.filter { it.coverClip != null }
+        assertTrue(withClip.isNotEmpty(), "no project has an animated cover")
+        val reparsed = PortfolioParser.parse(Json.encodeToString(Portfolio.serializer(), portfolio))
         val html = StaticHtml.content(reparsed)
-        val article = html.substringAfter("<article id=\"project-vistago\">").substringBefore("</article>")
-        assertTrue(article.indexOf(StaticHtml.resourceUrl(clip.fullPath)) < article.indexOf("<h3>"), "the clip leads the article")
-        assertTrue(StaticHtml.resourceUrl(clip.posterPath) in article, "with its poster for reduced motion")
-        assertTrue(StaticHtml.resourceUrl(vistago.cover!!.thumbPath) in article, "and the still cover still in it")
+        withClip.forEach { project ->
+            val clip = project.coverClip!!
+            assertEquals(GalleryItem.Kind.CoverClip, project.leadMedia?.kind, project.id)
+            if (project.cover != null) {
+                assertEquals(listOf(GalleryItem.Kind.Cover, GalleryItem.Kind.CoverClip), project.gallery.take(2).map { it.kind }, project.id)
+            }
+            val article = html.substringAfter("<article id=\"project-${project.id}\">").substringBefore("</article>")
+            assertTrue(article.indexOf(StaticHtml.resourceUrl(clip.fullPath)) < article.indexOf("<h3>"), "${project.id}: the clip leads the article")
+            assertTrue(StaticHtml.resourceUrl(clip.posterPath) in article, "${project.id}: its poster for reduced motion")
 
-        // The card's player: the clip decodes and loops in the one reusable bitmap.
-        val player = AnimatedClip.decode(File(resources, clip.fullPath).readBytes())
-        repeat(player.frameCount) { player.show(ClipFrames.next(player.heldFrame, player.frameCount)) }
-        assertEquals(0, player.heldFrame)
-        assertTrue(File(resources, clip.posterPath).isFile)
+            val player = AnimatedClip.decode(File(resources, clip.fullPath).readBytes())
+            repeat(player.frameCount) { player.show(ClipFrames.next(player.heldFrame, player.frameCount)) }
+            assertEquals(0, player.heldFrame, "${project.id}: one loop ends back on frame 0")
+            assertTrue(File(resources, clip.posterPath).isFile, "${project.id}: poster missing")
+        }
     }
 
     /** The cover clip budget holds the clips that ship today, decoded the way the cards hold them. */

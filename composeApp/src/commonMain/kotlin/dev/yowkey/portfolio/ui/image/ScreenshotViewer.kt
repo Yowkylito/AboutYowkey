@@ -39,6 +39,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import dev.yowkey.portfolio.model.GalleryItem
+import dev.yowkey.portfolio.ui.components.PlayPauseButton
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import dev.yowkey.portfolio.ui.theme.LocalReducedMotion
 import kotlinx.coroutines.launch
 
@@ -101,6 +105,8 @@ fun ScreenshotViewer(request: ViewerRequest, onDismiss: () -> Unit) {
             ) { page ->
                 val item = shots[page]
                 val shot = item.shot
+                // Under reduced motion a clip waits for the reader's Play; otherwise it plays on its settled page.
+                var chosenToPlay by remember(page) { mutableStateOf(false) }
                 Box(
                     Modifier
                         .fillMaxSize()
@@ -110,13 +116,16 @@ fun ScreenshotViewer(request: ViewerRequest, onDismiss: () -> Unit) {
                 ) {
                     ViewerMediaImage(
                         item = item,
-                        playing = !reducedMotion && pager.settledPage == page && !pager.isScrollInProgress,
+                        playing = (!reducedMotion || chosenToPlay) && pager.settledPage == page && !pager.isScrollInProgress,
                         modifier = Modifier
                             .aspectRatio(shot.aspectRatio, matchHeightConstraintsFirst = shot.aspectRatio < 1f)
                             .clip(RoundedCornerShape(12.dp))
                             // Taps on the image itself should not close the viewer.
                             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {},
                     )
+                    if (reducedMotion && item.isClip) {
+                        PlayPauseButton(playing = chosenToPlay, onToggle = { chosenToPlay = !chosenToPlay })
+                    }
                 }
             }
             Column(

@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.clickable
@@ -140,6 +141,44 @@ fun StatusBadge(text: String, modifier: Modifier = Modifier) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
         )
+    }
+}
+
+/**
+ * Plays or pauses a clip the reader opened. Shown only when the system asks for reduced motion, where nothing plays
+ * on its own; motion the reader starts is what that setting still allows, so the animations stay one tap away.
+ * Drawn, not an icon font: a triangle to play, two bars to pause.
+ */
+@Composable
+fun PlayPauseButton(playing: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier) {
+    val label = if (playing) "Pause the animation" else "Play the animation"
+    Box(
+        modifier
+            .size(56.dp)
+            .background(Color.Black.copy(alpha = 0.6f), CircleShape)
+            .clickable(onClickLabel = label, role = Role.Button, onClick = onToggle)
+            .semantics { contentDescription = label },
+    ) {
+        Canvas(Modifier.size(56.dp)) {
+            val c = size.center
+            val r = size.minDimension / 2
+            if (playing) {
+                val w = r * 0.16f
+                val h = r * 0.42f
+                drawRect(Color.White, Offset(c.x - r * 0.26f, c.y - h), androidx.compose.ui.geometry.Size(w, h * 2))
+                drawRect(Color.White, Offset(c.x + r * 0.10f, c.y - h), androidx.compose.ui.geometry.Size(w, h * 2))
+            } else {
+                drawPath(
+                    Path().apply {
+                        moveTo(c.x - r * 0.24f, c.y - r * 0.40f)
+                        lineTo(c.x + r * 0.42f, c.y)
+                        lineTo(c.x - r * 0.24f, c.y + r * 0.40f)
+                        close()
+                    },
+                    Color.White,
+                )
+            }
+        }
     }
 }
 

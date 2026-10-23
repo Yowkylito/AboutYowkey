@@ -58,7 +58,7 @@ apply; what does is below. `[x]` done, `[ ]` open, `N/A` with the reason.
 | 768 px tablet | [x] two-column cards, inline nav, stacked headers |
 | 1024 px+ desktop, dark | [x] header rail beside two-column cards |
 | Live resize between size classes | [x] |
-| Reduced motion | [x] reveals and skeleton pulse disabled; covers show posters, clips not fetched; the list ↔ detail switch is instant |
+| Reduced motion | [x] reveals and skeleton pulse disabled; card covers show posters, clips not fetched; the list ↔ detail switch is instant. The detail hero and the viewer show a Play/Pause button on clips instead, so animations stay one tap away (reader-started motion); checked in Chrome with Windows animations off: plays on Play, and the a11y tree exposes "Play the animation" |
 | Project card and detail, 412 px phone and 1280 px desktop, light and dark | [x] checked in Chrome 156 (screenshots in the PR hand-off): equal-height cards, chips, glyphs, the module diagram on a phone |
 | Detail routing | [x] open, browser Back (scroll kept), Escape, the bar's arrow after a deep link, `#/projects/<id>` on first load, an unknown id |
 | Safari / Firefox | [ ] not yet run. Trigger: before sharing the link |
