@@ -17,6 +17,9 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import dev.yowkey.portfolio.ui.components.initialsOf
+import dev.yowkey.portfolio.ui.components.roleOf
+import dev.yowkey.portfolio.ui.components.shorterForms
 
 /**
  * The crawlable HTML twin of the Compose UI. Search engines, link previews and browsers without WasmGC read this;
@@ -78,13 +81,15 @@ object StaticHtml {
         appendLine("<div class=\"bar-row\">")
         appendLine(
             "<a class=\"mark\" href=\"#top\" aria-label=\"${escape("${p.name}, back to top")}\">" +
-                "<span aria-hidden=\"true\">${escape(initials(p.name))}</span></a>",
+                "<span aria-hidden=\"true\">${escape(initialsOf(p.name))}</span></a>",
         )
         append("<div class=\"brand\">")
         p.availability?.let {
-            append("<span class=\"pill\"><span class=\"dot\" aria-hidden=\"true\"></span><span class=\"text\">${escape(it)}</span></span>")
+            append("<span class=\"pill\" role=\"img\" aria-label=\"${escape(it)}\"><span class=\"dot\" aria-hidden=\"true\"></span>")
+            append("${fitted(it, PILL_SHORT)}</span>")
         }
-        append("<span class=\"who\"><strong>${escape(p.name)}</strong><span>${escape(role(p.headline))}</span></span>")
+        val role = roleOf(p.headline)
+        append("<span class=\"who\"><strong>${escape(p.name)}</strong><span aria-label=\"${escape(role)}\">${fitted(role, ROLE_SHORT)}</span></span>")
         appendLine("</div>")
         appendLine("<nav class=\"sections\" id=\"sections\" aria-label=\"Sections\"><ul>")
         sections(portfolio).forEach { appendLine("<li><a href=\"#${it.name.lowercase()}\">${escape(it.title)}</a></li>") }
@@ -121,14 +126,20 @@ object StaticHtml {
         Section.Contact,
     )
 
-    /** The monogram's letters: the first of the name's first and last words ("RT"), or one for a one-word name. */
-    private fun initials(name: String): String {
-        val words = name.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
-        return listOfNotNull(words.firstOrNull(), words.drop(1).lastOrNull()).joinToString("") { it.first().uppercase() }
+    /**
+     * [text] whole, and for a phone's bar its longest whole-word form of at most [shortChars] characters ("Open to
+     * relocation"), the same cut the app's bar makes (`shorterForms`); CSS shows one or the other. Both are hidden
+     * from screen readers, which hear the whole text from the element's label.
+     */
+    private fun fitted(text: String, shortChars: Int): String {
+        val short = shorterForms(text).firstOrNull { it.length <= shortChars } ?: text
+        return "<span class=\"full\" aria-hidden=\"true\">${escape(text)}</span>" +
+            "<span class=\"short\" aria-hidden=\"true\">${escape(short)}</span>"
     }
 
-    /** The headline's role, the part before its first " · " ("Android Developer at DigiPlus since 2024"). */
-    private fun role(headline: String): String = headline.substringBefore(" · ").trim()
+    /** The phone bar's room, in characters, for the availability and for the role. */
+    private const val PILL_SHORT = 22
+    private const val ROLE_SHORT = 30
 
     /** The switch's two ends, as the app's: the sun on the left, the moon on the right; the knob covers the one that is on. */
     private const val SUN_ICON = "<svg class=\"sun\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" aria-hidden=\"true\" focusable=\"false\">" +

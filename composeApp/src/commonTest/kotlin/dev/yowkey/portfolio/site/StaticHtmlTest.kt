@@ -77,8 +77,10 @@ class StaticHtmlTest {
         assertTrue(bar.startsWith("<div id=\"top\"></div>\n<header class=\"bar\">"), bar.take(80))
         listOf(
             "<a class=\"mark\" href=\"#top\" aria-label=\"Ada &lt;King&gt;  Lovelace, back to top\"><span aria-hidden=\"true\">AL</span></a>",
-            "<div class=\"brand\"><span class=\"pill\"><span class=\"dot\" aria-hidden=\"true\"></span><span class=\"text\">Open to &lt;work&gt;</span></span>" +
-                "<span class=\"who\"><strong>Ada &lt;King&gt;  Lovelace</strong><span>Engineer at &quot;Acme&quot;</span></span></div>",
+            "<div class=\"brand\"><span class=\"pill\" role=\"img\" aria-label=\"Open to &lt;work&gt;\"><span class=\"dot\" aria-hidden=\"true\"></span>" +
+                "<span class=\"full\" aria-hidden=\"true\">Open to &lt;work&gt;</span><span class=\"short\" aria-hidden=\"true\">Open to &lt;work&gt;</span></span>" +
+                "<span class=\"who\"><strong>Ada &lt;King&gt;  Lovelace</strong><span aria-label=\"Engineer at &quot;Acme&quot;\">" +
+                "<span class=\"full\" aria-hidden=\"true\">Engineer at &quot;Acme&quot;</span><span class=\"short\" aria-hidden=\"true\">Engineer at &quot;Acme&quot;</span></span></span></div>",
             "<nav class=\"sections\" id=\"sections\" aria-label=\"Sections\"><ul>",
             "<button class=\"theme\" type=\"button\" role=\"switch\" aria-checked=\"false\" aria-label=\"Dark theme\"><span class=\"knob\"></span><svg class=\"sun\"",
             "<button class=\"menu\" type=\"button\" aria-expanded=\"false\" aria-controls=\"sections\" aria-label=\"Open navigation menu\"><svg",
@@ -87,6 +89,22 @@ class StaticHtmlTest {
         val order = listOf("class=\"mark\"", "class=\"brand\"", "<nav", "class=\"theme\"", "class=\"menu\"", "class=\"progress\"").map { bar.indexOf(it) }
         assertEquals(order.sorted(), order, "mark, slot, links, switch, menu, then the progress on the edge")
         assertFalse("<header class=\"hero\"" in bar || "<h1" in bar, "the hero is the content's")
+    }
+
+    /** On a phone the pill and the role shorten at whole words, as the app's bar does, and readers hear them whole. */
+    @Test
+    fun thePhonesBarShortensAtWholeWordsAsTheAppsDoes() {
+        val owner = everySection.copy(
+            profile = everySection.profile.copy(
+                availability = "Open to relocation to any Country",
+                headline = "Android Developer at DigiPlus since 2024 · Kotlin, Jetpack Compose",
+            ),
+        )
+        val bar = StaticHtml.bar(owner)
+        assertTrue("aria-label=\"Open to relocation to any Country\"" in bar)
+        assertTrue("<span class=\"short\" aria-hidden=\"true\">Open to relocation</span>" in bar, bar)
+        assertTrue("aria-label=\"Android Developer at DigiPlus since 2024\"" in bar)
+        assertTrue("<span class=\"short\" aria-hidden=\"true\">Android Developer at DigiPlus</span>" in bar, bar)
     }
 
     /** One link per section the page has, to its id, in its order, under the app's names for them. */
@@ -116,7 +134,11 @@ class StaticHtmlTest {
     fun withoutAvailabilityTheSlotHasNoPill() {
         val bar = StaticHtml.bar(portfolio)
         assertFalse("class=\"pill\"" in bar)
-        assertTrue("<div class=\"brand\"><span class=\"who\"><strong>Ada</strong><span>Engineer</span></span></div>" in bar)
+        assertTrue(
+            "<div class=\"brand\"><span class=\"who\"><strong>Ada</strong><span aria-label=\"Engineer\">" +
+                "<span class=\"full\" aria-hidden=\"true\">Engineer</span><span class=\"short\" aria-hidden=\"true\">Engineer</span></span></span></div>" in bar,
+            bar,
+        )
     }
 
     /** The bar and the button are the page's own: the same with a backend or without, and never talking to one. */
