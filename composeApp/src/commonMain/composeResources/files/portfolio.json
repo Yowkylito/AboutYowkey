@@ -274,7 +274,8 @@
           "file": "pawffice-ride.webp",
           "caption": "The crew rides along in your car while Pumpkin and Earl Whiskers answer in the crew thread",
           "width": 480,
-          "height": 271
+          "height": 271,
+          "video": true
         }
       ],
       "screenshots": [
