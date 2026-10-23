@@ -48,20 +48,28 @@ fun StarRow(rating: Int, modifier: Modifier = Modifier, glyphSize: Dp = 16.dp) {
 
 /**
  * [value] out of five, to the fraction: 4.8 is four full stars and one lit to four fifths, from the left, over its
- * outline. Read as one node: "Average 4.8 of 5".
+ * outline. Read as one node: "Average 4.8 of 5". [progress] (0..1) lights only that share of [value], for a meter that
+ * fills as a number counts up beside it; it is read in the draw phase, so the filling never recomposes.
  */
 @Composable
-fun StarMeter(value: Double, modifier: Modifier = Modifier, glyphSize: Dp = 20.dp, label: String = "Average ${oneDecimal(value)} of 5") {
+fun StarMeter(
+    value: Double,
+    modifier: Modifier = Modifier,
+    glyphSize: Dp = 20.dp,
+    label: String = "Average ${oneDecimal(value)} of 5",
+    spacing: Dp = 3.dp,
+    progress: () -> Float = { 1f },
+) {
     val lit = MaterialTheme.colorScheme.primary
     val dim = MaterialTheme.colorScheme.outline
-    Row(modifier.semantics { contentDescription = label }, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+    Row(modifier.semantics { contentDescription = label }, horizontalArrangement = Arrangement.spacedBy(spacing)) {
         for (star in 1..5) {
-            val fill = (value - (star - 1)).coerceIn(0.0, 1.0).toFloat()
             Spacer(
                 Modifier.size(glyphSize).drawWithCache {
                     val path = starPath(size)
                     val outline = Stroke(width = (glyphSize.value / 15).dp.toPx(), join = StrokeJoin.Round)
                     onDrawBehind {
+                        val fill = (value * progress().coerceIn(0f, 1f) - (star - 1)).coerceIn(0.0, 1.0).toFloat()
                         if (fill < 1f) drawPath(path, dim, style = outline)
                         if (fill > 0f) clipRect(right = size.width * fill) { drawPath(path, lit) }
                     }

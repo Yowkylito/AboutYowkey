@@ -142,6 +142,17 @@ class PageItemsTest {
         assertTrue(PageItem.Ratings in none && none.none { it is PageItem.Notes }, "it answered with no notes: the dashboard says so")
     }
 
+    /** The bar's proof leads to the dashboard it sums up, or to the note form while the notes are on their way. */
+    @Test
+    fun theProofLeadsToTheNotes() {
+        val withApi = portfolio.copy(api = "https://api.example")
+        val loaded = buildPageItems(withApi, 1, 1, emptyList(), notesLoaded = true)
+        assertEquals(PageItem.Ratings, loaded[notesRow(loaded)!!])
+        val waiting = buildPageItems(withApi, 1, 1)
+        assertEquals(PageItem.Feedback, waiting[notesRow(waiting)!!])
+        assertNull(notesRow(buildPageItems(portfolio, 1, 1)), "no backend, nowhere to go")
+    }
+
     @Test
     fun onlyTheLastJobEndsTheTimeline() {
         val jobs = buildPageItems(portfolio, 1, 1).filterIsInstance<PageItem.Job>()

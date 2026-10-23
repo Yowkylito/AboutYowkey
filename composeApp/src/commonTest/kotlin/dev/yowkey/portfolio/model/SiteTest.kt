@@ -3,6 +3,7 @@ package dev.yowkey.portfolio.model
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -101,13 +102,73 @@ class SiteTest {
     }
 
     @Test
-    fun theLiveLineSaysOnlyWhatExists() {
-        assertTrue(LiveStats().isEmpty)
-        assertTrue(LiveStats(VisitCount(0), RatingSummary()).isEmpty)
+    fun theProofHoldsOnlyWhatExists() {
+        assertTrue(LiveStats().isEmpty, "no answer yet")
+        assertTrue(LiveStats(VisitCount(0), RatingSummary()).isEmpty, "answers with nothing in them")
+        assertTrue(LiveStats(VisitCount(0), RatingSummary(count = 2, average = null)).isEmpty, "a count without an average is no rating")
+
         val both = LiveStats(VisitCount(12, since = "2026-10-23"), RatingSummary(3, 4.7))
-        assertEquals("4.7 from 3 ratings", both.ratingLine)
-        assertEquals("12 visits since Oct 2026", both.visitsLine)
-        assertNull(LiveStats(VisitCount(12)).ratingLine)
+        assertEquals(4.7, both.average)
+        assertEquals(3, both.ratingCount)
+        assertEquals(12L, both.visitTotal)
+        assertTrue(both.hasRating && both.hasVisits && !both.isEmpty)
+
+        val visitsOnly = LiveStats(VisitCount(12), RatingSummary())
+        assertNull(visitsOnly.average)
+        assertEquals(0, visitsOnly.ratingCount)
+        assertTrue(visitsOnly.hasVisits && !visitsOnly.hasRating)
+
+        val ratingOnly = LiveStats(VisitCount(0), RatingSummary(1, 5.0))
+        assertTrue(ratingOnly.hasRating && !ratingOnly.hasVisits)
+        assertEquals(0L, LiveStats(VisitCount(-3)).visitTotal, "never fewer than none")
+    }
+
+    @Test
+    fun theProofIsSettledOnceBothAnswersAreIn() {
+        assertFalse(LiveStats().settled)
+        assertFalse(LiveStats(visits = VisitCount(5)).settled, "the notes are still on their way")
+        assertFalse(LiveStats(ratings = RatingSummary(1, 5.0)).settled, "the visits are still on their way")
+        assertTrue(LiveStats(VisitCount(0), RatingSummary()).settled, "answered, if with nothing")
+    }
+
+    @Test
+    fun theProofsNumbersCountUpFromZero() {
+        assertEquals("0.0", ProofCopy.average(4.8, 0f))
+        assertEquals("2.4", ProofCopy.average(4.8, 0.5f))
+        assertEquals("4.8", ProofCopy.average(4.75))
+        assertEquals("5.0", ProofCopy.average(5.0, 1f))
+        assertEquals("5.0", ProofCopy.average(5.0, 3f), "never past the value")
+        assertEquals("0", ProofCopy.visits(1234, 0f))
+        assertEquals("617", ProofCopy.visits(1234, 0.5f))
+        assertEquals("1,234", ProofCopy.visits(1234))
+        assertEquals("1,234,567", ProofCopy.visits(1234567, 1f))
+        assertEquals("0", ProofCopy.visits(35, -1f), "never under 0")
+        val steps = (0..100).map { ProofCopy.visits(35, it / 100f).toLong() }
+        assertEquals(steps.sorted(), steps, "it only ever counts up")
+    }
+
+    @Test
+    fun theProofsWordsAgreeWithTheirNumbers() {
+        assertEquals("· 1 rating", ProofCopy.ratingCount(1))
+        assertEquals("· 14 ratings", ProofCopy.ratingCount(14))
+        assertEquals("visit", ProofCopy.visitsWord(1))
+        assertEquals("visits", ProofCopy.visitsWord(35))
+    }
+
+    @Test
+    fun theProofIsReadAsOneSentence() {
+        assertEquals(
+            "Rated 5.0 out of 5 from 1 rating, 35 visits. Read the reviews.",
+            ProofCopy.label(LiveStats(VisitCount(35), RatingSummary(1, 5.0))),
+        )
+        assertEquals(
+            "Rated 4.8 out of 5 from 14 ratings, 1,234 visits. Read the reviews.",
+            ProofCopy.label(LiveStats(VisitCount(1234), RatingSummary(14, 4.75))),
+        )
+        assertEquals("Rated 4.0 out of 5 from 2 ratings. Read the reviews.", ProofCopy.label(LiveStats(VisitCount(0), RatingSummary(2, 4.0))))
+        assertEquals("1 visit. See the notes.", ProofCopy.label(LiveStats(VisitCount(1), RatingSummary())))
+        assertNull(ProofCopy.label(LiveStats(VisitCount(0), RatingSummary())))
+        assertNull(ProofCopy.label(LiveStats()))
     }
 
     @Test

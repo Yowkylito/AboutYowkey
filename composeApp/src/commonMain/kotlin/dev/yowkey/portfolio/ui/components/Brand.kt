@@ -1,10 +1,5 @@
 package dev.yowkey.portfolio.ui.components
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.CubicBezierEasing
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
@@ -12,18 +7,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,7 +27,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -48,12 +37,11 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import dev.yowkey.portfolio.ui.theme.LocalReducedMotion
-import kotlinx.coroutines.delay
 
 /*
- * The pieces of the page bar's brand: the monogram that takes the name's place at its start, the availability pill
- * shown beside it while the hero's own name is on screen, and the name with its role once that has scrolled away.
+ * The pieces of the page bar's brand: the monogram that takes the name's place at its start, and the name with its
+ * role once the hero's own has scrolled away. While the hero's name is on screen the bar shows its proof instead
+ * (ProofChip).
  */
 
 /**
@@ -118,60 +106,6 @@ fun Monogram(name: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
 }
 
 /**
- * Whether the visitor can be hired, as a pill: a small green dot that pulses now and then, like a status light, and
- * [availability] in words. On a narrow bar the words shorten at a word boundary ("Open to relocation") rather than
- * ellipsize mid-word (see [shorterForms]); a screen reader always hears the whole sentence. Under reduced motion the
- * dot holds still.
- */
-@Composable
-fun AvailabilityPill(availability: String, modifier: Modifier = Modifier) {
-    val scheme = MaterialTheme.colorScheme
-    val dark = scheme.background.luminance() < 0.5f
-    val green = if (dark) AvailableDark else AvailableLight
-    val style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 0.1.sp)
-    Row(
-        modifier
-            .clearAndSetSemantics { contentDescription = availability }
-            .background(lerp(scheme.background, green, if (dark) 0.10f else 0.08f), CircleShape)
-            .border(1.dp, green.copy(alpha = if (dark) 0.28f else 0.24f), CircleShape)
-            .padding(start = 10.dp, end = 11.dp, top = 6.dp, bottom = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        LiveDot(green)
-        FittedText(availability, style, scheme.onBackground.copy(alpha = 0.86f))
-    }
-}
-
-/**
- * The status light: a solid dot, and every few seconds a ring that grows from it and fades. The ring is read only in
- * the draw phase and rests between pulses, so it neither recomposes nor keeps the page drawing frames while idle.
- */
-@Composable
-private fun LiveDot(color: Color) {
-    val reducedMotion = LocalReducedMotion.current
-    val pulse = remember { Animatable(0f) }
-    LaunchedEffect(reducedMotion) {
-        pulse.snapTo(0f)
-        if (reducedMotion) return@LaunchedEffect
-        delay(600)
-        while (true) {
-            pulse.snapTo(0f)
-            pulse.animateTo(1f, tween(1400, easing = EaseOutCubic))
-            delay(1800)
-        }
-    }
-    Spacer(
-        Modifier.size(DotBox).drawBehind {
-            val r = 3.5.dp.toPx()
-            val p = pulse.value
-            if (p > 0f && p < 1f) drawCircle(color.copy(alpha = 0.5f * (1f - p)), radius = r * (1f + 1.5f * p))
-            drawCircle(color, r)
-        },
-    )
-}
-
-/**
  * Who, once the hero's name has scrolled under the bar: [name] over [role] (the headline's lead, see [roleOf]), each
  * on one line. One node to a screen reader, so it reads as "name, role".
  */
@@ -198,9 +132,9 @@ fun BrandName(name: String, role: String, modifier: Modifier = Modifier) {
 }
 
 /**
- * One line of [text] in the width it is given: the longest of its [shorterForms] that fits, so a narrow bar cuts it
- * at a whole word ("Open to relocation") instead of mid-word; only when even the shortest is too wide does it
- * ellipsize. Measured once per text and width, not per frame.
+ * One line of [text] in the width it is given: the longest of its [shorterForms] that fits, so a narrow bar cuts the
+ * role at a whole word instead of mid-word; only when even the shortest is too wide does it ellipsize. Measured once
+ * per text and width, not per frame.
  */
 @Composable
 private fun FittedText(text: String, style: TextStyle, color: Color, modifier: Modifier = Modifier) {
@@ -251,12 +185,5 @@ private val JoiningWords = setOf(
     "until", "with",
 )
 
-private val EaseOutCubic = CubicBezierEasing(0.33f, 1f, 0.68f, 1f)
-
 private val MarkSize = 32.dp
 private val MarkCorner = 10.dp
-private val DotBox = 10.dp
-
-// Green for "available", which the blue accent cannot say: 600 on the light page, 400 on the dark one.
-private val AvailableLight = Color(0xFF16A34A)
-private val AvailableDark = Color(0xFF4ADE80)

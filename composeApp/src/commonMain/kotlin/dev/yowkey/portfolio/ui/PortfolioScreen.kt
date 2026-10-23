@@ -67,7 +67,9 @@ import dev.yowkey.portfolio.model.Relation
 import dev.yowkey.portfolio.model.SiteNotes
 import dev.yowkey.portfolio.model.VisitCount
 import dev.yowkey.portfolio.ui.components.BackToTop
+import dev.yowkey.portfolio.ui.components.ProofReveal
 import dev.yowkey.portfolio.ui.components.SectionHeader
+import dev.yowkey.portfolio.ui.components.rememberProofReveal
 import dev.yowkey.portfolio.ui.components.rememberRevealProgress
 import dev.yowkey.portfolio.ui.sections.AwardList
 import dev.yowkey.portfolio.ui.sections.CardRow
@@ -213,8 +215,8 @@ fun PortfolioRoute(
 /**
  * @param route which screen to show once content is ready; a project id that is not in the content calls
  *   [onUnknownProject] (the router then goes home) and shows the list meanwhile
- * @param visits the hero's count, once the site's backend has answered; null until then, or without a backend
- * @param notes the rating and the public notes shown so far, for the hero's line, the dashboard and the cards above
+ * @param visits the bar's count, once the site's backend has answered; null until then, or without a backend
+ * @param notes the rating and the public notes shown so far, for the bar's proof, the dashboard and the cards above
  *   the form; null likewise
  * @param notesControls "Show more" and the star sheet the dashboard's bars open, with what they are showing
  * @param feedback the note form's state and actions; the form only exists when the content names a backend
@@ -259,11 +261,11 @@ fun PortfolioScreen(
 }
 
 /**
- * The list and the detail screen, switched by [route]. The list's scroll position, its reveal bookkeeping, its
- * reading keys and whether Back to top shows live here, above the switch, so coming back from a project lands
- * exactly where the visitor left (the list is rebuilt on the same state, which keeps the first row's index and
- * offset), with nothing re-animating. Opening a project rises and fades in over 280 ms; going back fades it out.
- * Under reduced motion the switch is instant.
+ * The list and the detail screen, switched by [route]. The list's scroll position, its reveal bookkeeping (the bar's
+ * proof's too), its reading keys and whether Back to top shows live here, above the switch, so coming back from a
+ * project lands exactly where the visitor left (the list is rebuilt on the same state, which keeps the first row's
+ * index and offset), with nothing re-animating. Opening a project rises and fades in over 280 ms; going back fades it
+ * out. Under reduced motion the switch is instant.
  */
 @Composable
 private fun PortfolioContent(
@@ -290,6 +292,7 @@ private fun PortfolioContent(
         (layout.gutter + 48.dp + 16.dp + LocalBottomEndClearance.current).roundToPx()
     }
     val seen = remember { mutableSetOf<Any>() }
+    val proofReveal = rememberProofReveal()
     val reducedMotion = LocalReducedMotion.current
     val project = remember(portfolio, route) {
         (route as? Route.Project)?.let { r -> portfolio.projects.firstOrNull { it.id == r.id } }
@@ -334,6 +337,7 @@ private fun PortfolioContent(
                     onOpenLink = onOpenLink,
                     notesControls = notesControls,
                     coverKeepClear = { if (backToTop.value && uncovered) keepClearPx else 0 },
+                    proofReveal = proofReveal,
                 )
                 BackToTop(
                     visible = { backToTop.value && uncovered },
@@ -349,7 +353,7 @@ private fun PortfolioContent(
 
 /**
  * The page's list. [reading] runs its section jumps and learns from its form rows when the focus is in a form (see
- * [ReadingFrame], which hosts this).
+ * [ReadingFrame], which hosts this). [proofReveal] is the bar's proof's entrance, kept by the caller so it plays once.
  */
 @Composable
 fun PortfolioPage(
@@ -369,6 +373,7 @@ fun PortfolioPage(
     onOpenLink: (Link) -> Unit = {},
     notesControls: NotesControls = NotesControls(),
     coverKeepClear: () -> Int = { 0 },
+    proofReveal: ProofReveal = rememberProofReveal(),
 ) {
     val items = remember(portfolio, layout, notes) {
         buildPageItems(
@@ -388,14 +393,13 @@ fun PortfolioPage(
             else items.getOrNull(listState.firstVisibleItemIndex)?.section ?: Section.Home
         }
     }
-    // A glide whose time scales with the distance, landing exactly on the section's header (see glideToItem).
-    val navigate: (Section) -> Unit = remember(starts, items, layout, density, reducedMotion, reading) {
-        { section ->
-            starts[section]?.let { index ->
-                reading.jumpTo(index, with(density) { items[index].landingInto(layout).roundToPx() }, reducedMotion)
-            }
-        }
+    // A glide whose time scales with the distance, landing exactly on the row's header (see glideToItem).
+    val jumpTo: (Int) -> Unit = remember(items, layout, density, reducedMotion, reading) {
+        { index -> reading.jumpTo(index, with(density) { items[index].landingInto(layout).roundToPx() }, reducedMotion) }
     }
+    val navigate: (Section) -> Unit = remember(starts, jumpTo) { { section -> starts[section]?.let(jumpTo) } }
+    // The bar's proof leads to the notes, which it sums up: their dashboard, landing as a section's header does.
+    val openNotes: () -> Unit = remember(items, jumpTo) { { notesRow(items)?.let(jumpTo) } }
     // Recomputed on every scroll frame (a few visible rows), but readers are only told when the set of ids changes.
     val playingCovers = remember(items, coversActive) {
         derivedStateOf {
@@ -430,7 +434,10 @@ fun PortfolioPage(
             // A derived state: the bar hears of it only when it flips. The progress is read in the bar's draw phase.
             heroPassed = rememberHeroPassed(listState),
             progress = { listState.layoutInfo.readingProgress() },
+            stats = stats,
+            onOpenNotes = openNotes,
             onNavigate = navigate,
+            proofReveal = proofReveal,
         )
         LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
             items(items, key = { it.key }, contentType = { it::class.simpleName }) { item ->
@@ -456,7 +463,7 @@ fun PortfolioPage(
                     ) {
                         PageRow(
                             item, layout, platformLabel, numbered.indexOf(item.section) + 1, navigate, onOpenProject, isCoverPlaying,
-                            stats, feedback, message, onOpenLink, notes, notesControls,
+                            feedback, message, onOpenLink, notes, notesControls,
                         )
                     }
                 }
@@ -498,7 +505,6 @@ private fun PageRow(
     onNavigate: (Section) -> Unit,
     onOpenProject: (String) -> Unit,
     isCoverPlaying: (String) -> Boolean,
-    stats: LiveStats,
     feedback: FeedbackControls,
     message: MessageControls,
     onOpenLink: (Link) -> Unit,
@@ -513,7 +519,6 @@ private fun PageRow(
                 wide = layout.wideSections,
                 onSeeProjects = { onNavigate(Section.Projects) },
                 onContact = { onNavigate(Section.Contact) },
-                stats = stats,
             )
         }
         is PageItem.Services -> SectionFrame(item, number, layout) {
@@ -605,6 +610,13 @@ private val HeaderLanding = 32.dp
  */
 private fun PageItem.landingInto(layout: PageLayout): Dp =
     if (this is PageItem.Hero) 0.dp else (topSpacing(layout) - HeaderLanding).coerceAtLeast(0.dp)
+
+/**
+ * Where the bar's proof leads: the notes' dashboard, once the backend has answered with them; before that, the note
+ * form; null without a backend, which has no proof to show either.
+ */
+internal fun notesRow(items: List<PageItem>): Int? =
+    items.indexOf(PageItem.Ratings).takeIf { it >= 0 } ?: items.indexOf(PageItem.Feedback).takeIf { it >= 0 }
 
 /** The rows with text fields: while the focus is in one, the reading keys leave its keys alone. */
 private val PageItem.holdsForm: Boolean get() = this == PageItem.Message || this == PageItem.Feedback
