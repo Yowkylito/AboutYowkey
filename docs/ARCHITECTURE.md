@@ -46,12 +46,14 @@ Arrows point one way: UI → ViewModel → repository → parser → model. Noth
 - Card covers that are clips decode one frame at a time into one bitmap, only while on screen (`CoverPlayback`
   over the list's layout info, through `derivedStateOf`, so a card recomposes only when its own answer changes),
   and a shared `ClipDecodeGate` lets one clip decode per display frame however many play.
-- On the web the viewer plays a clip's 60 fps `.mp4` twin, when it has one, as an HTML `<video>` (`ClipVideo`,
-  expect/actual; the desktop actual is never called). The browser decodes it, in hardware where it can, so it costs
-  the UI thread nothing per frame where a WebP frame costs 7–8 ms. Compose places the element over the canvas and
-  cannot draw above it, so it is used only in the viewer, where nothing overlaps the media; the wrapper and the
-  video pass pointer events through to the canvas, so the pager still swipes over it. A video that fails to load
-  falls back to the WebP.
+- On the web the viewer, the card covers and the detail screen's hero play a clip's 60 fps `.mp4` twin, when it has
+  one, as an HTML `<video>` (`ClipVideo`, expect/actual; the desktop actual is never called). The browser decodes it,
+  in hardware where it can, so it costs the UI thread nothing per frame where a WebP frame costs 7–8 ms. Compose
+  places the element over the canvas and cannot draw above it, so it is used only where nothing is drawn over the
+  media, inside the scrolling areas below the top bars (Compose clips the element to them), and a cover's video is
+  only up while it plays, so it never shows through the viewer. Its corners follow `mediaFrameCorner`. The wrapper
+  and the video pass pointer events through to the canvas, so swipes and taps still work. A video that fails to
+  load falls back to the WebP.
 - The detail screen's pinned media column and its top bar divider read the scroll offset in the layer and draw
   phases. The module diagram levels each line of cards with `IntrinsicSize.Min` too, so a card's "uses" names are a
   `WrapRow` for the same reason.

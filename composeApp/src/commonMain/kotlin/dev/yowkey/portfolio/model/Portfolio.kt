@@ -317,8 +317,9 @@ data class Screenshot(
     val width: Int,
     val height: Int,
     /**
-     * Clips only: a 60 fps H.264 `.mp4` twin ships beside the WebP ([videoPath]). The web viewer plays it with the
-     * browser's video decoder; the desktop app, the cards, the detail screen and the static page keep the WebP.
+     * Clips only: a 60 fps H.264 `.mp4` twin ships beside the WebP ([videoPath]). On the web the viewer, the card
+     * covers and the detail screen's hero play it with the browser's video decoder; the desktop app, reduced motion
+     * (outside the viewer) and the static page keep the WebP.
      */
     val video: Boolean = false,
 ) {
