@@ -2,6 +2,7 @@ package dev.yowkey.portfolio.data
 
 import dev.yowkey.portfolio.model.FeedbackDraft
 import dev.yowkey.portfolio.model.Portfolio
+import dev.yowkey.portfolio.model.SiteNotes
 import dev.yowkey.portfolio.model.VisitCount
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
@@ -18,6 +19,12 @@ interface SiteApi {
      * @throws SiteApiException when the server cannot be reached or answers with an error
      */
     suspend fun recordVisit(api: String): VisitCount
+
+    /**
+     * The published notes and the rating they add up to, for the page.
+     * @throws SiteApiException when the server cannot be reached or answers with an error
+     */
+    suspend fun loadNotes(api: String): SiteNotes
 
     /**
      * Puts [draft] in the owner's inbox.
@@ -58,6 +65,16 @@ class HttpSiteApi(private val transport: HttpTransport, private val countsVisits
             json.decodeFromString(VisitCount.serializer(), reply.body)
         } catch (e: Exception) {
             throw SiteApiException("visits: unreadable reply", e)
+        }
+    }
+
+    override suspend fun loadNotes(api: String): SiteNotes {
+        val reply = transport.send("GET", "$api/notes", null)
+        if (!reply.isSuccess) throw SiteApiException("notes: HTTP ${reply.status}")
+        return try {
+            json.decodeFromString(SiteNotes.serializer(), reply.body)
+        } catch (e: Exception) {
+            throw SiteApiException("notes: unreadable reply", e)
         }
     }
 

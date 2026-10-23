@@ -3,14 +3,16 @@
   "private": true,
   "type": "module",
   "description": "The portfolio's backend: a visit counter and a feedback inbox on a Cloudflare Worker with a D1 database.",
-  "engines": { "node": ">=22.13" },
+  "engines": {
+    "node": ">=22.13"
+  },
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "test": "node --disable-warning=ExperimentalWarning --test \"test/**/*.test.js\"",
-    "db:init": "wrangler d1 execute aboutyowkey --remote --file schema.sql",
-    "db:init:local": "wrangler d1 execute aboutyowkey --local --file schema.sql",
-    "inbox": "wrangler d1 execute aboutyowkey --remote --command \"SELECT id, created_at, rating, name, contact, message FROM feedback ORDER BY id DESC LIMIT 50\"",
+    "db:init": "wrangler d1 migrations apply aboutyowkey --remote",
+    "db:init:local": "wrangler d1 migrations apply aboutyowkey --local",
+    "inbox": "wrangler d1 execute aboutyowkey --remote --command \"SELECT id, created_at, rating, name, contact, consent, published_at, hidden_at, message FROM feedback ORDER BY id DESC LIMIT 50\"",
     "tail": "wrangler tail"
   },
   "devDependencies": {

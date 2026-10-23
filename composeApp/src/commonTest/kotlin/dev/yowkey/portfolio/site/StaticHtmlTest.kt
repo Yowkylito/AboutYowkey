@@ -75,13 +75,16 @@ class StaticHtmlTest {
         assertTrue("<p>S</p>\n<p class=\"disclaimer\">Not &lt;their&gt; app</p>" in article, "right under the summary, escaped")
     }
 
-    /** With a backend named, the Contact section ends in the note form and the page in the visit count's place. */
+    /**
+     * With a backend named, the hero gets its live line, and the Contact section the published notes' place and
+     * the note form; all three carry the backend's address for the page's script.
+     */
     @Test
-    fun theNoteFormAndTheVisitCountAppearOnlyWithABackendAndPostToIt() {
+    fun theNoteFormTheNotesAndTheLiveLineAppearOnlyWithABackendAndPointToIt() {
         val none = StaticHtml.content(portfolio)
         assertFalse("<form" in none)
         assertFalse("data-api" in none)
-        assertFalse("<footer" in none)
+        assertFalse("live-stats" in none)
 
         val html = StaticHtml.content(portfolio.copy(api = "https://api.example/\"x"))
         val contact = html.substringAfter("<section id=\"contact\">").substringBefore("</section>")
@@ -96,15 +99,20 @@ class StaticHtmlTest {
             "<select name=\"rating\"><option value=\"\">No rating</option><option value=\"5\">5 · Excellent</option>",
             "<option value=\"1\">1 · Poor</option></select>",
             "<textarea name=\"message\" required maxlength=\"2000\" rows=\"5\"></textarea>",
+            "<label class=\"consent\"><input type=\"checkbox\" name=\"consent\" value=\"1\"><span>${FeedbackCopy.CONSENT}</span></label>",
             "<label class=\"trap\" aria-hidden=\"true\"><span>Website</span><input name=\"website\" tabindex=\"-1\" autocomplete=\"off\"></label>",
             "<button type=\"submit\">${FeedbackCopy.SEND}</button>",
             "<p class=\"status\" role=\"status\" aria-live=\"polite\"></p>",
         ).forEach { assertTrue(it in contact, "the form lacks $it") }
+        val hero = html.substringBefore("</header>")
         assertTrue(
-            html.substringAfterLast("</section>").trim() ==
-                "<footer class=\"site-footer\" hidden><p class=\"muted visits\" data-api=\"https://api.example/&quot;x\"></p></footer>",
-            "the footer closes the page, hidden until the backend answers",
+            "<p class=\"headline\">Engineer</p>\n<p class=\"live-stats muted\" data-api=\"https://api.example/&quot;x\" hidden></p>" in hero,
+            "the live line sits right under the headline, hidden until the backend answers",
         )
+        val notesBox = "<div class=\"visitor-notes\" data-api=\"https://api.example/&quot;x\" hidden>\n<h3>${FeedbackCopy.NOTES_TITLE}</h3>\n<ul class=\"notes\"></ul>\n</div>"
+        assertTrue(notesBox in contact, "the notes' place")
+        assertTrue(contact.indexOf(notesBox) < contact.indexOf("<form class=\"feedback\""), "the notes come before the form")
+        assertFalse("<footer" in html, "the count moved from the footer to the hero")
     }
 
     @Test

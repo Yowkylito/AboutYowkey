@@ -1,13 +1,16 @@
 import { DatabaseSync } from "node:sqlite";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 
 /**
  * D1's binding API (prepare → bind → first / all / run) over Node's own SQLite, so handler.js runs unchanged in
- * the tests, against the real schema, with real SQL semantics (ON CONFLICT, INSERT OR IGNORE, changes()).
+ * the tests, against the real migrations in order, with real SQL semantics (ON CONFLICT, INSERT OR IGNORE, changes()).
  */
-export function openDatabase(schemaPath) {
+export function openDatabase(migrationsDir) {
   const db = new DatabaseSync(":memory:");
-  db.exec(readFileSync(schemaPath, "utf8"));
+  for (const file of readdirSync(migrationsDir).filter((name) => name.endsWith(".sql")).sort()) {
+    db.exec(readFileSync(join(migrationsDir, file), "utf8"));
+  }
   return {
     prepare(sql) {
       const statement = db.prepare(sql);

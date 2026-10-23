@@ -13,6 +13,7 @@ database_name = "aboutyowkey"
 # Paste the id that `npx wrangler d1 create aboutyowkey` prints. The placeholder is enough for `npm run dev`,
 # which uses a local SQLite file under .wrangler/.
 database_id = "c5449c6a-b33c-4d07-a92c-1570eefa0eff"
+migrations_dir = "migrations"
 
 [vars]
 # The pages that may call the API from a browser, comma-separated. The second is the local dist server (README, "Run it").

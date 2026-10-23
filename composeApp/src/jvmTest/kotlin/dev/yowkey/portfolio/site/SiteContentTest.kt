@@ -223,12 +223,13 @@ class SiteContentTest {
         }
     }
 
-    /** Once the content names the backend, the page carries the note form and the visit count's place; not before. */
+    /** Once the content names the backend, the page carries the note form, the notes' place and the hero's live line. */
     @Test
-    fun theNoteFormAndTheVisitCountFollowTheContentsBackend() {
+    fun theNoteFormTheNotesAndTheLiveLineFollowTheContentsBackend() {
         val api = portfolio.api
         assertEquals(api != null, "<form class=\"feedback\"" in page)
-        assertEquals(api != null, "class=\"muted visits\"" in page)
+        assertEquals(api != null, "class=\"visitor-notes\"" in page)
+        assertEquals(api != null, "class=\"live-stats muted\"" in page)
         api?.let { assertTrue("action=\"${StaticHtml.escape(it)}/feedback\"" in page) }
     }
 

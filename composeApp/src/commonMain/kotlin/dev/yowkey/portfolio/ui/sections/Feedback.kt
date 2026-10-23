@@ -4,16 +4,18 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -27,13 +29,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.geometry.center
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeJoin
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -45,13 +40,11 @@ import androidx.compose.ui.unit.dp
 import dev.yowkey.portfolio.model.FeedbackCopy
 import dev.yowkey.portfolio.model.FeedbackDraft
 import dev.yowkey.portfolio.ui.FeedbackUiState
-import kotlin.math.PI
-import kotlin.math.cos
-import kotlin.math.sin
+import dev.yowkey.portfolio.ui.components.StarGlyph
 
 /**
  * The note form under the Contact block: name and email (both optional), an overall impression out of five, the
- * message, Send. [state] is the ViewModel's: while a note is on its way the button waits; a failure's sentence
+ * message, the consent to show it, Send. [state] is the ViewModel's: while a note is on its way the button waits; a failure's sentence
  * shows beside it; once sent, the form gives way to a thank-you and a way to write another. The draft is saveable,
  * so scrolling the row off the screen and back keeps it; the thank-you need not be.
  */
@@ -81,6 +74,7 @@ private fun DraftForm(state: FeedbackUiState, onSend: (FeedbackDraft) -> Unit, w
     var contact by rememberSaveable { mutableStateOf("") }
     var rating by rememberSaveable { mutableStateOf(0) }
     var message by rememberSaveable { mutableStateOf("") }
+    var consent by rememberSaveable { mutableStateOf(false) }
     // The form's own objection, raised at Send and dropped at the next keystroke; the server's comes in [state].
     var problem by remember { mutableStateOf<String?>(null) }
     val sending = state is FeedbackUiState.Sending
@@ -131,11 +125,23 @@ private fun DraftForm(state: FeedbackUiState, onSend: (FeedbackDraft) -> Unit, w
             isError = problem != null && message.isBlank(),
             enabled = !sending,
         )
+        // The whole line toggles, and reads as one checkbox.
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .toggleable(value = consent, enabled = !sending, role = Role.Checkbox) { consent = it }
+                .padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Checkbox(checked = consent, onCheckedChange = null, enabled = !sending)
+            Text(FeedbackCopy.CONSENT, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+        }
         val shown = problem ?: (state as? FeedbackUiState.Failed)?.message
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             Button(
                 onClick = {
-                    val draft = FeedbackDraft(name, contact, rating.takeIf { it in 1..5 }, message)
+                    val draft = FeedbackDraft(name, contact, rating.takeIf { it in 1..5 }, message, consent)
                     problem = draft.problems.firstOrNull()
                     if (problem == null) onSend(draft)
                 },
@@ -177,34 +183,6 @@ private fun RatingRow(rating: Int, onRate: (Int) -> Unit, enabled: Boolean) {
                 }
             }
         }
-    }
-}
-
-/** A five-pointed star, drawn (no icon font to download): filled when chosen, outlined when not. */
-@Composable
-private fun StarGlyph(filled: Boolean, color: Color, modifier: Modifier = Modifier) {
-    Spacer(
-        modifier.size(24.dp).drawWithCache {
-            val star = starPath(size)
-            val outline = Stroke(width = 1.6.dp.toPx(), join = StrokeJoin.Round)
-            onDrawBehind { if (filled) drawPath(star, color) else drawPath(star, color, style = outline) }
-        },
-    )
-}
-
-private fun starPath(size: Size): Path {
-    val c = size.center
-    val outer = size.minDimension / 2
-    val inner = outer * 0.42f
-    return Path().apply {
-        for (i in 0 until 10) {
-            val r = if (i % 2 == 0) outer else inner
-            val angle = -PI / 2 + i * PI / 5
-            val x = c.x + r * cos(angle).toFloat()
-            val y = c.y + r * sin(angle).toFloat()
-            if (i == 0) moveTo(x, y) else lineTo(x, y)
-        }
-        close()
     }
 }
 

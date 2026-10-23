@@ -1,16 +1,20 @@
 /**
- * The owner's pages, in the site's own colours: the inbox, and the one-paragraph notices a plain form post gets
- * back. Every value from the database or the request goes through escape().
+ * The owner's pages, in the site's own colours: the inbox, with a button for everything that can be done to a
+ * note, and the one-paragraph notices a plain form post gets back. Every value from the database or the request
+ * goes through escape().
  */
 
 export function renderInbox({ visits, items, days, today }) {
+  const waiting = items.filter((item) => item.consent && !item.published_at && !item.hidden_at).length;
   const rows = items
     .map(
-      (item) => `<tr>
+      (item) => `<tr${item.hidden_at ? ' class="hidden"' : ""}>
   <td class="when">${escape(when(item.created_at))}</td>
   <td class="rating">${stars(item.rating)}</td>
   <td>${escape(item.name || "")}${contactLine(item.contact)}</td>
   <td class="message">${escape(item.message)}</td>
+  <td class="status">${status(item)}</td>
+  <td class="actions"><form method="post" action="/inbox/notes/${Number(item.id)}">${buttons(item)}</form></td>
 </tr>`,
     )
     .join("\n");
@@ -19,13 +23,14 @@ export function renderInbox({ visits, items, days, today }) {
   return page(
     "Inbox",
     `<h1>Inbox</h1>
-<p class="muted">${Number(visits.total)} visits${since} · ${Number(visits.today)} today (${escape(today)}, UTC) · ${items.length} notes</p>
+<p class="muted">${Number(visits.total)} visits${since} · ${Number(visits.today)} today (${escape(today)}, UTC) · ${items.length} notes, ${waiting} waiting</p>
+<p class="muted">A note with the visitor's tick can be published; it then shows on the site with the name, the stars and the words, never the contact. Hide takes it down without deleting it.</p>
 ${days.length ? `<h2>Visitors by day</h2>\n<ul class="days">${series}</ul>` : ""}
 <h2>Notes</h2>
 ${
   items.length
     ? `<table>
-<thead><tr><th>When</th><th>Rating</th><th>From</th><th>Message</th></tr></thead>
+<thead><tr><th>When</th><th>Rating</th><th>From</th><th>Message</th><th>Status</th><th></th></tr></thead>
 <tbody>
 ${rows}
 </tbody>
@@ -35,10 +40,27 @@ ${rows}
   );
 }
 
-/** A short page with one sentence, and the way back to the portfolio when [backUrl] is given. */
+/** A short page with one sentence, and the way back when [backUrl] is given. */
 export function renderNotice(title, sentence, backUrl) {
-  const back = backUrl ? `\n<p><a href="${escape(backUrl)}">Back to the portfolio</a></p>` : "";
+  const label = backUrl && backUrl.startsWith("/") ? "Back to the inbox" : "Back to the portfolio";
+  const back = backUrl ? `\n<p><a href="${escape(backUrl)}">${label}</a></p>` : "";
   return page(title, `<h1>${escape(title)}</h1>\n<p>${escape(sentence)}</p>${back}`);
+}
+
+/** Published, hidden, waiting for the owner, or private (the visitor did not tick the box). */
+function status(item) {
+  if (item.hidden_at) return `Hidden<br><span class="dim">${escape(when(item.hidden_at))}</span>`;
+  if (item.published_at) return `Published<br><span class="dim">${escape(when(item.published_at))}</span>`;
+  return item.consent ? "<strong>Waiting</strong>" : '<span class="dim">Private</span>';
+}
+
+function buttons(item) {
+  const button = (action, label, extra = "") => `<button name="action" value="${action}"${extra}>${label}</button>`;
+  const remove = button("delete", "Delete", ' class="danger" onclick="return confirm(\'Delete this note for good?\')"');
+  if (item.hidden_at) return button("unhide", "Unhide") + remove;
+  if (item.published_at) return button("unpublish", "Unpublish") + button("hide", "Hide") + remove;
+  const publish = item.consent ? button("publish", "Publish", ' class="primary"') : button("publish", "Publish", ' disabled title="No consent from the visitor"');
+  return publish + button("hide", "Hide") + remove;
 }
 
 function stars(rating) {
@@ -68,26 +90,33 @@ function page(title, body) {
 <meta name="robots" content="noindex, nofollow">
 <title>${escape(title)} · AboutYowkey</title>
 <style>
-  :root { --bg: #F7F5F0; --surface: #FFFFFF; --ink: #16181D; --muted: #545A66; --line: #E4E0D7; --accent: #C2410C; }
+  :root { --bg: #F7F5F0; --surface: #FFFFFF; --ink: #16181D; --muted: #545A66; --line: #E4E0D7; --accent: #C2410C; --on-accent: #FFFFFF; --danger: #B3261E; }
   @media (prefers-color-scheme: dark) {
-    :root { --bg: #0E1014; --surface: #161A20; --ink: #ECEDEF; --muted: #9AA1AD; --line: #262B33; --accent: #FB923C; }
+    :root { --bg: #0E1014; --surface: #161A20; --ink: #ECEDEF; --muted: #9AA1AD; --line: #262B33; --accent: #FB923C; --on-accent: #1A0E05; --danger: #F2B8B5; }
   }
   body { margin: 0; padding: 32px 20px 80px; background: var(--bg); color: var(--ink); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-  main { max-width: 1120px; margin: 0 auto; }
+  main { max-width: 1200px; margin: 0 auto; }
   h1 { font-size: 32px; letter-spacing: -0.02em; margin: 0 0 8px; }
   h2 { font-size: 14px; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin: 32px 0 12px; }
   a { color: var(--accent); font-weight: 600; }
   .muted, .dim { color: var(--muted); }
-  .dim { opacity: .45; }
+  .dim { opacity: .6; }
   .days { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
   .days li { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; font-size: 14px; display: grid; }
   .days strong { font-size: 20px; color: var(--accent); }
   table { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
   th, td { text-align: left; vertical-align: top; padding: 12px 14px; border-top: 1px solid var(--line); font-size: 15px; }
   th { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); border-top: 0; }
-  td.when { white-space: nowrap; color: var(--muted); }
+  tr.hidden td { opacity: .55; }
+  td.when, td.status { white-space: nowrap; color: var(--muted); font-size: 14px; }
+  td.status strong { color: var(--accent); }
   td.rating { white-space: nowrap; color: var(--accent); letter-spacing: .05em; }
-  td.message { white-space: pre-wrap; overflow-wrap: anywhere; width: 55%; }
+  td.message { white-space: pre-wrap; overflow-wrap: anywhere; width: 45%; }
+  td.actions form { display: flex; flex-direction: column; gap: 6px; }
+  button { font: inherit; font-size: 13px; font-weight: 600; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; cursor: pointer; }
+  button.primary { color: var(--on-accent); background: var(--accent); border-color: var(--accent); }
+  button.danger { color: var(--danger); }
+  button:disabled { opacity: .5; cursor: default; }
 </style>
 </head>
 <body>

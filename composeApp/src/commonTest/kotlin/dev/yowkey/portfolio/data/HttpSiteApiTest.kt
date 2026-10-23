@@ -1,6 +1,9 @@
 package dev.yowkey.portfolio.data
 
 import dev.yowkey.portfolio.model.FeedbackDraft
+import dev.yowkey.portfolio.model.PublicNote
+import dev.yowkey.portfolio.model.RatingSummary
+import dev.yowkey.portfolio.model.SiteNotes
 import dev.yowkey.portfolio.model.VisitCount
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -36,13 +39,25 @@ class HttpSiteApiTest {
     }
 
     @Test
+    fun thePublishedNotesAreReadWithAPlainGet() = runTest {
+        val transport = FakeTransport(
+            HttpReply(200, """{"visits":{"total":3},"ratings":{"count":1,"average":5},"notes":[{"id":7,"name":"Ada","rating":5,"message":"Great","date":"2026-10-24"}]}"""),
+        )
+        val notes = HttpSiteApi(transport, true).loadNotes(api)
+        assertEquals(Triple("GET", "https://api.example/notes", null), transport.calls.single())
+        assertEquals(SiteNotes(VisitCount(3), RatingSummary(1, 5.0), listOf(PublicNote(7, "Ada", 5, "Great", "2026-10-24"))), notes)
+        assertFailsWith<SiteApiException> { HttpSiteApi(FakeTransport(HttpReply(503, "down")), true).loadNotes(api) }
+        assertFailsWith<SiteApiException> { HttpSiteApi(FakeTransport(HttpReply(200, "[]")), true).loadNotes(api) }
+    }
+
+    @Test
     fun aNoteGoesAsTrimmedJsonAndSucceedsOn201() = runTest {
         val transport = FakeTransport(HttpReply(201, """{"ok":true}"""))
-        HttpSiteApi(transport, true).sendFeedback(api, FeedbackDraft(" Ada ", "", 5, " Hi "))
+        HttpSiteApi(transport, true).sendFeedback(api, FeedbackDraft(" Ada ", "", 5, " Hi ", consent = true))
         val (method, url, body) = transport.calls.single()
         assertEquals("POST", method)
         assertEquals("https://api.example/feedback", url)
-        assertEquals("""{"name":"Ada","rating":5,"message":"Hi"}""", body, "fields left at their default are left out")
+        assertEquals("""{"name":"Ada","rating":5,"message":"Hi","consent":true}""", body, "fields left at their default are left out")
     }
 
     @Test

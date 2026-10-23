@@ -7,6 +7,7 @@ import dev.yowkey.portfolio.data.PortfolioRepository
 import dev.yowkey.portfolio.data.SiteApi
 import dev.yowkey.portfolio.model.FeedbackDraft
 import dev.yowkey.portfolio.model.Portfolio
+import dev.yowkey.portfolio.model.SiteNotes
 import dev.yowkey.portfolio.model.VisitCount
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -45,11 +46,16 @@ class PortfolioViewModel(
     private val _visits = MutableStateFlow<VisitCount?>(null)
     val visits: StateFlow<VisitCount?> = _visits.asStateFlow()
 
+    /** The published notes and their rating once the backend has answered; null without a backend, or until it does. */
+    private val _notes = MutableStateFlow<SiteNotes?>(null)
+    val notes: StateFlow<SiteNotes?> = _notes.asStateFlow()
+
     private val _feedback = MutableStateFlow<FeedbackUiState>(FeedbackUiState.Idle)
     val feedback: StateFlow<FeedbackUiState> = _feedback.asStateFlow()
 
     private var loadJob: Job? = null
     private var visitJob: Job? = null
+    private var notesJob: Job? = null
     private var sendJob: Job? = null
 
     init {
@@ -68,6 +74,7 @@ class PortfolioViewModel(
             _state.value = try {
                 val portfolio = repository.load()
                 recordVisit(portfolio.api)
+                loadNotes(portfolio.api)
                 PortfolioUiState.Ready(portfolio)
             } catch (e: CancellationException) {
                 throw e
@@ -83,6 +90,20 @@ class PortfolioViewModel(
         visitJob = viewModelScope.launch {
             _visits.value = try {
                 siteApi.recordVisit(api)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                null
+            }
+        }
+    }
+
+    /** Once per page load as well; without an answer the page simply has no notes and no rating. */
+    private fun loadNotes(api: String?) {
+        if (api == null || notesJob != null) return
+        notesJob = viewModelScope.launch {
+            _notes.value = try {
+                siteApi.loadNotes(api)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

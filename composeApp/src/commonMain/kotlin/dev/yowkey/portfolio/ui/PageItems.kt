@@ -8,6 +8,7 @@ import dev.yowkey.portfolio.model.Portfolio
 import dev.yowkey.portfolio.model.Profile
 import dev.yowkey.portfolio.model.Project
 import dev.yowkey.portfolio.model.ProjectGroup
+import dev.yowkey.portfolio.model.PublicNote
 import dev.yowkey.portfolio.model.Service
 import dev.yowkey.portfolio.model.SkillGroup
 
@@ -85,6 +86,12 @@ sealed interface PageItem {
         override val showsHeader = true
     }
 
+    /** One row of the published notes, between the contact block and the form; the first row carries the title. */
+    data class Notes(val notes: List<PublicNote>, val columns: Int, val row: Int) : PageItem {
+        override val key = "notes-$row"
+        override val section = Section.Contact
+    }
+
     /** The note form, under the contact block; only when the content names the site's backend ([Portfolio.api]). */
     data object Feedback : PageItem {
         override val key = "feedback"
@@ -99,9 +106,15 @@ sealed interface PageItem {
 
 /**
  * Flattens the portfolio into rows for the current column counts, in [Section] order. Empty sections produce no rows
- * at all.
+ * at all. [notes], the published notes from the site's backend, are chunked like the project cards and sit between
+ * the contact block and the form; without a backend there are neither.
  */
-fun buildPageItems(portfolio: Portfolio, serviceColumns: Int, projectColumns: Int): List<PageItem> = buildList {
+fun buildPageItems(
+    portfolio: Portfolio,
+    serviceColumns: Int,
+    projectColumns: Int,
+    notes: List<PublicNote> = emptyList(),
+): List<PageItem> = buildList {
     add(PageItem.Hero(portfolio.profile))
     portfolio.experience.forEachIndexed { index, job ->
         add(PageItem.Job(job, index, isLast = index == portfolio.experience.lastIndex))
@@ -118,7 +131,10 @@ fun buildPageItems(portfolio: Portfolio, serviceColumns: Int, projectColumns: In
         add(PageItem.Services(chunk, serviceColumns, showsHeader = row == 0, row = row))
     }
     add(PageItem.Contact(portfolio.profile.email, portfolio.links))
-    if (portfolio.api != null) add(PageItem.Feedback)
+    if (portfolio.api != null) {
+        notes.chunked(projectColumns).forEachIndexed { row, chunk -> add(PageItem.Notes(chunk, projectColumns, row)) }
+        add(PageItem.Feedback)
+    }
     add(PageItem.Footer)
 }
 
