@@ -102,11 +102,11 @@ performance warn).
 - [x] Deploy on every push to `main`: a content fix is live in minutes
 - [x] Lighthouse report kept as a workflow artifact on each deploy
 - [x] Visit counts (once per visitor per day, no addresses kept) and a feedback inbox, on the site's own worker. The
-  page shows them once `portfolio.json` names the worker (README, "Visits and feedback"); the notes, their rating
+  page shows them once `portfolio.json` names the worker (DEVELOPMENT.md, "Visits and feedback"); the notes, their rating
   dashboard and a star filter show on the page too
 - [x] The owner hears about a new note or message as it arrives, and gets the day's numbers at 23:59 Manila time:
   each is kept as a record the Android app polls every 15 minutes, and pushed through FCM once the
-  `FCM_SERVICE_ACCOUNT` secret is set (README, "Visits and feedback"). A failed push never fails the visitor's
+  `FCM_SERVICE_ACCOUNT` secret is set (DEVELOPMENT.md, "Visits and feedback"). A failed push never fails the visitor's
   request
 - [ ] Custom domain (`CNAME`). Trigger: when a domain is bought
 

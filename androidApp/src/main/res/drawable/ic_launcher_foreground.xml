@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   favicon.svg's Y. Its 64-unit square is the full-bleed icon, so it maps onto the adaptive icon's inner 72 of 108 dp
-  (scale 72/64, offset 18), the same crop the README asks of the project icons.
+  (scale 72/64, offset 18), the same crop docs/DEVELOPMENT.md asks of the project icons.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
