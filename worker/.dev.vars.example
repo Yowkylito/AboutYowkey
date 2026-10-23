@@ -1,0 +1,4 @@
+# Copy to .dev.vars (gitignored) for `npm run dev`. On Cloudflare these are secrets: `npx wrangler secret put ADMIN_TOKEN`.
+# ADMIN_TOKEN is the inbox password; VISITOR_SALT makes the daily visitor ids unguessable. Long and random, both.
+ADMIN_TOKEN=replace-me
+VISITOR_SALT=replace-me-too

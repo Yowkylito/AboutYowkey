@@ -209,6 +209,17 @@ class PortfolioParserTest {
         }
     }
 
+    @Test
+    fun apiIsOptionalHttpsWithoutATrailingSlash() {
+        assertNull(PortfolioParser.parse(validJson).api)
+        fun with(api: String) = validJson.replaceFirst("\"siteUrl\"", "\"api\": \"$api\", \"siteUrl\"")
+        assertEquals("https://api.example", PortfolioParser.parse(with("https://api.example")).api)
+        assertEquals("http://localhost:8787", PortfolioParser.parse(with("http://localhost:8787")).api, "a worker running locally")
+        listOf("http://api.example", "https://api.example/", "api.example", "").forEach { bad ->
+            assertFailsWith<IllegalArgumentException>(bad) { PortfolioParser.parse(with(bad)) }
+        }
+    }
+
     private fun words(count: Int) = List(count) { "word" }.joinToString(" ")
 
     @Test

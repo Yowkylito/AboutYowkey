@@ -1,0 +1,56 @@
+name: Worker
+
+# The site's backend (worker/). Its tests run on every change; the deploy runs on main once the Cloudflare secrets
+# exist (README.md, "Visits and feedback"), and is a no-op until then.
+on:
+  push:
+    branches: [main]
+    paths: ["worker/**", ".github/workflows/worker.yml"]
+  pull_request:
+    paths: ["worker/**", ".github/workflows/worker.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: worker-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: worker
+
+jobs:
+  test:
+    name: Test the worker
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: npm test
+
+  deploy:
+    name: Deploy to Cloudflare
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: test
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Explain the skip until the secrets exist
+        if: env.CLOUDFLARE_API_TOKEN == ''
+        run: echo "Not deployed: the CLOUDFLARE_API_TOKEN secret is not set. See README.md, Visits and feedback." >> "$GITHUB_STEP_SUMMARY"
+      - name: Install wrangler
+        if: env.CLOUDFLARE_API_TOKEN != ''
+        run: npm ci
+      - name: Deploy
+        if: env.CLOUDFLARE_API_TOKEN != ''
+        run: npx wrangler deploy

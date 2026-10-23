@@ -33,6 +33,13 @@ object PortfolioParser {
     private fun validate(portfolio: Portfolio) {
         require(portfolio.profile.name.isNotBlank()) { "profile.name must not be blank" }
         require(portfolio.siteUrl.startsWith("https://")) { "siteUrl must be an https:// URL" }
+        portfolio.api?.let { api ->
+            // The static form posts to it as written and the app appends /visits and /feedback to it.
+            require(api.startsWith("https://") || api.startsWith("http://localhost")) {
+                "api must be an https:// URL (http://localhost… for a worker running locally), got $api"
+            }
+            require(!api.endsWith("/")) { "api must not end with a slash: the page appends /visits and /feedback" }
+        }
         validateProof(portfolio.profile.proof)
 
         val duplicateIds = portfolio.projects.groupBy { it.id }.filterValues { it.size > 1 }.keys

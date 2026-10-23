@@ -39,6 +39,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfoV2
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
@@ -56,12 +57,15 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.window.core.layout.WindowSizeClass
+import dev.yowkey.portfolio.model.FeedbackDraft
 import dev.yowkey.portfolio.model.Portfolio
+import dev.yowkey.portfolio.model.VisitCount
 import dev.yowkey.portfolio.ui.components.SectionHeader
 import dev.yowkey.portfolio.ui.components.rememberRevealProgress
 import dev.yowkey.portfolio.ui.sections.AwardList
 import dev.yowkey.portfolio.ui.sections.CardRow
 import dev.yowkey.portfolio.ui.sections.ContactBlock
+import dev.yowkey.portfolio.ui.sections.FeedbackForm
 import dev.yowkey.portfolio.ui.sections.Footer
 import dev.yowkey.portfolio.ui.sections.GroupHeader
 import dev.yowkey.portfolio.ui.sections.Hero
@@ -109,6 +113,14 @@ data class PageLayout(
     }
 }
 
+/** The note form's state and its two actions, handed to the Contact section's row together. */
+@Immutable
+data class FeedbackControls(
+    val state: FeedbackUiState = FeedbackUiState.Idle,
+    val onSend: (FeedbackDraft) -> Unit = {},
+    val onReset: () -> Unit = {},
+)
+
 /** Stateful entry: owns the ViewModel and the router. Everything below it is stateless and previewable. */
 @Composable
 fun PortfolioRoute(
@@ -120,6 +132,10 @@ fun PortfolioRoute(
 ) {
     val state by viewModel.state.collectAsState()
     val route by navigator.route.collectAsState()
+    val visits by viewModel.visits.collectAsState()
+    val feedbackState by viewModel.feedback.collectAsState()
+    val onSendFeedback: (FeedbackDraft) -> Unit = remember(viewModel) { viewModel::sendFeedback }
+    val onResetFeedback: () -> Unit = remember(viewModel) { viewModel::resetFeedback }
     val onOpenProject: (String) -> Unit = remember(navigator) { { id -> navigator.open(Route.Project(id)) } }
     val onBack: () -> Unit = remember(navigator) { { navigator.back() } }
     val onUnknownProject: () -> Unit = remember(navigator) { { navigator.replace(Route.Home) } }
@@ -133,12 +149,16 @@ fun PortfolioRoute(
         onUnknownProject = onUnknownProject,
         onContentShown = onContentShown,
         modifier = modifier,
+        visits = visits,
+        feedback = FeedbackControls(feedbackState, onSendFeedback, onResetFeedback),
     )
 }
 
 /**
  * @param route which screen to show once content is ready; a project id that is not in the content calls
  *   [onUnknownProject] (the router then goes home) and shows the list meanwhile
+ * @param visits the footer's count, once the site's backend has answered; null until then, or without a backend
+ * @param feedback the note form's state and actions; the form only exists when the content names a backend
  */
 @Composable
 fun PortfolioScreen(
@@ -151,13 +171,15 @@ fun PortfolioScreen(
     onUnknownProject: () -> Unit,
     onContentShown: () -> Unit,
     modifier: Modifier = Modifier,
+    visits: VisitCount? = null,
+    feedback: FeedbackControls = FeedbackControls(),
 ) {
     Surface(modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         when (state) {
             PortfolioUiState.Loading -> LoadingPage()
             is PortfolioUiState.Error -> ErrorPage(state.message, onRetry)
             is PortfolioUiState.Ready -> {
-                PortfolioContent(state.portfolio, route, platformLabel, onOpenProject, onBack, onUnknownProject)
+                PortfolioContent(state.portfolio, route, platformLabel, visits, feedback, onOpenProject, onBack, onUnknownProject)
                 val shown by rememberUpdatedState(onContentShown)
                 LaunchedEffect(Unit) {
                     withFrameNanos { } // after the first frame of real content is on screen
@@ -179,6 +201,8 @@ private fun PortfolioContent(
     portfolio: Portfolio,
     route: Route,
     platformLabel: String,
+    visits: VisitCount?,
+    feedback: FeedbackControls,
     onOpenProject: (String) -> Unit,
     onBack: () -> Unit,
     onUnknownProject: () -> Unit,
@@ -218,6 +242,8 @@ private fun PortfolioContent(
                 seen = seen,
                 // Read from the current route, not this child's: the list fading out must stop its covers now.
                 coversActive = showingList && !reducedMotion,
+                visits = visits,
+                feedback = feedback,
                 onOpenProject = onOpenProject,
             )
         } else {
@@ -234,6 +260,8 @@ fun PortfolioPage(
     listState: LazyListState,
     seen: MutableSet<Any>,
     coversActive: Boolean,
+    visits: VisitCount?,
+    feedback: FeedbackControls,
     onOpenProject: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -305,6 +333,7 @@ fun PortfolioPage(
                     ) {
                         PageRow(
                             item, layout, platformLabel, numbered.indexOf(item.section) + 1, navigate, onOpenProject, isCoverPlaying,
+                            visits, feedback,
                         )
                     }
                 }
@@ -316,6 +345,8 @@ fun PortfolioPage(
 private fun PageItem.topSpacing(layout: PageLayout): Dp = when {
     this is PageItem.Hero -> if (layout.compact) 40.dp else 96.dp
     this is PageItem.Footer -> 96.dp
+    // The note form: apart from the contact block above it, closer than a new section.
+    this is PageItem.Feedback -> if (layout.compact) 48.dp else 64.dp
     showsHeader -> if (layout.compact) 72.dp else 120.dp
     // The second group of a section: clearly apart from the first group's last row, closer than a new section.
     this is PageItem.Projects && showsGroupHeader -> if (layout.compact) 56.dp else 72.dp
@@ -332,6 +363,8 @@ private fun PageRow(
     onNavigate: (Section) -> Unit,
     onOpenProject: (String) -> Unit,
     isCoverPlaying: (String) -> Boolean,
+    visits: VisitCount?,
+    feedback: FeedbackControls,
 ) {
     when (item) {
         is PageItem.Hero -> SelectionContainer {
@@ -376,7 +409,10 @@ private fun PageRow(
         is PageItem.Contact -> SectionFrame(item, number, layout) {
             ContactBlock(item.email, item.links)
         }
-        PageItem.Footer -> Footer(platformLabel)
+        PageItem.Feedback -> SectionFrame(item, number, layout) {
+            FeedbackForm(feedback.state, feedback.onSend, feedback.onReset, wide = !layout.compact)
+        }
+        PageItem.Footer -> Footer(platformLabel, visits?.summary)
     }
 }
 

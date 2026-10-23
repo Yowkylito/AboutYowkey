@@ -85,6 +85,12 @@ sealed interface PageItem {
         override val showsHeader = true
     }
 
+    /** The note form, under the contact block; only when the content names the site's backend ([Portfolio.api]). */
+    data object Feedback : PageItem {
+        override val key = "feedback"
+        override val section = Section.Contact
+    }
+
     data object Footer : PageItem {
         override val key = "footer"
         override val section = Section.Contact
@@ -112,6 +118,7 @@ fun buildPageItems(portfolio: Portfolio, serviceColumns: Int, projectColumns: In
         add(PageItem.Services(chunk, serviceColumns, showsHeader = row == 0, row = row))
     }
     add(PageItem.Contact(portfolio.profile.email, portfolio.links))
+    if (portfolio.api != null) add(PageItem.Feedback)
     add(PageItem.Footer)
 }
 

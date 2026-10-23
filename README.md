@@ -18,6 +18,7 @@ Rules the build enforces (it fails rather than ship a broken page):
 - project `id`s are unique and plain (`a-z`, `0-9`, `-`): they key the list rows and are the project's link,
   `#/projects/<id>`
 - links are `https://` or `mailto:`
+- `api`, if given, is `https://` with no trailing slash: the site's backend (see "Visits and feedback")
 
 ### Adding screenshots to a project
 
@@ -185,5 +186,82 @@ JDK 17+ (Android Studio's bundled JBR works).
 `.github/workflows/pages.yml` scans for secrets, runs the tests, builds the bundle and deploys it on every push to
 `main`, then runs Lighthouse against the live URL. Pull requests get the same build and tests without the deploy.
 One-time setup: **Settings → Pages → Source: GitHub Actions**.
+
+## Visits and feedback
+
+The visit count in the footer and the "Leave a note" form under Contact are real data, kept by a small backend of
+the site's own: a Cloudflare Worker with a D1 (SQLite) database, in [`worker/`](worker/). GitHub Pages serves files
+only, so this is the one piece that runs on a server. Cloudflare's free plan covers it many times over (100,000
+requests a day), and it never sleeps.
+
+What it keeps, and nothing more:
+
+- **Visits**: one count per day. A visitor is counted once a day, told apart by a hash of the day, their address,
+  their browser and a secret salt; the address itself is never stored, and the hashes are deleted the next day.
+  Crawlers, link previews and CI's Lighthouse run read the count but are not counted.
+- **Notes**: what the form says (name and email are optional), the rating, the time, and the day's hash for a limit
+  of 5 notes per visitor per day. A hidden field catches bots that fill every field. Nothing is published.
+
+Until `portfolio.json` names the backend, neither the count nor the form is on the page. Setting it up takes about
+ten minutes, once:
+
+1. A free [Cloudflare account](https://dash.cloudflare.com/sign-up), and Node 22 or newer. Then:
+
+   ```bash
+   cd worker && npm install && npx wrangler login
+   ```
+
+2. Create the database, paste the `database_id` it prints into `worker/wrangler.toml`, and create the tables:
+
+   ```bash
+   npx wrangler d1 create aboutyowkey
+   ```
+
+   ```bash
+   npm run db:init
+   ```
+
+3. Two secrets: the inbox password, and the salt for the visitor hashes. Long and random, both (`openssl rand
+   -base64 32` makes one). Wrangler asks for the value, so neither is ever in a file:
+
+   ```bash
+   npx wrangler secret put ADMIN_TOKEN
+   ```
+
+   ```bash
+   npx wrangler secret put VISITOR_SALT
+   ```
+
+4. Deploy, and note the URL it prints (`https://aboutyowkey-api.<account>.workers.dev`):
+
+   ```bash
+   npm run deploy
+   ```
+
+5. Put that URL in `portfolio.json`, next to `siteUrl`, and push:
+
+   ```json
+   "api": "https://aboutyowkey-api.<account>.workers.dev"
+   ```
+
+   The build checks it is `https://` with no trailing slash. The next deploy of the site shows the count in the
+   footer and the form under Contact.
+
+**Reading the notes**: open `https://aboutyowkey-api.<account>.workers.dev/inbox` in a browser; any user name, the
+password is `ADMIN_TOKEN`. It lists the notes newest first, with the visit totals and the last two weeks by day.
+From the terminal, `npm run inbox` prints the same table, and one note is removed with
+
+```bash
+npx wrangler d1 execute aboutyowkey --remote --command "DELETE FROM feedback WHERE id = 3"
+```
+
+**Changes to the worker** deploy from CI (`.github/workflows/worker.yml`) once two repository secrets exist:
+`CLOUDFLARE_ACCOUNT_ID` (on the dashboard's Workers page) and `CLOUDFLARE_API_TOKEN` (a token made from the "Edit
+Cloudflare Workers" template, with D1 edit added). Without them the workflow only runs the worker's tests, and
+`npm run deploy` by hand does the rest.
+
+**Locally**: `npm run dev` in `worker/` serves it at `http://localhost:8787` against a SQLite file under
+`.wrangler/` (`npm run db:init:local` first; copy `.dev.vars.example` to `.dev.vars` for the two secrets). Set
+`"api": "http://localhost:8787"` in `portfolio.json` while testing: the parser allows `http://` for localhost only.
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and [`docs/READINESS.md`](docs/READINESS.md).

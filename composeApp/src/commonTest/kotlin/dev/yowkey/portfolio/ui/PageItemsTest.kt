@@ -95,6 +95,19 @@ class PageItemsTest {
         assertNull(rows.first().note, "no private repo, so no note")
     }
 
+    /** The note form sits in the Contact section, after the contact block, only when the content names a backend. */
+    @Test
+    fun theNoteFormFollowsContactOnlyWithABackend() {
+        val without = buildPageItems(portfolio, 1, 1)
+        assertFalse(without.any { it is PageItem.Feedback })
+
+        val items = buildPageItems(portfolio.copy(api = "https://api.example"), 1, 1)
+        assertEquals(listOf(PageItem.Contact(null, portfolio.links), PageItem.Feedback, PageItem.Footer), items.takeLast(3))
+        assertEquals(Section.Contact, PageItem.Feedback.section)
+        assertFalse(PageItem.Feedback.showsHeader)
+        assertEquals(sectionStarts(without).keys.toList(), sectionStarts(items).keys.toList(), "no section, so no nav entry, of its own")
+    }
+
     @Test
     fun onlyTheLastJobEndsTheTimeline() {
         val jobs = buildPageItems(portfolio, 1, 1).filterIsInstance<PageItem.Job>()

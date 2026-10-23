@@ -1,6 +1,8 @@
 package dev.yowkey.portfolio.site
 
 import dev.yowkey.portfolio.model.Engineering
+import dev.yowkey.portfolio.model.FeedbackCopy
+import dev.yowkey.portfolio.model.FeedbackDraft
 import dev.yowkey.portfolio.model.Link
 import dev.yowkey.portfolio.model.Portfolio
 import dev.yowkey.portfolio.model.Project
@@ -92,7 +94,47 @@ object StaticHtml {
 
         appendLine("<section id=\"contact\"><h2>Contact</h2>")
         links(listOfNotNull(p.email?.let { Link("Email", "mailto:$it") }) + portfolio.links)
+        portfolio.api?.let { feedbackForm(it) }
         appendLine("</section>")
+
+        // The visit count's place, filled by the page's script from the backend; hidden until it answers.
+        portfolio.api?.let {
+            appendLine("<footer class=\"site-footer\" hidden><p class=\"muted visits\" data-api=\"${escape(it)}\"></p></footer>")
+        }
+    }
+
+    /**
+     * The note form, as the app's: name and email (optional), the impression, the message. It posts to the backend
+     * at [api] the way the app does, through the page's script; without the script the browser posts the plain
+     * form and the backend answers with a page. The `website` field is a trap for bots that fill every field:
+     * people never see it, and a filled one is quietly dropped.
+     */
+    private fun StringBuilder.feedbackForm(api: String) {
+        appendLine("<h3 id=\"feedback\">${escape(FeedbackCopy.TITLE)}</h3>")
+        appendLine("<p class=\"note\">${escape(FeedbackCopy.INTRO)}</p>")
+        appendLine("<form class=\"feedback\" method=\"post\" action=\"${escape("$api/feedback")}\" data-api=\"${escape(api)}\">")
+        appendLine("<div class=\"fields\">")
+        appendLine(
+            "<label><span>${escape(FeedbackCopy.NAME)} <span class=\"muted\">(optional)</span></span>" +
+                "<input name=\"name\" maxlength=\"${FeedbackDraft.MAX_NAME}\" autocomplete=\"name\"></label>",
+        )
+        appendLine(
+            "<label><span>${escape(FeedbackCopy.CONTACT)} <span class=\"muted\">(optional, if you&#39;d like a reply)</span></span>" +
+                "<input name=\"contact\" type=\"email\" maxlength=\"${FeedbackDraft.MAX_CONTACT}\" autocomplete=\"email\"></label>",
+        )
+        appendLine("</div>")
+        append("<label><span>${escape(FeedbackCopy.RATING)} <span class=\"muted\">(optional)</span></span>")
+        append("<select name=\"rating\"><option value=\"\">No rating</option>")
+        (5 downTo 1).forEach { append("<option value=\"$it\">${escape(FeedbackCopy.ratingLabel(it))}</option>") }
+        appendLine("</select></label>")
+        appendLine(
+            "<label><span>${escape(FeedbackCopy.MESSAGE)}</span>" +
+                "<textarea name=\"message\" required maxlength=\"${FeedbackDraft.MAX_MESSAGE}\" rows=\"5\"></textarea></label>",
+        )
+        appendLine("<label class=\"trap\" aria-hidden=\"true\"><span>Website</span><input name=\"website\" tabindex=\"-1\" autocomplete=\"off\"></label>")
+        appendLine("<button type=\"submit\">${escape(FeedbackCopy.SEND)}</button>")
+        appendLine("<p class=\"status\" role=\"status\" aria-live=\"polite\"></p>")
+        appendLine("</form>")
     }
 
     /**

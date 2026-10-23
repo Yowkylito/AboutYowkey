@@ -1,0 +1,21 @@
+# The portfolio's backend. Setup and the owner's commands: README.md, "Visits and feedback".
+# Secrets (ADMIN_TOKEN, VISITOR_SALT) are set with `npx wrangler secret put <NAME>`, never written here.
+name = "aboutyowkey-api"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+
+[observability]
+enabled = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "aboutyowkey"
+# Paste the id that `npx wrangler d1 create aboutyowkey` prints. The placeholder is enough for `npm run dev`,
+# which uses a local SQLite file under .wrangler/.
+database_id = "00000000-0000-0000-0000-000000000000"
+
+[vars]
+# The pages that may call the API from a browser, comma-separated. The second is the local dist server (README, "Run it").
+ALLOWED_ORIGINS = "https://yowkylito.github.io,http://localhost:8080"
+# Where a plain form post (a browser without the page's script) is sent back to.
+SITE_URL = "https://yowkylito.github.io/AboutYowkey/"

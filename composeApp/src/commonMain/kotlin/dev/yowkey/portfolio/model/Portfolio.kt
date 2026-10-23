@@ -16,6 +16,12 @@ data class Portfolio(
     val recognition: List<Award> = emptyList(),
     val skills: List<SkillGroup> = emptyList(),
     val links: List<Link> = emptyList(),
+    /**
+     * The site's own backend (`worker/`): an `https://` URL with no trailing slash. It counts visits for the
+     * footer and keeps the notes left in the Contact section (see [VisitCount] and [FeedbackDraft]). Leave it out
+     * and the page has neither; nothing else changes.
+     */
+    val api: String? = null,
 ) {
     /** The projects split into [ProjectGroup]s, in page order, each keeping the content's order. Empty groups are left out. */
     val projectGroups: List<Pair<ProjectGroup, List<Project>>>
