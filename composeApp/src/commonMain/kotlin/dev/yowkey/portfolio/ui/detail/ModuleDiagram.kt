@@ -44,8 +44,9 @@ import dev.yowkey.portfolio.ui.theme.PortfolioTheme
  * card names the ones it uses directly, so no arrow per dependency is drawn to tangle with the others.
  *
  * It fits any width without scrolling: every card is one width, as many to a line as fit at [MinCardWidth] (and no
- * more than the widest band needs), and a band with more modules than that wraps onto another line. Lines are
- * centred, and the cards in a line are as tall as the tallest, so a long role wraps instead of being cut.
+ * more than the widest band needs), and a band with more modules than that wraps onto lines as even as they go
+ * ([evenLines]). Lines are centred, and the cards in a line are as tall as the tallest, so a long role wraps
+ * instead of being cut.
  */
 @Composable
 fun ModuleDiagram(modules: List<Module>, modifier: Modifier = Modifier) {
@@ -63,7 +64,7 @@ fun ModuleDiagram(modules: List<Module>, modifier: Modifier = Modifier) {
                 bands.forEachIndexed { index, band ->
                     if (index > 0) DownArrow(line, head)
                     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(CardGap)) {
-                        band.chunked(columns).forEach { cards ->
+                        evenLines(band, columns).forEach { cards ->
                             Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(CardGap)) {
                                 cards.forEach { ModuleCard(it, Modifier.width(cardWidth).fillMaxHeight()) }
                             }
@@ -78,6 +79,17 @@ fun ModuleDiagram(modules: List<Module>, modifier: Modifier = Modifier) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
+}
+
+/**
+ * [band] on as few lines as [columns] allows, their lengths at most one apart and the longer first: four in three
+ * columns are two and two, not three and a stray one that reads as a band of its own.
+ */
+internal fun <T> evenLines(band: List<T>, columns: Int): List<List<T>> {
+    val lines = (band.size + columns - 1) / columns
+    val sizes = List(lines) { band.size / lines + if (it < band.size % lines) 1 else 0 }
+    val ends = sizes.runningReduce { end, size -> end + size }
+    return ends.mapIndexed { index, end -> band.subList(end - sizes[index], end) }
 }
 
 /**
