@@ -220,9 +220,10 @@ private fun StarBar(
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(
+                // A tint of the accent, not its container colour: as light in the dark theme as in the light one.
                 when {
-                    selected -> colors.primaryContainer
-                    hovered -> colors.surfaceContainerHigh
+                    selected -> colors.primary.copy(alpha = 0.14f)
+                    hovered -> colors.onSurface.copy(alpha = 0.05f)
                     else -> Color.Transparent
                 },
             )
@@ -247,7 +248,7 @@ private fun StarBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Text("$stars", style = MaterialTheme.typography.labelLarge.copy(fontFeatureSettings = "tnum"), color = colors.onSurface)
+            Text("$stars", style = MaterialTheme.typography.labelLarge.copy(letterSpacing = 0.sp, fontFeatureSettings = "tnum"), color = colors.onSurface)
             StarGlyph(filled = true, color = accent, glyphSize = 12.dp)
         }
         Spacer(
@@ -272,14 +273,14 @@ private fun StarBar(
         )
         Text(
             "$count",
-            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum"),
+            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.sp, fontFeatureSettings = "tnum"),
             color = colors.onSurface,
             textAlign = TextAlign.End,
             modifier = Modifier.width(36.dp).clearAndSetSemantics {},
         )
         Text(
             percent,
-            style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
+            style = MaterialTheme.typography.bodySmall.copy(letterSpacing = 0.sp, fontFeatureSettings = "tnum"),
             color = colors.onSurfaceVariant,
             textAlign = TextAlign.End,
             modifier = Modifier.width(40.dp).clearAndSetSemantics {},

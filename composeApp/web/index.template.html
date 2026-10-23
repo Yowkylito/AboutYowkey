@@ -112,7 +112,9 @@
     form.message legend { padding: 0; margin: 0 0 6px; font-size: 15px; font-weight: 600; }
     form.message legend .muted { font-weight: 400; }
     h3 .badge { vertical-align: middle; }
-    .visitor-notes { margin: 40px 0 8px; }
+    .visitor-notes { margin: 40px 0 40px; }
+    /* The rules below give these a display, which would beat the hidden attribute's; hidden must still hide them. */
+    .visitor-notes [hidden] { display: none !important; }
     /* The ratings dashboard: the average with its stars lit to the fraction, and a bar per number of stars, each a filter. */
     .ratings {
       display: grid; grid-template-columns: minmax(180px, 36fr) 64fr; gap: 24px; align-items: center; margin: 16px 0 12px; padding: 32px;
