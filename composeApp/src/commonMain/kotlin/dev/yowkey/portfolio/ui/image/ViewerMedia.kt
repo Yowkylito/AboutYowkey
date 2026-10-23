@@ -4,6 +4,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.produceState
@@ -17,6 +20,7 @@ import androidx.compose.ui.graphics.asComposeImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.IntSize
 import dev.yowkey.portfolio.model.GalleryItem
+import dev.yowkey.portfolio.model.Screenshot
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import org.jetbrains.skia.AnimationDisposalMode
@@ -101,13 +105,16 @@ class AnimatedClip private constructor(private val data: Data, private val codec
  *   on every vsync) and why the viewer pauses the clip while the pager is being swiped. Frames only build on
  *   the held one ([ClipFrames.priorFrame]), so a clip whose frames change a small area decodes faster.
  * - The frame clock does not tick in a background tab, so decoding stops there too.
+ * - Several players (two card covers, say) share one [ClipDecodeGate]: at most one decode per display frame, so
+ *   their costs never add up inside one frame.
  *
  * The new frame reaches the screen by bumping a counter read only in `drawBehind`: no recomposition, no layout.
  */
 @Composable
 fun ClipPlayer(clip: AnimatedClip, playing: Boolean, modifier: Modifier = Modifier) {
     val shown = remember(clip) { mutableIntStateOf(clip.heldFrame) }
-    LaunchedEffect(clip, playing) {
+    val gate = LocalScreenshotImages.current?.decodeGate ?: remember { ClipDecodeGate() }
+    LaunchedEffect(clip, playing, gate) {
         if (!playing || clip.frameCount < 2) return@LaunchedEffect
         var frame = clip.heldFrame
         var due = withFrameMillis { it }
@@ -117,10 +124,10 @@ fun ClipPlayer(clip: AnimatedClip, playing: Boolean, modifier: Modifier = Modifi
             frame = ClipFrames.next(frame, clip.frameCount)
             // Wake a little early, then let the frame clock pick the vsync; `due` keeps the pace from drifting.
             delay((due - shownAt - EARLY_WAKE_MS).coerceAtLeast(0))
-            shownAt = withFrameMillis { now ->
-                clip.show(frame)
-                shown.intValue = frame
-                now
+            val next = frame
+            shownAt = gate.decodeInFrame {
+                clip.show(next)
+                shown.intValue = next
             }
             // After a stall (a hidden tab, a long frame) carry on from now instead of racing to catch up.
             if (shownAt - due > STALL_MS) due = shownAt
@@ -138,6 +145,15 @@ fun ClipPlayer(clip: AnimatedClip, playing: Boolean, modifier: Modifier = Modifi
     )
 }
 
+/** Runs [decode] inside the first display frame whose slot is free, and returns that frame's time. */
+private suspend fun ClipDecodeGate.decodeInFrame(decode: () -> Unit): Long {
+    while (true) {
+        val at = withFrameMillis { now -> if (tryAcquire(now)) now.also { decode() } else NOT_DECODED }
+        if (at != NOT_DECODED) return at
+    }
+}
+
+private const val NOT_DECODED = Long.MIN_VALUE
 private const val EARLY_WAKE_MS = 8L
 private const val STALL_MS = 250L
 
@@ -170,5 +186,31 @@ fun ViewerMediaImage(item: GalleryItem, playing: Boolean, modifier: Modifier = M
         } else {
             FadingImage(null, description, modifier, ContentScale.Fit)
         }
+    }
+}
+
+/**
+ * A cover clip: its poster at once, and the clip over it while [playing]. The clip is not even downloaded until it
+ * is first asked to play, so a card that never comes into view, or a visitor who asked for reduced motion, costs
+ * only the poster. Paused, it holds the frame it reached. The caller sizes this to the clip's aspect ratio.
+ */
+@Composable
+fun CoverClip(shot: Screenshot, playing: Boolean, modifier: Modifier = Modifier) {
+    val images = LocalScreenshotImages.current
+    var wanted by remember(shot) { mutableStateOf(playing) }
+    if (playing && !wanted) SideEffect { wanted = true }
+    val clip by produceState<AnimatedClip?>(null, shot, images, wanted) {
+        if (!wanted) return@produceState
+        value = try {
+            images?.covers?.get(shot.fullPath)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null // the poster stays; the tests guard that every listed clip decodes
+        }
+    }
+    Box(modifier) {
+        ScreenshotImage(shot.posterPath, shot.caption, images?.thumbnails, Modifier.fillMaxSize())
+        clip?.let { ClipPlayer(it, playing, Modifier.fillMaxSize()) }
     }
 }

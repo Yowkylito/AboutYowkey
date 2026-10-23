@@ -11,6 +11,7 @@ import dev.yowkey.portfolio.model.RepoVisibility
 import dev.yowkey.portfolio.model.Screenshot
 import dev.yowkey.portfolio.model.Service
 import dev.yowkey.portfolio.model.SkillGroup
+import dev.yowkey.portfolio.ui.navigation.Route
 import dev.yowkey.portfolio.ui.sections.ProjectCard
 import dev.yowkey.portfolio.ui.theme.PortfolioTheme
 
@@ -34,6 +35,7 @@ private val previewPortfolio = Portfolio(
             stack = List(9) { "Library $it" },
             links = listOf(Link("Source", "https://github.com")),
             period = "Jan – Mar 2026",
+            tagline = "A tagline at the limit of ninety characters, to check it wraps on the card cleanly ok",
             visibility = RepoVisibility.Public,
             // No loader in previews, so these show as their sized placeholders.
             cover = Screenshot("splash.webp", "A phone splash screen", 1080, 2400),
@@ -56,39 +58,58 @@ private val emptyPortfolio = previewPortfolio.copy(
     skills = emptyList(),
 )
 
+@Composable
+private fun PreviewScreen(state: PortfolioUiState, route: Route = Route.Home) = PortfolioScreen(
+    state = state,
+    route = route,
+    platformLabel = "Preview",
+    onRetry = {},
+    onOpenProject = {},
+    onBack = {},
+    onUnknownProject = {},
+    onContentShown = {},
+)
+
 @Preview
 @Composable
 private fun ReadyPreview() = PortfolioTheme {
-    PortfolioScreen(PortfolioUiState.Ready(previewPortfolio), "Preview", onRetry = {}, onContentShown = {})
+    PreviewScreen(PortfolioUiState.Ready(previewPortfolio))
 }
 
 @Preview
 @Composable
 private fun ReadyDarkPreview() = PortfolioTheme(darkTheme = true) {
-    PortfolioScreen(PortfolioUiState.Ready(previewPortfolio), "Preview", onRetry = {}, onContentShown = {})
+    PreviewScreen(PortfolioUiState.Ready(previewPortfolio))
 }
 
 /** Only a profile: every empty section disappears, nav included. */
 @Preview
 @Composable
 private fun EmptySectionsPreview() = PortfolioTheme {
-    PortfolioScreen(PortfolioUiState.Ready(emptyPortfolio), "Preview", onRetry = {}, onContentShown = {})
+    PreviewScreen(PortfolioUiState.Ready(emptyPortfolio))
 }
 
 @Preview
 @Composable
 private fun LoadingPreview() = PortfolioTheme {
-    PortfolioScreen(PortfolioUiState.Loading, "Preview", onRetry = {}, onContentShown = {})
+    PreviewScreen(PortfolioUiState.Loading)
 }
 
 @Preview
 @Composable
 private fun ErrorPreview() = PortfolioTheme {
-    PortfolioScreen(PortfolioUiState.Error("portfolio.json is not valid: ..."), "Preview", onRetry = {}, onContentShown = {})
+    PreviewScreen(PortfolioUiState.Error("portfolio.json is not valid: ..."))
+}
+
+/** A deep link straight to a project: the detail screen, with the long project's media and text. */
+@Preview(widthDp = 412, heightDp = 1800)
+@Composable
+private fun DeepLinkedDetailPreview() = PortfolioTheme {
+    PreviewScreen(PortfolioUiState.Ready(previewPortfolio), Route.Project("b"))
 }
 
 @Preview
 @Composable
 private fun LongProjectCardPreview() = PortfolioTheme {
-    ProjectCard(previewPortfolio.projects.last(), onOpenScreenshot = {})
+    ProjectCard(previewPortfolio.projects.last(), playing = { false }, onOpen = {})
 }

@@ -28,3 +28,23 @@ object ClipFrames {
         else -> NO_FRAME
     }
 }
+
+/**
+ * Lets at most one clip decode a frame per display frame, however many are playing. Each decode costs 7–8 ms on
+ * the web (see `ClipPlayer`); two in the same frame would leave nothing of a 16 ms frame for layout and drawing.
+ * A player that loses the slot decodes on the next frame instead, 16 ms late on a clip whose frames last 83 ms,
+ * which nobody can see.
+ *
+ * Players call [tryAcquire] from inside a frame-clock callback, so every caller in one frame sees the same
+ * [frameTimeMillis] and all run on the UI thread: no locking needed.
+ */
+class ClipDecodeGate {
+    private var lastFrame = Long.MIN_VALUE
+
+    /** True for the first caller in the frame at [frameTimeMillis]; that caller may decode now. */
+    fun tryAcquire(frameTimeMillis: Long): Boolean {
+        if (frameTimeMillis == lastFrame) return false
+        lastFrame = frameTimeMillis
+        return true
+    }
+}

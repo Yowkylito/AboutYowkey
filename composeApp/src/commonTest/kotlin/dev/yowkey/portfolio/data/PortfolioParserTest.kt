@@ -1,11 +1,14 @@
 package dev.yowkey.portfolio.data
 
+import dev.yowkey.portfolio.model.Engineering
 import dev.yowkey.portfolio.model.GalleryItem
+import dev.yowkey.portfolio.model.Project
 import dev.yowkey.portfolio.model.RepoVisibility
 import dev.yowkey.portfolio.validJson
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class PortfolioParserTest {
@@ -133,5 +136,117 @@ class PortfolioParserTest {
             listOf("cover.thumb.webp", "c1.poster.webp", "s1.thumb.webp", "s2.thumb.webp"),
             project.gallery.map { it.cardPath.substringAfterLast('/') },
         )
+    }
+
+    @Test
+    fun coverClipLeadsTheClipsAndFollowsTheirFileRules() {
+        val project = PortfolioParser.parse(
+            withSecondProject(
+                "\"cover\": ${media("cover.webp")}, \"coverClip\": ${media("intro.webp")}, \"clips\": [${media("c1.webp")}]",
+            ),
+        ).projects[1]
+        assertEquals(listOf("cover.webp", "intro.webp", "c1.webp"), project.gallery.map { it.shot.file })
+        assertEquals(GalleryItem.Kind.CoverClip, project.gallery[1].kind)
+        assertTrue(project.gallery[1].isClip && project.gallery[1].isCoverMedia)
+        assertEquals("files/screens/intro.poster.webp", project.gallery[1].cardPath)
+        assertEquals("intro.webp", project.leadMedia?.shot?.file, "the cover clip leads, ahead of the still cover")
+        listOf("../x.webp", "x.poster.webp").forEach { bad ->
+            assertFailsWith<IllegalArgumentException>(bad) { PortfolioParser.parse(withSecondProject("\"coverClip\": ${media(bad)}")) }
+        }
+        assertFailsWith<IllegalArgumentException>("one file cannot be the cover clip and a clip") {
+            PortfolioParser.parse(withSecondProject("\"coverClip\": ${media("a.webp")}, \"clips\": [${media("a.webp")}]"))
+        }
+    }
+
+    @Test
+    fun projectIdsArePlainBecauseTheyAreInTheUrl() {
+        listOf("Two", "two words", "two/three", "-two", "twö").forEach { bad ->
+            assertFailsWith<IllegalArgumentException>(bad) { PortfolioParser.parse(validJson.replace("\"id\": \"two\"", "\"id\": \"$bad\"")) }
+        }
+        assertEquals("two-3", PortfolioParser.parse(validJson.replace("\"id\": \"two\"", "\"id\": \"two-3\"")).projects[1].id)
+    }
+
+    @Test
+    fun taglineIsOptionalAndFitsTheCard() {
+        assertNull(PortfolioParser.parse(validJson).projects[1].tagline)
+        val max = "x".repeat(Project.MAX_TAGLINE)
+        assertEquals(max, PortfolioParser.parse(withSecondProject("\"tagline\": \"$max\"")).projects[1].tagline)
+        listOf("$max!", "  ").forEach { bad ->
+            assertFailsWith<IllegalArgumentException>(bad) { PortfolioParser.parse(withSecondProject("\"tagline\": \"$bad\"")) }
+        }
+    }
+
+    private fun words(count: Int) = List(count) { "word" }.joinToString(" ")
+
+    private fun module(name: String, vararg dependsOn: String, role: String = "Does one thing") =
+        "{ \"name\": \"$name\", \"role\": \"$role\", \"dependsOn\": [${dependsOn.joinToString { "\"$it\"" }}] }"
+
+    private fun decision(detail: String = "Because it is simpler.") = "{ \"title\": \"A choice\", \"detail\": \"$detail\" }"
+
+    private fun withEngineering(body: String) = withSecondProject("\"engineering\": { $body }")
+
+    private val fullEngineering = """
+        "builtWith": ["Kotlin Multiplatform", "Compose Multiplatform"],
+        "platforms": ["Android", "iOS", "Web", "Desktop"],
+        "architecture": "${words(Engineering.MAX_ARCHITECTURE_WORDS)}",
+        "decisions": [${decision()}, ${decision(words(Engineering.MAX_DECISION_WORDS))}],
+        "modules": [${module(":app", ":core:data")}, ${module(":core:data", ":core:model")}, ${module(":core:model")}],
+        "quality": ["800 unit tests", "CI on GitHub Actions"]
+    """.trimIndent()
+
+    @Test
+    fun engineeringParsesInTheDocumentedShapeAndIsOptional() {
+        assertNull(PortfolioParser.parse(validJson).projects[1].engineering)
+        val engineering = PortfolioParser.parse(withEngineering(fullEngineering)).projects[1].engineering!!
+        assertEquals(listOf("Kotlin Multiplatform", "Compose Multiplatform"), engineering.builtWith)
+        assertEquals(4, engineering.platforms.size)
+        assertEquals(listOf(":app", ":core:data", ":core:model"), engineering.modules.map { it.name })
+        assertEquals(listOf(":core:model"), engineering.modules[1].dependsOn)
+        assertEquals(2, engineering.decisions.size)
+        assertTrue(PortfolioParser.parse(withEngineering("")).projects[1].engineering!!.modules.isEmpty(), "every field is optional")
+    }
+
+    @Test
+    fun engineeringListsKeepTheirCaps() {
+        fun strings(n: Int) = List(n) { "\"item $it\"" }.joinToString()
+        listOf(
+            "\"builtWith\": [${strings(Engineering.MAX_BUILT_WITH + 1)}]",
+            "\"platforms\": [${strings(Engineering.MAX_PLATFORMS + 1)}]",
+            "\"quality\": [${strings(Engineering.MAX_QUALITY + 1)}]",
+            "\"builtWith\": [\"Kotlin\", \" \"]",
+            "\"platforms\": [\"Android\", \"android\"]",
+        ).forEach { bad -> assertFailsWith<IllegalArgumentException>(bad) { PortfolioParser.parse(withEngineering(bad)) } }
+        PortfolioParser.parse(withEngineering("\"builtWith\": [${strings(Engineering.MAX_BUILT_WITH)}]"))
+    }
+
+    @Test
+    fun architectureAndDecisionsStayShort() {
+        listOf(
+            "\"architecture\": \"${words(Engineering.MAX_ARCHITECTURE_WORDS + 1)}\"",
+            "\"architecture\": \" \"",
+            "\"decisions\": [${decision()}]",
+            "\"decisions\": [${List(Engineering.MAX_DECISIONS + 1) { decision() }.joinToString()}]",
+            "\"decisions\": [${decision()}, ${decision(words(Engineering.MAX_DECISION_WORDS + 1))}]",
+            "\"decisions\": [${decision()}, { \"title\": \" \", \"detail\": \"d\" }]",
+        ).forEach { bad -> assertFailsWith<IllegalArgumentException>(bad) { PortfolioParser.parse(withEngineering(bad)) } }
+    }
+
+    @Test
+    fun modulesMustFormAnAcyclicGraphOfListedNames() {
+        fun modules(vararg items: String) = withEngineering("\"modules\": [${items.joinToString()}]")
+        val cycle = assertFailsWith<IllegalArgumentException> {
+            PortfolioParser.parse(modules(module("a", "b"), module("b", "c"), module("c", "a")))
+        }
+        assertTrue("a → b → c → a" in cycle.message.orEmpty(), cycle.message)
+        val unknown = assertFailsWith<IllegalArgumentException> { PortfolioParser.parse(modules(module("a", "ghost"))) }
+        assertTrue("ghost" in unknown.message.orEmpty())
+        listOf(
+            modules(module("a", "a")),
+            modules(module("a"), module("a")),
+            modules(module("a", role = words(Engineering.MAX_MODULE_ROLE_WORDS + 1))),
+            modules(module("a", role = " ")),
+            modules(*Array(Engineering.MAX_MODULES + 1) { module("m$it") }),
+        ).forEach { bad -> assertFailsWith<IllegalArgumentException>(bad) { PortfolioParser.parse(bad) } }
+        PortfolioParser.parse(modules(*Array(Engineering.MAX_MODULES) { module("m$it", *(if (it > 0) arrayOf("m${it - 1}") else emptyArray())) }))
     }
 }

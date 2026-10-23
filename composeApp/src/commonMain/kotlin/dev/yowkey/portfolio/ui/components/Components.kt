@@ -32,6 +32,8 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.clickable
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -72,16 +74,34 @@ fun SectionHeader(number: Int, title: String, modifier: Modifier = Modifier) {
     }
 }
 
-/** A bordered, flat card: depth from the outline, not shadows, so it reads the same in light and dark. */
+/**
+ * A bordered, flat card: depth from the outline, not shadows, so it reads the same in light and dark. With
+ * [onClick] the whole card is one tap target, labelled [onClickLabel] for screen readers.
+ */
 @Composable
-fun OutlinedCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+fun OutlinedCard(
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
+    onClickLabel: String? = null,
+    content: @Composable () -> Unit,
+) {
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        content = content,
-    )
+    ) {
+        if (onClick == null) {
+            content()
+        } else {
+            // Inside the Surface, so the ripple is clipped to its corners; min constraints pass through so the
+            // content can still fill an equal-height row.
+            Box(
+                Modifier.clickable(onClickLabel = onClickLabel, role = Role.Button, onClick = onClick),
+                propagateMinConstraints = true,
+            ) { content() }
+        }
+    }
 }
 
 /** A non-interactive label; deliberately not a Chip so it does not look tappable. */

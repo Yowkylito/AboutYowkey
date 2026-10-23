@@ -1,9 +1,13 @@
 package dev.yowkey.portfolio.site
 
 import dev.yowkey.portfolio.data.PortfolioParser
+import dev.yowkey.portfolio.model.GalleryItem
+import dev.yowkey.portfolio.model.Portfolio
 import dev.yowkey.portfolio.model.RepoVisibility
 import dev.yowkey.portfolio.ui.image.AnimatedClip
 import dev.yowkey.portfolio.ui.image.ClipFrames
+import dev.yowkey.portfolio.ui.image.ScreenshotImages
+import kotlinx.serialization.json.Json
 import org.jetbrains.skia.Codec
 import org.jetbrains.skia.Data
 import java.io.File
@@ -28,6 +32,19 @@ class SiteContentTest {
         portfolio.experience.forEach { assertTrue(StaticHtml.escape(it.company) in page, "missing job at ${it.company}") }
         portfolio.services.forEach { assertTrue(StaticHtml.escape(it.title) in page, "missing service ${it.title}") }
         portfolio.recognition.forEach { assertTrue(StaticHtml.escape(it.title) in page, "missing award ${it.title}") }
+    }
+
+    /** The detail screen's engineering content is in the crawlable page too, every word of it. */
+    @Test
+    fun everyProjectsEngineeringIsInTheCrawlablePage() {
+        portfolio.projects.forEach { project ->
+            val article = page.substringAfter("<article id=\"${project.anchor}\">").substringBefore("</article>")
+            project.tagline?.let { assertTrue(StaticHtml.escape(it) in article, "${project.id}: tagline") }
+            val e = project.engineering ?: return@forEach
+            (e.builtWith + e.platforms + e.quality + listOfNotNull(e.architecture) + e.decisions.flatMap { listOf(it.title, it.detail) } +
+                e.modules.flatMap { listOf(it.name, it.role) + it.dependsOn })
+                .forEach { assertTrue(StaticHtml.escape(it) in article, "${project.id}: missing \"$it\"") }
+        }
     }
 
     /** The seven-second skim: every point is in the hero, ahead of the first section. */
@@ -125,13 +142,59 @@ class SiteContentTest {
         assertEquals(anyPrivate, StaticHtml.escape(RepoVisibility.PRIVATE_NOTE) in page)
     }
 
+    /** The card's lead (the cover clip, else the cover) opens its article, ahead of the title. */
     @Test
     fun coversComeFirstInTheirArticle() {
         portfolio.projects.forEach { project ->
-            val cover = project.cover ?: return@forEach
-            val article = page.substringAfter("<h3>${StaticHtml.escape(project.title)}</h3>", missingDelimiterValue = "")
-            assertFalse(StaticHtml.resourceUrl(cover.thumbPath) in article, "${project.id}: the cover is not before its title")
-            assertTrue(StaticHtml.resourceUrl(cover.thumbPath) in page, "${project.id}: cover missing from the page")
+            val lead = project.coverClip?.fullPath ?: project.cover?.thumbPath ?: return@forEach
+            val article = page.substringAfter("<article id=\"${project.anchor}\">", missingDelimiterValue = "")
+            assertTrue(article.isNotEmpty(), "${project.id}: no article with its id")
+            val title = article.indexOf("<h3>${StaticHtml.escape(project.title)}</h3>")
+            assertTrue(article.indexOf(StaticHtml.resourceUrl(lead)) in 0 until title, "${project.id}: the cover is not before its title")
         }
+    }
+
+    @Test
+    fun everyProjectHasAnArticleTheDeepLinkCanReach() {
+        portfolio.projects.forEach { assertTrue("<article id=\"project-${it.id}\">" in page, "no article for ${it.id}") }
+        assertTrue("getElementById(\"project-\" + match[1])" in page, "the static page scrolls to a deep-linked project")
+    }
+
+    /**
+     * A cover clip, tested with media that ships today: Vistago's launch clip moved from `clips` to `coverClip`.
+     * Kept out of portfolio.json; this proves the parser, the static page and the player accept it as a cover.
+     */
+    @Test
+    fun anExistingClipWorksAsACoverClip() {
+        val vistago = portfolio.projects.first { it.id == "vistago" }
+        val clip = vistago.clips.first()
+        val fixture = portfolio.copy(
+            projects = portfolio.projects.map { if (it.id == "vistago") it.copy(coverClip = clip, clips = it.clips.drop(1)) else it },
+        )
+        val reparsed = PortfolioParser.parse(Json.encodeToString(Portfolio.serializer(), fixture))
+        val project = reparsed.projects.first { it.id == "vistago" }
+        assertEquals(clip, project.coverClip)
+        assertEquals(GalleryItem.Kind.CoverClip, project.leadMedia?.kind)
+        assertEquals(listOf(GalleryItem.Kind.Cover, GalleryItem.Kind.CoverClip), project.gallery.take(2).map { it.kind })
+
+        val html = StaticHtml.content(reparsed)
+        val article = html.substringAfter("<article id=\"project-vistago\">").substringBefore("</article>")
+        assertTrue(article.indexOf(StaticHtml.resourceUrl(clip.fullPath)) < article.indexOf("<h3>"), "the clip leads the article")
+        assertTrue(StaticHtml.resourceUrl(clip.posterPath) in article, "with its poster for reduced motion")
+        assertTrue(StaticHtml.resourceUrl(vistago.cover!!.thumbPath) in article, "and the still cover still in it")
+
+        // The card's player: the clip decodes and loops in the one reusable bitmap.
+        val player = AnimatedClip.decode(File(resources, clip.fullPath).readBytes())
+        repeat(player.frameCount) { player.show(ClipFrames.next(player.heldFrame, player.frameCount)) }
+        assertEquals(0, player.heldFrame)
+        assertTrue(File(resources, clip.posterPath).isFile)
+    }
+
+    /** The cover clip budget holds the clips that ship today, decoded the way the cards hold them. */
+    @Test
+    fun coverClipBudgetFitsFourOfTodaysLargestClips() {
+        val largest = clips.map { AnimatedClip.decode(File(resources, it.shot.fullPath).readBytes()).byteCount }.sortedDescending()
+        assertTrue(largest.isNotEmpty())
+        assertTrue(largest.take(4).sum() <= ScreenshotImages.COVER_CLIP_BUDGET, "four clips weigh ${largest.take(4).sum()} bytes")
     }
 }

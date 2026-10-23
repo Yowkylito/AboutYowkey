@@ -15,7 +15,8 @@ Change it, push to `main`, and the site redeploys. A section with no entries dis
 Rules the build enforces (it fails rather than ship a broken page):
 
 - `profile.name` is not blank; `siteUrl` is `https://`
-- project `id`s are unique (they key the list rows)
+- project `id`s are unique and plain (`a-z`, `0-9`, `-`): they key the list rows and are the project's link,
+  `#/projects/<id>`
 - links are `https://` or `mailto:`
 
 ### Adding screenshots to a project
@@ -48,7 +49,12 @@ python scripts/prepare_screenshots.py --clip path/to/png-frames/ vistago-trip --
 - **Visibility**: `"public"` or `"private"`. The card shows a "Public repo" / "Private repo" badge, and if any
   project is private a note under the Projects header says why its source is not linked. Leave it out for no badge.
 
-The viewer pages through cover → clips → screenshots, in that order.
+- **Cover clip** (`coverClip`, optional): an animated WebP that plays as the card's cover while the card is on
+  screen. Same files and budgets as a clip (make it with `--clip`); `cover` stays the still (the static page's
+  fallback and the viewer's first page). Pick a calm stretch: a clip whose frames repaint the whole screen decodes
+  too slowly for a card (see READINESS.md, "Cover clips").
+
+The viewer pages through cover → cover clip → clips → screenshots, in that order.
 
 ```json
 {
@@ -60,6 +66,41 @@ The viewer pages through cover → clips → screenshots, in that order.
 }
 ```
 
+### The card and the detail screen
+
+The card answers three questions at a glance: the cover, the title with its period and badge, one line
+(`tagline`, or the summary cut to 90 characters), and chips for what it is built with and where it runs. A tap
+opens the project's own screen (`#/projects/<id>`, linkable, Back returns to the list where it was) with the
+highlights, how it is built, the gallery, the full stack and the links.
+
+```json
+{
+  "id": "my-app",
+  "tagline": "What it is, in one line a recruiter reads in two seconds",
+  "coverClip": { "file": "my-app-tour.webp", "caption": "…", "width": 332, "height": 720 },
+  "engineering": {
+    "builtWith": ["Kotlin Multiplatform", "Compose Multiplatform"],
+    "platforms": ["Android", "iOS", "Web"],
+    "architecture": "One paragraph.",
+    "decisions": [{ "title": "Offline first", "detail": "Why, in a sentence or two." }],
+    "modules": [{ "name": ":core:data", "role": "Repositories and sync", "dependsOn": [":core:model"] }],
+    "quality": ["412 unit tests", "CI on GitHub Actions"]
+  }
+}
+```
+
+Every field is optional. The build holds them to what the card and the detail screen have room for:
+
+| Field | Rule |
+|---|---|
+| `tagline` | at most 90 characters |
+| `builtWith` | at most 4; shown as chips on the card. Without it the card shows the first 4 of `stack` |
+| `platforms` | at most 5, targets that actually ship; each gets a drawn glyph (Android, iOS, Web, Desktop/macOS/Windows/Linux, Server, or a dot) |
+| `architecture` | one paragraph, at most 70 words |
+| `decisions` | 2 to 4, each `detail` at most 40 words |
+| `modules` | at most 12; `role` at most 10 words; `dependsOn` names listed modules, with no cycles. Drawn as a layered diagram |
+| `quality` | at most 4 verifiable facts |
+
 ## How the page loads
 
 A Compose app on the web draws into a `<canvas>`, which search engines, link previews and screen readers can't read,
@@ -70,7 +111,9 @@ and its runtime is several megabytes. So the build also renders `portfolio.json`
 2. If the browser supports WasmGC, the Compose app loads behind it, invisible.
 3. Once Compose has drawn real content, the page swaps to it.
 
-Browsers without WasmGC, or a failed download, just keep the HTML version.
+Browsers without WasmGC, or a failed download, just keep the HTML version. It carries everything the detail
+screens do, one `<article id="project-<id>">` per project, and a `#/projects/<id>` link scrolls to that article
+there too.
 
 ## Run it
 

@@ -5,10 +5,13 @@ wasmJsMain/main.kt ─┐                     jvmMain/main.kt (desktop window)
                     ├─ startKoin(appModule) → App()
                     │
 ui/      PortfolioRoute ── koinViewModel ──► PortfolioViewModel ── StateFlow<PortfolioUiState>
-           └─ PortfolioScreen (stateless) → TopBar, sections/*, components/*
+           │            └─ koinInject ──► Navigator ── StateFlow<Route>   (HashNavigator on web, InMemoryNavigator on JVM)
+           └─ PortfolioScreen (stateless) → list: TopBar, sections/*   |   detail/ProjectDetailScreen
+                                             (AnimatedContent on the route; the list's LazyListState lives above it)
 data/    PortfolioRepository ◄── ResourcePortfolioRepository(readContent, dispatcher)
            └─ PortfolioParser (decode + validate)
-model/   Portfolio, Profile, Service, Project, Experience, SkillGroup, Link   (@Serializable, @Immutable)
+model/   Portfolio, Profile, Service, Project, Engineering, Experience, SkillGroup, Link   (@Serializable, @Immutable)
+         ModuleGraph (cycle check, transitive reduction, layered plan for the module diagram)
 site/    StaticHtml (common)  ◄── jvmMain/site/StaticSite.kt ◄── Gradle task generateStaticSite
 ```
 
@@ -21,7 +24,11 @@ Arrows point one way: UI → ViewModel → repository → parser → model. Noth
 | `data/PortfolioRepository` | Loads the portfolio off the main thread; the source (`Res.readBytes`) is injected so tests fake it. |
 | `ui/PortfolioViewModel` | `Loading → Ready | Error`, with a retry that ignores double taps. |
 | `ui/PageItems` | Flattens the portfolio into keyed lazy-list rows for the current column count. Pure, unit-tested. |
-| `ui/PortfolioScreen` | Stateless page: adaptive layout from `WindowSizeClass`, nav, reveal animation. |
+| `ui/PortfolioScreen` | Stateless page: adaptive layout from `WindowSizeClass`, nav, reveal animation, list ↔ detail switch. |
+| `ui/navigation` | `Route` (`Home` / `Project(id)`, parsed from and written to `#/projects/<id>`) and the `Navigator` interface. The web's `HashNavigator` (wasmJsMain) keeps it in browser history; the desktop uses `InMemoryNavigator`. Provided per platform by `di/platformModule` (expect/actual). |
+| `ui/detail` | `ProjectDetailScreen` (two columns on expanded, one below) and `ModuleDiagram`, drawn from `ModuleGraph.plan`. |
+| `ui/CoverPlayback` | Which card covers may play: on screen, most visible first, at most two. Pure, unit-tested. |
+| `model/ModuleGraph` | The module graph's rules and layout: cycles, the arrows worth drawing, layers with lanes for long arrows. Pure, unit-tested. |
 | `site/StaticHtml` | Renders the crawlable HTML twin of the page, plus `sitemap.xml` and `robots.txt`. |
 | `di/AppModule` | Koin wiring: dispatcher, repository, ViewModel. |
 
@@ -34,3 +41,10 @@ Arrows point one way: UI → ViewModel → repository → parser → model. Noth
   section does, through `derivedStateOf`.
 - The model classes are `@Immutable`, so rows skip recomposition when their data is unchanged.
 - JSON is decoded on `Dispatchers.Default` (injected); Kotlin/Wasm has no IO dispatcher.
+- Card covers that are clips decode one frame at a time into one bitmap, only while on screen (`CoverPlayback`
+  over the list's layout info, through `derivedStateOf`, so a card recomposes only when its own answer changes),
+  and a shared `ClipDecodeGate` lets one clip decode per display frame however many play.
+- The detail screen's pinned media column and its top bar divider read the scroll offset in the layer and draw
+  phases; the module diagram is one layout node whose arrows are drawn behind it from the positions it computed.
+- The card grid levels rows with `IntrinsicSize.Min`, so the card's chip groups use `WrapRow`, whose intrinsic
+  height matches what it draws (FlowRow's did not, see `WrapRowLayoutTest`).
