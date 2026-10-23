@@ -40,6 +40,11 @@ export const LIMITS = Object.freeze({
   message: 2000,
   /** Notes one visitor may leave in a day; the next gets a 429. */
   notesPerDay: 5,
+  /**
+   * And at most one every this many minutes (wrangler.toml's NOTE_GAP_MINUTES overrides it), so a burst from one
+   * device is turned away before the day's limit is reached.
+   */
+  noteGapMinutes: 5,
   /** Messages one visitor may send in a day; the next gets a 429. */
   messagesPerDay: 3,
   /** Characters of request body read; more is a 413. */
@@ -78,6 +83,18 @@ const PUBLIC = "consent = 1 AND hidden_at IS NULL";
 /** A rating the page counts: any note's that the owner has not hidden, its words public or not. */
 const COUNTED = "rating IS NOT NULL AND hidden_at IS NULL";
 const ENOUGH_FOR_TODAY = "That is plenty for one day, thank you. Try again tomorrow.";
+
+/** The minutes one device waits between notes: NOTE_GAP_MINUTES when it is a whole number (0 turns it off), else 5. */
+function noteGapMinutes(env) {
+  const set = String(env.NOTE_GAP_MINUTES ?? "").trim();
+  return /^\d+$/.test(set) ? Number(set) : LIMITS.noteGapMinutes;
+}
+
+/** The rule's sentence, with the minutes still to wait rounded up: "One note every 5 minutes … in 3 minutes." */
+function oneNoteAtATime(gap, waitMs) {
+  const minutes = Math.ceil(waitMs / 60000);
+  return `One note every ${gap} ${gap === 1 ? "minute" : "minutes"}, thank you. Try again in ${minutes} ${minutes === 1 ? "minute" : "minutes"}.`;
+}
 
 /**
  * [ctx] is the Worker's execution context: alerts push in its `waitUntil`, after the visitor has the answer.
@@ -365,8 +382,14 @@ async function submitFeedback(request, env, now, cors, alerts) {
 
   const today = localDay(env, now);
   const visitor = await visitorId(request, env, today, request.headers.get("User-Agent") || "");
-  const { n } = await env.DB.prepare("SELECT COUNT(*) AS n FROM feedback WHERE visitor = ?1").bind(visitor).first();
+  const { n, last } = await env.DB
+    .prepare("SELECT COUNT(*) AS n, MAX(created_at) AS last FROM feedback WHERE visitor = ?1")
+    .bind(visitor)
+    .first();
   if (n >= LIMITS.notesPerDay) return reply(body.form, { error: ENOUGH_FOR_TODAY }, 429, cors, env);
+  const gap = noteGapMinutes(env);
+  const wait = last && gap ? Date.parse(last) + gap * 60000 - now.getTime() : 0;
+  if (wait > 0) return reply(body.form, { error: oneNoteAtATime(gap, wait) }, 429, cors, env);
   const note = normalizeFeedback(fields);
   const { meta } = await env.DB
     .prepare(
@@ -592,7 +615,8 @@ async function inboxAction(request, env, kind, id, now, url) {
  * What the owner may do to a note, from the inbox's buttons or the app: one set of rules for both. A note is public
  * on arrival, so the owner's levers are hide and unhide (and delete). "publish" and "unpublish" are the 1.0 app's
  * names for those two, kept so its buttons still work; publishing a note sent without the visitor's tick is
- * refused, as before. Pin puts a note first on the site, so only a note on the site can be pinned; hiding one
+ * refused, as before. "make-public" is the owner's own word that the writer of a private note (one sent before
+ * notes were public, without the tick) has since agreed: it goes on the site like any other. Pin puts a note first on the site, so only a note on the site can be pinned; hiding one
  * unpins it, and unhiding leaves it unpinned: the owner pins it again if it should still come first. A second pin
  * keeps the first time. Returns `{ status: 200 }`, or a status with a title and the sentence saying why not.
  */
@@ -605,6 +629,9 @@ async function noteAction(db, id, action, now) {
     case "publish":
       if (!note.consent) return refusal(409, "Not published", "The visitor did not agree to this note being shown.");
       statement = db.prepare("UPDATE feedback SET published_at = COALESCE(published_at, ?1), hidden_at = NULL WHERE id = ?2").bind(stamp, id);
+      break;
+    case "make-public":
+      statement = db.prepare("UPDATE feedback SET consent = 1, hidden_at = NULL WHERE id = ?1").bind(id);
       break;
     case "unpublish":
     case "hide":

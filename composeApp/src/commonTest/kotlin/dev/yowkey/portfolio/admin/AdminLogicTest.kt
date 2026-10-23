@@ -65,6 +65,16 @@ class AdminLogicTest {
     }
 
     @Test
+    fun makingAPrivateNotePublicPutsItOnTheSiteHiddenOrNot() {
+        val now = "2026-10-23T12:00:00.000Z"
+        val private = AdminNote(3, consent = false)
+        assertFalse(private.isPublic)
+        assertTrue(private.after(NoteAction.MakePublic, now)!!.isPublic, "the owner's word that the writer agreed")
+        assertTrue(private.copy(hiddenAt = now).after(NoteAction.MakePublic, now)!!.isPublic, "and back from hidden")
+        assertEquals("make-public", NoteAction.MakePublic.wire)
+    }
+
+    @Test
     fun hidingANoteUnpinsItAndUnhidingDoesNotPinItAgain() {
         val now = "2026-10-23T12:00:00.000Z"
         val pinned = AdminNote(1, consent = true, pinnedAt = "2026-10-22T08:00:00.000Z")

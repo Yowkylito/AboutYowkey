@@ -27,6 +27,8 @@ SITE_URL = "https://yowkylito.github.io/AboutYowkey/"
 TIME_ZONE = "Asia/Manila"
 # The links on the page whose clicks are counted (POST /clicks), comma-separated, lowercase.
 TRACKED_LINKS = "linkedin,github"
+# Anti-spam: one note per device (the same daily hash as a visit) every this many minutes, on top of 5 a day.
+NOTE_GAP_MINUTES = "5"
 
 [triggers]
 # The daily report. Cron times are UTC: 15:59 UTC is 23:59 in Asia/Manila (UTC+8 all year, no daylight saving).

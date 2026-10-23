@@ -264,6 +264,7 @@ class OwnerViewModel(
                 NoteAction.Delete -> "Note deleted."
                 NoteAction.Pin -> "Pinned: it comes first on the site."
                 NoteAction.Unpin -> "Unpinned."
+                NoteAction.MakePublic -> "On the site now."
             }
         }
     }

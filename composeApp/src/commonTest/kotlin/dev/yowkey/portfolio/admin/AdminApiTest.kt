@@ -192,7 +192,7 @@ class AdminApiTest {
             transport.calls,
         )
         assertEquals(
-            listOf("publish", "unpublish", "hide", "unhide", "delete", "pin", "unpin"),
+            listOf("publish", "unpublish", "hide", "unhide", "delete", "pin", "unpin", "make-public"),
             NoteAction.entries.map { it.wire },
         )
         assertEquals(listOf("read", "unread", "archive", "unarchive", "delete"), MessageAction.entries.map { it.wire })

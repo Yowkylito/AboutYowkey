@@ -32,6 +32,8 @@ beforeEach(() => {
     VISITOR_SALT: "salt",
     TIME_ZONE: "Asia/Manila",
     TRACKED_LINKS: "linkedin,github",
+    // Off for the tests in general, which send notes back to back; the 5-minute rule has tests of its own.
+    NOTE_GAP_MINUTES: "0",
   };
   pending = [];
   network = async (url) => assert.fail(`a test reached the network: ${url}`);
@@ -339,6 +341,32 @@ test(`a visitor may leave ${LIMITS.notesPerDay} notes a day`, async () => {
   assert.equal((await post("/feedback", { message: "someone else" }, { address: "198.51.100.2" })).status, 201);
   assert.equal((await post("/feedback", { message: "next day" }, { now: DAY_TWO })).status, 201);
   assert.equal(feedbackRows().length, LIMITS.notesPerDay + 2);
+});
+
+test("one note per device every 5 minutes, by default and as NOTE_GAP_MINUTES says", async () => {
+  delete env.NOTE_GAP_MINUTES;
+  const at = (minutes) => new Date(Date.parse(DAY_ONE) + minutes * 60000).toISOString();
+  assert.equal((await post("/feedback", { message: "first" }, { now: at(0) })).status, 201);
+  const soon = await post("/feedback", { message: "again" }, { now: at(1.5) });
+  assert.equal(soon.status, 429);
+  assert.equal((await soon.json()).error, "One note every 5 minutes, thank you. Try again in 4 minutes.");
+  const almost = await post("/feedback", { message: "again" }, { now: at(4.5) });
+  assert.equal((await almost.json()).error, "One note every 5 minutes, thank you. Try again in 1 minute.");
+  assert.equal((await post("/feedback", { message: "another device" }, { now: at(1), address: "198.51.100.2" })).status, 201, "a different device");
+  assert.equal((await post("/feedback", { message: "other browser" }, { now: at(1), agent: CHROME.replace("130", "131") })).status, 201, "a different browser");
+  assert.equal((await post("/feedback", { message: "later" }, { now: at(5) })).status, 201, "five minutes on");
+  assert.equal(feedbackRows().length, 4);
+
+  const form = await call("/feedback", {
+    method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "message=burst", now: at(6),
+  });
+  assert.equal(form.status, 429);
+  assert.match(await form.text(), /One note every 5 minutes/, "the plain form gets the sentence on a page");
+
+  env.NOTE_GAP_MINUTES = "2";
+  assert.equal((await post("/feedback", { message: "two minutes on" }, { now: at(7) })).status, 201);
+  env.NOTE_GAP_MINUTES = "ten";
+  assert.equal((await post("/feedback", { message: "too soon" }, { now: at(8) })).status, 429, "anything but a whole number means the default");
 });
 
 test("a plain form post gets a page back, with the way home", async () => {
@@ -1038,6 +1066,25 @@ test("the notes page by offset, with how many match and whether more follow", as
   assert.deepEqual([ids(lastFive), lastFive.more], [[4], false]);
 });
 
+test("the owner shows a private note on the site once its writer agreed, from the inbox or the app", async () => {
+  await note({ name: "Bubu", rating: 5, message: "Proud of you", consent: false }, "198.51.100.1");
+  await note({ name: "Old", rating: 4, message: "Also private", consent: false }, "198.51.100.2");
+  const before = await publicNotes();
+  assert.deepEqual([before.notes.length, before.ratings.private], [0, 2]);
+
+  assert.equal((await act(1, "make-public")).status, 303, "from the inbox");
+  assert.equal((await noteAct(2, "make-public")).status, 200, "from the app");
+  const after = await publicNotes();
+  assert.deepEqual(ids(after), [2, 1]);
+  assert.deepEqual([after.ratings.count, after.ratings.private], [2, 0], "their stars count as before, no longer as private");
+  assert.equal((await noteAct(1, "pin")).status, 200, "and it can be pinned like any note on the site");
+
+  assert.equal((await noteAct(2, "hide")).status, 200);
+  assert.equal((await noteAct(2, "make-public")).status, 200);
+  assert.deepEqual(ids(await publicNotes()), [1, 2], "making a hidden one public brings it back");
+  assert.equal((await noteAct(99, "make-public")).status, 404);
+});
+
 test("pinned notes come first, the newest pin first, then the newest notes; the 1.1 app's later pages leave them out", async () => {
   for (let i = 1; i <= 5; i++) await note({ rating: 5, message: `Note ${i}`, relation: i % 2 ? "friend" : "colleague" }, `198.51.100.${i}`);
   assert.equal((await noteAct(2, "pin", { now: DAY_ONE })).status, 200);
@@ -1152,7 +1199,11 @@ test("the inbox shows the relation beside the name, Pinned in the status, and Pi
   assert.equal(page.match(/Pinned<br>/g).length, 1);
   assert.match(page, /action="\/inbox\/notes\/1"><button name="action" value="hide">Hide<\/button><button name="action" value="unpin">Unpin<\/button><button name="action" value="delete"/);
   assert.match(page, /action="\/inbox\/notes\/2"><button name="action" value="hide">Hide<\/button><button name="action" value="pin">Pin<\/button><button name="action" value="delete"/);
-  assert.match(page, /action="\/inbox\/notes\/3"><button name="action" value="hide">Hide<\/button><button name="action" value="delete"/, "a private note cannot be pinned");
+  assert.match(
+    page,
+    /action="\/inbox\/notes\/3"><button name="action" value="make-public" onclick="return confirm\('Only if the writer agreed: show this note on the site\?'\)">Show on the site<\/button><button name="action" value="hide">Hide<\/button><button name="action" value="delete"/,
+    "a private note cannot be pinned, but can go on the site on the owner's word, asked for first",
+  );
   assert.match(page, /action="\/inbox\/notes\/4"><button name="action" value="unhide">Unhide<\/button><button name="action" value="delete"/, "nor a hidden one");
 });
 
