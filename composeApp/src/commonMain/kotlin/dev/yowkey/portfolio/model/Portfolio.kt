@@ -248,11 +248,17 @@ data class Screenshot(
     val caption: String,
     val width: Int,
     val height: Int,
+    /**
+     * Clips only: a 60 fps H.264 `.mp4` twin ships beside the WebP ([videoPath]). The web viewer plays it with the
+     * browser's video decoder; the desktop app, the cards, the detail screen and the static page keep the WebP.
+     */
+    val video: Boolean = false,
 ) {
     val aspectRatio: Float get() = width.toFloat() / height
     val fullPath: String get() = "$SCREENS_DIR/$file"
     val thumbPath: String get() = "$SCREENS_DIR/${file.removeSuffix(".webp")}.thumb.webp"
     val posterPath: String get() = "$SCREENS_DIR/${file.removeSuffix(".webp")}.poster.webp"
+    val videoPath: String get() = "$SCREENS_DIR/${file.removeSuffix(".webp")}.mp4"
 
     companion object {
         /** Relative to composeResources; `Res.readBytes` takes it as is. */

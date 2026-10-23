@@ -3,6 +3,7 @@
     python scripts/prepare_screenshots.py <source.png> <name> [<source.png> <name> ...]
     python scripts/prepare_screenshots.py --cover <source.png> <name>
     python scripts/prepare_screenshots.py --clip <source.mp4 | frames-folder> <name> [--start S] [--duration S] [--fps N]
+    python scripts/prepare_screenshots.py --clip <source.mp4> <name> --video [--start S] [--duration S]
 
 Everything is written into composeApp/src/commonMain/composeResources/files/screens/.
 
@@ -22,6 +23,13 @@ Screenshots (the default):
   The source is an mp4 (decoded by ffmpeg, which must be on PATH; --start and --duration pick the stretch,
   default the first 5 s) or a folder of PNG frames in name order (--fps is their frame rate, default 12; frames
   are dropped evenly to reach at most 12 fps).
+
+  --video also writes, from the same stretch of the mp4:
+  <name>.mp4           H.264 at 60 fps for the web viewer: long edge 1440 px (2x the WebP's), no audio, the index
+                       first so it starts playing while it downloads, at most 1536 KB
+  The source must be recorded at 60 fps (a phone's or the Mac's screen recorder is); slower sources are refused
+  rather than padded with repeated or invented frames. The WebP and its poster stay: the desktop app plays the
+  WebP, and every card shows the poster.
 
 Each run prints the JSON fields to paste into portfolio.json; write the caption yourself (it is also the alt
 text). The budgets match SiteContentTest, which fails the build if a file outgrows them.
@@ -49,6 +57,9 @@ CLIP_MAX_SECONDS = 6.0
 CLIP_MAX_FPS = 12
 CLIP_LONG_EDGE = 720
 CLIP_BUDGET = 700 * 1024
+VIDEO_FPS = 60
+VIDEO_LONG_EDGE = 1440
+VIDEO_BUDGET = 1536 * 1024
 
 
 def encode_within(image: Image.Image, budget: int) -> bytes:
@@ -144,7 +155,58 @@ def encode_clip(frames: list[Image.Image], fps: float) -> tuple[bytes, Image.Ima
         current = [fit_long_edge(frame, long_edge) for frame in frames]
 
 
-def prepare_clip(source: Path, name: str, start: float, duration: float, source_fps: float) -> None:
+def source_frame_rate(source: Path) -> float:
+    """The video's nominal frame rate. Screen recorders write variable frame rates, whose average says little."""
+    rate = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=r_frame_rate", "-of", "csv=p=0",
+         str(source)],
+        check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    numerator, _, denominator = rate.partition("/")
+    return float(numerator) / float(denominator or 1)
+
+
+def require_video_source(source: Path) -> None:
+    """Checked before any encoding, so a wrong source fails in a second, not after the WebP's tens of seconds."""
+    if source.is_dir():
+        raise SystemExit("--video needs an mp4 source, not a folder of frames")
+    if shutil.which("ffprobe") is None:
+        raise SystemExit("ffprobe is not on PATH; it reads the mp4's frame rate")
+    rate = source_frame_rate(source)
+    if rate < VIDEO_FPS - 1:
+        raise SystemExit(f"{source.name} is {rate:g} fps; --video needs a {VIDEO_FPS} fps recording")
+
+
+def encode_video(source: Path, start: float, duration: float) -> bytes:
+    """
+    H.264 at a constant 60 fps within the budget. Quality steps down by CRF; past 31, text in a screen recording
+    blurs, so a clip that still does not fit has to be shorter or calmer instead.
+    """
+    edge = VIDEO_LONG_EDGE
+    scale = f"scale='if(gt(iw,ih),min({edge},iw),-2)':'if(gt(iw,ih),-2,min({edge},ih))':flags=lanczos"
+    size = 0
+    with tempfile.TemporaryDirectory() as tmp:
+        out = Path(tmp) / "clip.mp4"
+        for crf in (22, 25, 28, 31):
+            subprocess.run(
+                [
+                    "ffmpeg", "-v", "error", "-y", "-ss", f"{start}", "-t", f"{duration}", "-i", str(source),
+                    "-vf", f"fps={VIDEO_FPS},{scale}", "-an", "-c:v", "libx264", "-profile:v", "high",
+                    "-pix_fmt", "yuv420p", "-preset", "slow", "-crf", str(crf), "-tag:v", "avc1",
+                    "-movflags", "+faststart", str(out),
+                ],
+                check=True,
+            )
+            size = out.stat().st_size
+            if size <= VIDEO_BUDGET:
+                return out.read_bytes()
+            print(f"  {size // 1024} KB at CRF {crf}; retrying at lower quality", flush=True)
+    raise SystemExit(f"cannot fit the video under {VIDEO_BUDGET // 1024} KB; use a shorter or calmer stretch")
+
+
+def prepare_clip(source: Path, name: str, start: float, duration: float, source_fps: float, video: bool) -> None:
+    if video:
+        require_video_source(source)
     with tempfile.TemporaryDirectory() as tmp:
         if source.is_dir():
             paths, fps = folder_frames(source, source_fps)
@@ -159,12 +221,17 @@ def prepare_clip(source: Path, name: str, start: float, duration: float, source_
 
     clip_bytes, first = encode_clip(frames, fps)
     poster_bytes = encode_within(card_thumbnail(first), THUMB_BUDGET)
+    video_bytes = encode_video(source, start, duration) if video else None
     (OUT / f"{name}.webp").write_bytes(clip_bytes)
     (OUT / f"{name}.poster.webp").write_bytes(poster_bytes)
+    if video_bytes is not None:
+        (OUT / f"{name}.mp4").write_bytes(video_bytes)
+    video_field = ', "video": true' if video_bytes is not None else ""
+    video_note = f" + {VIDEO_FPS} fps video {len(video_bytes) // 1024} KB" if video_bytes is not None else ""
     print(
-        f'{{ "file": "{name}.webp", "caption": "", "width": {first.width}, "height": {first.height} }}'
+        f'{{ "file": "{name}.webp", "caption": "", "width": {first.width}, "height": {first.height}{video_field} }}'
         f"  # {len(clip_bytes) // 1024} KB, {len(frames)} frames, {seconds:.1f} s at {fps:g} fps"
-        f" + poster {len(poster_bytes) // 1024} KB"
+        f" + poster {len(poster_bytes) // 1024} KB{video_note}"
     )
 
 
@@ -182,12 +249,15 @@ if __name__ == "__main__":
     OUT.mkdir(parents=True, exist_ok=True)
     if args[:1] == ["--clip"]:
         rest = args[1:]
+        video = "--video" in rest
+        if video:
+            rest.remove("--video")
         start = option(rest, "--start", 0.0)
         duration = option(rest, "--duration", 5.0)
         fps = option(rest, "--fps", CLIP_MAX_FPS)
         if len(rest) != 2 or not 0 < duration <= CLIP_MAX_SECONDS:
             raise SystemExit(__doc__)
-        prepare_clip(Path(rest[0]), rest[1], start, duration, fps)
+        prepare_clip(Path(rest[0]), rest[1], start, duration, fps, video)
     elif args[:1] == ["--cover"]:
         if len(args) != 3:
             raise SystemExit(__doc__)

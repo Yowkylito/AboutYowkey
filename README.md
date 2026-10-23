@@ -36,6 +36,7 @@ image is missing or over budget, or if a file in `screens/` is not listed.
 python scripts/prepare_screenshots.py --cover path/to/splash.png vistago-cover
 python scripts/prepare_screenshots.py --clip path/to/demo.mp4 vistago-trip --start 12 --duration 4.5
 python scripts/prepare_screenshots.py --clip path/to/png-frames/ vistago-trip --fps 30
+python scripts/prepare_screenshots.py --clip path/to/60fps-demo.mp4 vistago-trip --video --start 12 --duration 4.5
 ```
 
 - **Cover**: the splash screen shown large at the top of the card (full card width when landscape, a 320dp phone
@@ -46,6 +47,12 @@ python scripts/prepare_screenshots.py --clip path/to/png-frames/ vistago-trip --
   makes it smaller rather than blurrier, so pick a calm stretch, or a shorter one, to keep it sharp. The card shows
   the poster with a play mark; the viewer plays it in a loop (a still under reduced motion); the static page
   animates it natively.
+- **Clip video** (`"video": true` on a clip or the cover clip, optional): add `--video` and the script also writes
+  `<name>.mp4`, H.264 at 60 fps (long edge 1440 px, silent, at most 1536 KB). It needs a 60 fps recording (the
+  Mac's and most phones' screen recorders make one); slower sources are refused. The web viewer plays the video
+  instead of the WebP, through the browser's video decoder; the desktop app, the cards, the detail screen and the
+  static page keep the WebP. Under reduced motion the viewer shows the poster until Play, and a tap on the playing
+  video pauses it (the video is drawn above the Play button).
 - **Visibility**: `"public"` or `"private"`. The card shows a "Public repo" / "Private repo" badge, and if any
   project is private a note under the Projects header says why its source is not linked. Leave it out for no badge.
 

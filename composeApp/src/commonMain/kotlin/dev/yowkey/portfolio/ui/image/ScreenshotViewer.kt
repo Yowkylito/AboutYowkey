@@ -53,12 +53,14 @@ data class ViewerRequest(val title: String, val items: List<GalleryItem>, val st
 private val Scrim = Color(0xF20B0D10)
 private val OnScrim = Color(0xFFECEDEF)
 private val OnScrimMuted = Color(0xFFB4BAC4)
+private val MediaCorner = 12.dp
 
 /**
  * Full-screen screenshot viewer: swipe or arrow keys to page, Escape / Close / a tap on the backdrop to leave.
  * Only the visible page and its neighbours are composed, so only they load full-size images. A clip plays only
  * on the settled page and not while a swipe is moving (its decoding would compete with the swipe's frames), and
- * never under reduced motion; paging away stops its decoding.
+ * under reduced motion only once the reader presses Play; paging away stops its decoding. On the web a clip with a
+ * 60 fps video plays that instead (see [ViewerMediaImage]).
  */
 @Composable
 fun ScreenshotViewer(request: ViewerRequest, onDismiss: () -> Unit) {
@@ -117,11 +119,17 @@ fun ScreenshotViewer(request: ViewerRequest, onDismiss: () -> Unit) {
                     ViewerMediaImage(
                         item = item,
                         playing = (!reducedMotion || chosenToPlay) && pager.settledPage == page && !pager.isScrollInProgress,
+                        // A clip's video is drawn above the Play button, so under reduced motion it waits for Play.
+                        videoShown = !reducedMotion || chosenToPlay,
+                        cornerRadius = MediaCorner,
                         modifier = Modifier
                             .aspectRatio(shot.aspectRatio, matchHeightConstraintsFirst = shot.aspectRatio < 1f)
-                            .clip(RoundedCornerShape(12.dp))
-                            // Taps on the image itself should not close the viewer.
-                            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {},
+                            .clip(RoundedCornerShape(MediaCorner))
+                            // Taps on the image itself should not close the viewer. Under reduced motion a tap on a
+                            // clip pauses or plays it, which is the way to pause a video that covers its button.
+                            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                                if (reducedMotion && item.isClip) chosenToPlay = !chosenToPlay
+                            },
                     )
                     if (reducedMotion && item.isClip) {
                         PlayPauseButton(playing = chosenToPlay, onToggle = { chosenToPlay = !chosenToPlay })

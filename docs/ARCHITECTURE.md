@@ -44,6 +44,12 @@ Arrows point one way: UI → ViewModel → repository → parser → model. Noth
 - Card covers that are clips decode one frame at a time into one bitmap, only while on screen (`CoverPlayback`
   over the list's layout info, through `derivedStateOf`, so a card recomposes only when its own answer changes),
   and a shared `ClipDecodeGate` lets one clip decode per display frame however many play.
+- On the web the viewer plays a clip's 60 fps `.mp4` twin, when it has one, as an HTML `<video>` (`ClipVideo`,
+  expect/actual; the desktop actual is never called). The browser decodes it, in hardware where it can, so it costs
+  the UI thread nothing per frame where a WebP frame costs 7–8 ms. Compose places the element over the canvas and
+  cannot draw above it, so it is used only in the viewer, where nothing overlaps the media; the wrapper and the
+  video pass pointer events through to the canvas, so the pager still swipes over it. A video that fails to load
+  falls back to the WebP.
 - The detail screen's pinned media column and its top bar divider read the scroll offset in the layer and draw
   phases; the module diagram is one layout node whose arrows are drawn behind it from the positions it computed.
 - The card grid levels rows with `IntrinsicSize.Min`, so the card's chip groups use `WrapRow`, whose intrinsic

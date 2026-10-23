@@ -159,6 +159,20 @@ class PortfolioParserTest {
     }
 
     @Test
+    fun onlyClipsTakeAVideoTwin() {
+        fun withVideo(file: String) = media(file).replace(" }", ", \"video\": true }")
+        val project = PortfolioParser.parse(
+            withSecondProject("\"coverClip\": ${withVideo("intro.webp")}, \"clips\": [${withVideo("c1.webp")}, ${media("c2.webp")}]"),
+        ).projects[1]
+        assertEquals(listOf(true, true, false), project.gallery.map { it.shot.video })
+        assertEquals("files/screens/intro.mp4", project.gallery[0].shot.videoPath)
+        assertTrue(PortfolioParser.parse(validJson).projects.flatMap { it.gallery }.none { it.shot.video }, "video is optional")
+        listOf("\"cover\": ${withVideo("cover.webp")}", "\"screenshots\": [${withVideo("s.webp")}]").forEach { bad ->
+            assertFailsWith<IllegalArgumentException>(bad) { PortfolioParser.parse(withSecondProject(bad)) }
+        }
+    }
+
+    @Test
     fun projectIdsArePlainBecauseTheyAreInTheUrl() {
         listOf("Two", "two words", "two/three", "-two", "twö").forEach { bad ->
             assertFailsWith<IllegalArgumentException>(bad) { PortfolioParser.parse(validJson.replace("\"id\": \"two\"", "\"id\": \"$bad\"")) }
