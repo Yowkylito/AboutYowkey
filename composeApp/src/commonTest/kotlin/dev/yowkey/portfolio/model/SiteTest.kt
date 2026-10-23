@@ -21,9 +21,9 @@ class SiteTest {
     fun theRatingSummaryNeedsAPublishedRating() {
         assertNull(RatingSummary().summary)
         assertNull(RatingSummary(count = 3, average = null).summary)
-        assertEquals("5.0 from 1 note", RatingSummary(1, 5.0).summary)
-        assertEquals("4.8 from 12 notes", RatingSummary(12, 4.75).summary)
-        assertEquals("4.5 from 2 notes", RatingSummary(2, 4.5).summary)
+        assertEquals("5.0 from 1 rating", RatingSummary(1, 5.0).summary)
+        assertEquals("4.8 from 12 ratings", RatingSummary(12, 4.75).summary)
+        assertEquals("4.5 from 2 ratings", RatingSummary(2, 4.5).summary)
     }
 
     @Test
@@ -53,7 +53,7 @@ class SiteTest {
         assertTrue(LiveStats().isEmpty)
         assertTrue(LiveStats(VisitCount(0), RatingSummary()).isEmpty)
         val both = LiveStats(VisitCount(12, since = "2026-10-23"), RatingSummary(3, 4.7))
-        assertEquals("4.7 from 3 notes", both.ratingLine)
+        assertEquals("4.7 from 3 ratings", both.ratingLine)
         assertEquals("12 visits since Oct 2026", both.visitsLine)
         assertNull(LiveStats(VisitCount(12)).ratingLine)
     }

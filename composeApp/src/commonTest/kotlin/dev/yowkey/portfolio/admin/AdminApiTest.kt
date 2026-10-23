@@ -97,10 +97,9 @@ class AdminApiTest {
         assertFalse(notes[1].consent, "0 is no")
         assertTrue(notes[2].consent, "true is yes")
         assertNull(notes[1].name)
-        assertTrue(notes[0].isPublished)
-        assertFalse(notes[0].canPublish, "already published")
-        assertFalse(notes[1].canPublish, "no consent")
-        assertTrue(notes[2].canPublish)
+        assertTrue(notes[0].isPublic)
+        assertFalse(notes[1].isPublic, "no consent: private for good")
+        assertFalse(notes[2].isPublic, "hidden")
         assertTrue(notes[2].isHidden)
     }
 

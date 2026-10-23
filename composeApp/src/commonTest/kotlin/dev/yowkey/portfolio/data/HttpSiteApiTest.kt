@@ -10,6 +10,7 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 class HttpSiteApiTest {
 
@@ -49,6 +50,31 @@ class HttpSiteApiTest {
         assertEquals(SiteNotes(VisitCount(3), RatingSummary(1, 5.0), listOf(PublicNote(7, "Ada", 5, "Great", "2026-10-24"))), notes)
         assertFailsWith<SiteApiException> { HttpSiteApi(FakeTransport(HttpReply(503, "down")), true).loadNotes(api) }
         assertFailsWith<SiteApiException> { HttpSiteApi(FakeTransport(HttpReply(200, "[]")), true).loadNotes(api) }
+    }
+
+    @Test
+    fun theNotesAskForAStarAPageAfterAndPastTheCacheAndReadTheRatingStarByStar() = runTest {
+        val reply = """{"visits":{"total":3},"ratings":{"count":4,"average":4.5,"stars":{"1":0,"2":0,"3":1,"4":0,"5":3},"private":1},""" +
+            """"notes":[{"id":9,"rating":5,"message":"Great"}],"total":3,"more":true}"""
+        val transport = FakeTransport(HttpReply(200, reply))
+        val notes = HttpSiteApi(transport, true).loadNotes(api, stars = 5, before = 12)
+        assertEquals("https://api.example/notes?stars=5&before=12", transport.calls.single().second)
+        assertEquals(3, notes.ratings.countOf(5))
+        assertEquals(0.75f, notes.ratings.shareOf(5))
+        assertEquals("25%", notes.ratings.percentOf(3))
+        assertEquals(1, notes.ratings.keptPrivate)
+        assertEquals(3, notes.total)
+        assertEquals(true, notes.more)
+
+        HttpSiteApi(transport, true).loadNotes(api, fresh = true)
+        assertTrue(Regex("""https://api\.example/notes\?fresh=\d+""").matches(transport.calls.last().second), transport.calls.last().second)
+    }
+
+    @Test
+    fun aNoteIsAlwaysSentAsPublic() = runTest {
+        val transport = FakeTransport(HttpReply(201, """{"ok":true}"""))
+        HttpSiteApi(transport, true).sendFeedback(api, FeedbackDraft(message = "Hi"))
+        assertEquals("""{"message":"Hi","consent":true}""", transport.calls.single().third, "the form says it is public; the default is sent too")
     }
 
     @Test

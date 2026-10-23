@@ -1,6 +1,9 @@
 package dev.yowkey.portfolio.model
 
 import androidx.compose.runtime.Immutable
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -27,19 +30,38 @@ data class VisitCount(
         }
 }
 
-/** The rating the published notes add up to: how many carried one, and their mean to one decimal. */
+/**
+ * The rating every note the owner has not hidden adds up to: how many carried one, their mean to one decimal, and
+ * how many gave each number of stars (`"1"` to `"5"`, as the backend's JSON has them). [keptPrivate] of them came
+ * with words their writers kept private (notes left before notes were public), so the page shows fewer notes than
+ * it counts ratings, and says why.
+ */
 @Immutable
 @Serializable
-data class RatingSummary(val count: Int = 0, val average: Double? = null) {
-    /** "4.8 from 12 notes", for the star drawn beside it; null until a published note carries a rating. */
+data class RatingSummary(
+    val count: Int = 0,
+    val average: Double? = null,
+    val stars: Map<String, Int> = emptyMap(),
+    @SerialName("private") val keptPrivate: Int = 0,
+) {
+    /** "4.8 from 12 ratings", for the star drawn beside it; null until a note carries a rating. */
     val summary: String?
         get() {
             if (count <= 0 || average == null) return null
-            return "${oneDecimal(average)} from $count ${if (count == 1) "note" else "notes"}"
+            return "${oneDecimal(average)} from $count ${if (count == 1) "rating" else "ratings"}"
         }
+
+    /** How many gave [stars] stars. */
+    fun countOf(stars: Int): Int = this.stars[stars.toString()] ?: 0
+
+    /** [countOf] as a share of [count], 0 to 1; 0 while nothing is rated. */
+    fun shareOf(stars: Int): Float = if (count <= 0) 0f else countOf(stars).toFloat() / count
+
+    /** [shareOf] as a whole percentage, "75%"; the five need not add up to exactly 100. */
+    fun percentOf(stars: Int): String = "${(shareOf(stars) * 100).roundToInt()}%"
 }
 
-/** A note the owner has published, as `GET /notes` gives it: the visitor's words and name, never their contact. */
+/** A public note, as `GET /notes` gives it: the visitor's words and name, never their contact. */
 @Immutable
 @Serializable
 data class PublicNote(
@@ -47,7 +69,7 @@ data class PublicNote(
     val name: String? = null,
     val rating: Int? = null,
     val message: String,
-    /** The day it was published, `YYYY-MM-DD`. */
+    /** The day it was left, `YYYY-MM-DD`, in the owner's time zone. */
     val date: String? = null,
 ) {
     /** "Ada · Oct 2026", or "A visitor · Oct 2026" for a note left without a name. */
@@ -59,16 +81,21 @@ data class PublicNote(
     }
 }
 
-/** What `GET /notes` answers: the visits so far, the rating, and the latest published notes, newest first. */
+/**
+ * What `GET /notes` answers: the visits so far, the rating, and a page of the public notes, newest first: all of
+ * them, or one star's. [total] is how many public notes there are (of that star); [more] says another page follows.
+ */
 @Immutable
 @Serializable
 data class SiteNotes(
     val visits: VisitCount,
     val ratings: RatingSummary = RatingSummary(),
     val notes: List<PublicNote> = emptyList(),
+    val total: Int = notes.size,
+    val more: Boolean = false,
 )
 
-/** The hero's live line: the published notes' rating and the visit count, each only once it exists. */
+/** The hero's live line: the notes' rating and the visit count, each only once it exists. */
 @Immutable
 data class LiveStats(val visits: VisitCount? = null, val ratings: RatingSummary? = null) {
     val ratingLine: String? get() = ratings?.summary
@@ -107,8 +134,14 @@ data class FeedbackDraft(
     /** Overall impression, 1 to 5; null for none. */
     val rating: Int? = null,
     val message: String = "",
-    /** Whether the note may be shown on the site (with the name, never the contact) once the owner publishes it. */
-    val consent: Boolean = false,
+    /**
+     * That the note may be shown on the site, with the name and never the contact. The form says every note is
+     * public, so it always sends yes; the backend still keeps the notes of the 1.0 forms that sent no private.
+     * Always in the JSON, default or not: a note without it would be filed as private.
+     */
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault
+    val consent: Boolean = true,
 ) {
     /** What stops this note from being sent, message first, as sentences for the visitor; empty when it can go. */
     val problems: List<String>
@@ -140,19 +173,41 @@ data class FeedbackDraft(
 object FeedbackCopy {
     const val TITLE = "Leave a note"
     const val PUBLIC = "Public"
-    const val INTRO = "A bug on this site, or a thought on my work: I read every note. Tick the box and, once I have " +
-        "read it, it may appear here with your name; your email never does."
+    const val INTRO = "A bug on this site, or a thought on my work: your note appears here as soon as you send it, " +
+        "with your name if you give one. Your email never does."
     const val NAME = "Name"
     const val CONTACT = "Email"
     const val RATING = "Overall impression"
     const val MESSAGE = "Message"
-    const val CONSENT = "You may show this note on the site"
     const val SEND = "Send note"
     const val SENDING = "Sending…"
-    const val THANKS = "Thanks, your note is in."
+    const val THANKS = "Thanks, your note is up."
     const val ANOTHER = "Write another"
     const val NOTES_TITLE = "Notes from visitors"
+    const val NO_NOTES = "No notes yet. Be the first to leave one below."
+    const val MORE = "Show more notes"
+    const val LOADING_MORE = "Loading…"
+    const val ALL = "All notes"
+    const val DASHBOARD = "Ratings"
 
+    /** "from 12 ratings" under the average. */
+    fun ratingsCount(count: Int): String = "from $count ${if (count == 1) "rating" else "ratings"}"
+
+    /** Under the bars, when some ratings came with words kept private. */
+    fun keptPrivate(count: Int): String =
+        if (count == 1) "Every rating counts. One came with a note sent privately, before notes were public: its stars are here, its words are not."
+        else "Every rating counts. $count came with notes sent privately, before notes were public: their stars are here, their words are not."
+
+    /** The list's line while one star is picked: "4 notes with 5 stars". */
+    fun filtered(total: Int, stars: Int): String =
+        "$total ${if (total == 1) "note" else "notes"} with $stars ${if (stars == 1) "star" else "stars"}"
+
+    /** When a star has ratings but none with public words. */
+    fun noneShown(stars: Int): String = "No public notes with $stars ${if (stars == 1) "star" else "stars"} yet."
+
+    /** A bar as one spoken line: "5 stars: 18 ratings, 75 percent". */
+    fun barLabel(stars: Int, count: Int, percent: String): String =
+        "$stars ${if (stars == 1) "star" else "stars"}: $count ${if (count == 1) "rating" else "ratings"}, ${percent.removeSuffix("%")} percent"
     /** "5 · Excellent" down to "1 · Poor": the static page's options, the app's star names. */
     fun ratingLabel(rating: Int): String = "$rating · ${Impressions[rating - 1]}"
 

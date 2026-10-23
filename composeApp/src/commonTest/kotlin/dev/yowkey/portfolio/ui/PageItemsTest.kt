@@ -117,7 +117,7 @@ class PageItemsTest {
         assertEquals(sectionStarts(without).keys.toList(), sectionStarts(items).keys.toList(), "no section, so no nav entry, of their own")
     }
 
-    /** The published notes sit between the message form and the note form, chunked like the project cards. */
+    /** The dashboard and the public notes sit between the message form and the note form, chunked like the project cards. */
     @Test
     fun thePublishedNotesComeBetweenTheTwoFormsInRows() {
         val notes = (1..5).map { PublicNote(it.toLong(), "N$it", 5, "M$it", "2026-10-24") }
@@ -128,13 +128,18 @@ class PageItemsTest {
         assertEquals(listOf("notes-0", "notes-1", "notes-2"), rows.map { it.key })
         assertTrue(rows.all { it.section == Section.Contact && !it.showsHeader })
 
-        val items = buildPageItems(withApi, 1, 1, notes.take(1))
+        val items = buildPageItems(withApi, 1, 1, notes.take(1), moreNotes = true)
         assertEquals(
-            listOf(PageItem.Contact(null, portfolio.links), PageItem.Message, PageItem.Notes(notes.take(1), 1, 0), PageItem.Feedback, PageItem.Footer),
-            items.takeLast(5),
+            listOf(
+                PageItem.Contact(null, portfolio.links), PageItem.Message, PageItem.Ratings, PageItem.Notes(notes.take(1), 1, 0),
+                PageItem.MoreNotes, PageItem.Feedback, PageItem.Footer,
+            ),
+            items.takeLast(7),
         )
-        assertTrue(buildPageItems(portfolio, 1, 1, notes).none { it is PageItem.Notes }, "no backend, no notes, whatever was passed")
-        assertTrue(buildPageItems(withApi, 1, 1).none { it is PageItem.Notes }, "no notes yet, no rows")
+        assertTrue(buildPageItems(portfolio, 1, 1, notes).none { it is PageItem.Notes || it is PageItem.Ratings }, "no backend, no notes, whatever was passed")
+        assertTrue(buildPageItems(withApi, 1, 1).none { it is PageItem.Notes || it is PageItem.Ratings }, "the backend has not answered: nothing yet")
+        val none = buildPageItems(withApi, 1, 1, emptyList(), notesLoaded = true)
+        assertTrue(PageItem.Ratings in none && none.none { it is PageItem.Notes }, "it answered with no notes: the dashboard says so")
     }
 
     @Test

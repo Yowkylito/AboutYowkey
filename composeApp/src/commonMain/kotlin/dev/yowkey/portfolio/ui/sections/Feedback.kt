@@ -11,11 +11,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -44,8 +42,8 @@ import dev.yowkey.portfolio.ui.components.StarGlyph
 import dev.yowkey.portfolio.ui.components.StatusBadge
 
 /**
- * The public note form, after the published notes it may join: name and email (both optional), an overall
- * impression out of five, the message, the consent to show it, Send. [state] is the ViewModel's: while a note is on its way the button waits; a failure's sentence
+ * The public note form, after the notes it joins as soon as it is sent: name and email (both optional, the email
+ * never shown), an overall impression out of five, the message, Send. [state] is the ViewModel's: while a note is on its way the button waits; a failure's sentence
  * shows beside it; once sent, the form gives way to a thank-you and a way to write another. The draft is saveable,
  * so scrolling the row off the screen and back keeps it; the thank-you need not be.
  */
@@ -86,7 +84,6 @@ private fun DraftForm(state: FeedbackUiState, onSend: (FeedbackDraft) -> Unit, w
     var contact by rememberSaveable { mutableStateOf("") }
     var rating by rememberSaveable { mutableStateOf(0) }
     var message by rememberSaveable { mutableStateOf("") }
-    var consent by rememberSaveable { mutableStateOf(false) }
     // The form's own objection, raised at Send and dropped at the next keystroke; the server's comes in [state].
     var problem by remember { mutableStateOf<String?>(null) }
     val sending = state is FeedbackUiState.Sending
@@ -137,23 +134,11 @@ private fun DraftForm(state: FeedbackUiState, onSend: (FeedbackDraft) -> Unit, w
             isError = problem != null && message.isBlank(),
             enabled = !sending,
         )
-        // The whole line toggles, and reads as one checkbox.
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .toggleable(value = consent, enabled = !sending, role = Role.Checkbox) { consent = it }
-                .padding(vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Checkbox(checked = consent, onCheckedChange = null, enabled = !sending)
-            Text(FeedbackCopy.CONSENT, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
-        }
         val shown = problem ?: (state as? FeedbackUiState.Failed)?.message
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             Button(
                 onClick = {
-                    val draft = FeedbackDraft(name, contact, rating.takeIf { it in 1..5 }, message, consent)
+                    val draft = FeedbackDraft(name, contact, rating.takeIf { it in 1..5 }, message)
                     problem = draft.problems.firstOrNull()
                     if (problem == null) onSend(draft)
                 },

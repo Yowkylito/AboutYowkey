@@ -2,6 +2,8 @@ package dev.yowkey.portfolio.admin
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class AdminLogicTest {
 
@@ -41,7 +43,10 @@ class AdminLogicTest {
         val now = "2026-10-23T12:00:00.000Z"
         val hidden = AdminNote(1, consent = true, hiddenAt = "x")
         assertEquals(AdminNote(1, consent = true, publishedAt = now, hiddenAt = null), hidden.after(NoteAction.Publish, now))
-        assertEquals(null, AdminNote(1, publishedAt = "x").after(NoteAction.Unpublish, now)!!.publishedAt)
+        assertEquals(now, AdminNote(1, consent = true).after(NoteAction.Unpublish, now)!!.hiddenAt, "Unpublish hides")
+        assertTrue(AdminNote(1, consent = true).isPublic, "public as it arrives")
+        assertFalse(hidden.isPublic)
+        assertFalse(AdminNote(1, consent = false).isPublic, "sent before notes were public, without the tick")
         assertEquals(now, AdminNote(1).after(NoteAction.Hide, now)!!.hiddenAt)
         assertEquals(null, hidden.after(NoteAction.Unhide, now)!!.hiddenAt)
         assertEquals(null, hidden.after(NoteAction.Delete, now))
