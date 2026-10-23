@@ -46,48 +46,6 @@ import dev.yowkey.portfolio.ui.components.LinkButton
 import dev.yowkey.portfolio.ui.components.OutlinedCard
 import dev.yowkey.portfolio.ui.components.Tag
 
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-fun Hero(
-    profile: Profile,
-    platformLabel: String,
-    compact: Boolean,
-    onSeeProjects: () -> Unit,
-    onContact: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(20.dp)) {
-        profile.availability?.let {
-            Text(it.uppercase(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-        }
-        Text(
-            text = profile.name,
-            style = if (compact) MaterialTheme.typography.displayMedium else MaterialTheme.typography.displayLarge,
-            color = MaterialTheme.colorScheme.onBackground,
-        )
-        Text(
-            text = profile.headline,
-            style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.widthIn(max = 720.dp),
-        )
-        Text(
-            text = profile.summary,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.widthIn(max = 640.dp),
-        )
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Button(onClick = onSeeProjects) { Text("See projects") }
-            OutlinedButton(onClick = onContact) { Text("Get in touch") }
-        }
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            profile.location?.let { Tag(it) }
-            Tag("Rendered by $platformLabel")
-        }
-    }
-}
-
 /** Lays out one row of an equal-height card grid; short rows keep their column width. */
 @Composable
 fun CardRow(

@@ -2,6 +2,7 @@ package dev.yowkey.portfolio.data
 
 import dev.yowkey.portfolio.model.Link
 import dev.yowkey.portfolio.model.Portfolio
+import dev.yowkey.portfolio.model.ProofPoint
 import dev.yowkey.portfolio.model.Screenshot
 import kotlinx.serialization.json.Json
 
@@ -27,6 +28,7 @@ object PortfolioParser {
     private fun validate(portfolio: Portfolio) {
         require(portfolio.profile.name.isNotBlank()) { "profile.name must not be blank" }
         require(portfolio.siteUrl.startsWith("https://")) { "siteUrl must be an https:// URL" }
+        validateProof(portfolio.profile.proof)
 
         val duplicateIds = portfolio.projects.groupBy { it.id }.filterValues { it.size > 1 }.keys
         require(duplicateIds.isEmpty()) { "project ids must be unique, repeated: $duplicateIds" }
@@ -53,4 +55,22 @@ object PortfolioParser {
             "links must be https:// or mailto:, got ${link.url}"
         }
     }
+
+    /** The hero has room for a few short figures above the fold on a phone; more, or longer, would push the CTA down. */
+    private fun validateProof(proof: List<ProofPoint>) {
+        require(proof.size <= MAX_PROOF_POINTS) { "profile.proof takes at most $MAX_PROOF_POINTS points, got ${proof.size}" }
+        proof.forEach { point ->
+            require(point.value.isNotBlank() && point.label.isNotBlank()) { "a proof point needs a value and a label: $point" }
+            require(point.value.length <= MAX_PROOF_VALUE) {
+                "proof value \"${point.value}\" is longer than $MAX_PROOF_VALUE characters; keep the figure short, the label explains it"
+            }
+            require(point.label.length <= MAX_PROOF_LABEL) {
+                "proof label for ${point.value} is longer than $MAX_PROOF_LABEL characters; it must fit two lines on a phone"
+            }
+        }
+    }
+
+    const val MAX_PROOF_POINTS = 3
+    const val MAX_PROOF_VALUE = 12
+    const val MAX_PROOF_LABEL = 90
 }

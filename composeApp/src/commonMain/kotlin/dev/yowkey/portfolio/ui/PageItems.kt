@@ -10,13 +10,18 @@ import dev.yowkey.portfolio.model.Project
 import dev.yowkey.portfolio.model.Service
 import dev.yowkey.portfolio.model.SkillGroup
 
+/**
+ * The page's sections, in page order: evidence before claims. A recruiter's skim is answered by the hero; a hiring
+ * manager then reads the current job, the awards that back it, the work they can open, the keywords, and only then
+ * the focus areas, which summarise rather than prove.
+ */
 enum class Section(val title: String) {
     Home("Home"),
-    Services("Services"),
-    Projects("Projects"),
     Experience("Experience"),
     Recognition("Recognition"),
+    Projects("Projects"),
     Skills("Skills"),
+    Services("Focus areas"),
     Contact("Contact"),
 }
 
@@ -74,20 +79,23 @@ sealed interface PageItem {
     }
 }
 
-/** Flattens the portfolio into rows for the current column counts. Empty sections produce no rows at all. */
+/**
+ * Flattens the portfolio into rows for the current column counts, in [Section] order. Empty sections produce no rows
+ * at all.
+ */
 fun buildPageItems(portfolio: Portfolio, serviceColumns: Int, projectColumns: Int): List<PageItem> = buildList {
     add(PageItem.Hero(portfolio.profile))
-    portfolio.services.chunked(serviceColumns).forEachIndexed { row, chunk ->
-        add(PageItem.Services(chunk, serviceColumns, showsHeader = row == 0, row = row))
-    }
-    portfolio.projects.chunked(projectColumns).forEachIndexed { row, chunk ->
-        add(PageItem.Projects(chunk, projectColumns, showsHeader = row == 0))
-    }
     portfolio.experience.forEachIndexed { index, job ->
         add(PageItem.Job(job, index, isLast = index == portfolio.experience.lastIndex))
     }
     if (portfolio.recognition.isNotEmpty()) add(PageItem.Recognition(portfolio.recognition))
+    portfolio.projects.chunked(projectColumns).forEachIndexed { row, chunk ->
+        add(PageItem.Projects(chunk, projectColumns, showsHeader = row == 0))
+    }
     if (portfolio.skills.isNotEmpty()) add(PageItem.Skills(portfolio.skills))
+    portfolio.services.chunked(serviceColumns).forEachIndexed { row, chunk ->
+        add(PageItem.Services(chunk, serviceColumns, showsHeader = row == 0, row = row))
+    }
     add(PageItem.Contact(portfolio.profile.email, portfolio.links))
     add(PageItem.Footer)
 }

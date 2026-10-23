@@ -227,8 +227,8 @@ private fun PageRow(
         is PageItem.Hero -> SelectionContainer {
             Hero(
                 profile = item.profile,
-                platformLabel = platformLabel,
                 compact = layout.compact,
+                wide = layout.wideSections,
                 onSeeProjects = { onNavigate(Section.Projects) },
                 onContact = { onNavigate(Section.Contact) },
             )

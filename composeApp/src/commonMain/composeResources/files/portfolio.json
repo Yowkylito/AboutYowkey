@@ -2,11 +2,16 @@
   "siteUrl": "https://yowkylito.github.io/AboutYowkey/",
   "profile": {
     "name": "Rodelito Tangonan",
-    "headline": "Android Developer building native apps with Kotlin, Jetpack Compose and Clean Architecture",
-    "summary": "At DigiPlus I co-built ArenaPlus V2 from day one and wrote 53% of its code, from the Gradle architecture to wallet and payment flows. Outside work I ship apps end to end across Android, Compose Multiplatform and AI tooling. This site is one of them: a Compose Multiplatform app compiled to WebAssembly.",
+    "headline": "Android Developer at DigiPlus since 2024 · Kotlin, Jetpack Compose, Clean Architecture",
+    "summary": "On ArenaPlus I led the move from a hybrid WebView app to native and built the wallet flows: deposits, withdrawals and bank-linking. Outside work I build Android, Compose Multiplatform and AI apps end to end; this site is one, compiled to WebAssembly.",
     "location": "Quezon City, Philippines",
     "email": "yukstangonan@gmail.com",
-    "availability": "Open to relocation to Singapore"
+    "availability": "Open to relocation to Singapore",
+    "proof": [
+      { "value": "53%", "label": "of ArenaPlus V2's code written by me: 270K+ lines across 413 commits" },
+      { "value": "30 days", "label": "to ship the Arena Social app solo, rebuilt from web to native with ~100% of the code" },
+      { "value": "Rank #2", "label": "Top 9 Awardee, hand-picked by executive leadership in Sep 2026" }
+    ]
   },
   "services": [
     {
@@ -35,24 +40,6 @@
     }
   ],
   "projects": [
-    {
-      "id": "pawffice",
-      "title": "Pawffice",
-      "summary": "A local-first, multi-agent AI workspace for the desktop, presented as a 3D town where a crew of cats takes your prompts.",
-      "period": "Aug 2026 – Present",
-      "highlights": [
-        "Classifies each prompt into ordered AI stages and feeds every stage the previous one's output",
-        "Pricing gates before anything runs, repository-path isolation and rate-limit handling",
-        "13 P0 build-blocking tests guard the cost and security rules"
-      ],
-      "stack": ["Rust", "Tauri 2", "SQLite", "TypeScript", "JavaScript", "SVG"],
-      "screenshots": [
-        { "file": "pawffice-town.webp", "caption": "The town: walk your cat around while the crew thread on the right takes prompts", "width": 1600, "height": 900 },
-        { "file": "pawffice-crew-answer.webp", "caption": "Crew members answer in the thread, each in their own role", "width": 1600, "height": 900 },
-        { "file": "pawffice-hiring.webp", "caption": "Onboarding: the CEO cat \"hires\" you with four questions", "width": 1600, "height": 900 },
-        { "file": "pawffice-wardrobe.webp", "caption": "The wardrobe: breed, coat and outfit for your cat", "width": 1600, "height": 900 }
-      ]
-    },
     {
       "id": "vistago",
       "title": "Vistago",
@@ -104,6 +91,24 @@
       "stack": ["Kotlin", "Jetpack Compose", "Ktor", "Koin", "DataStore", "SSE", "Firebase AI"]
     },
     {
+      "id": "pawffice",
+      "title": "Pawffice",
+      "summary": "A local-first, multi-agent AI workspace for the desktop, presented as a 3D town where a crew of cats takes your prompts.",
+      "period": "Aug 2026 – Present",
+      "highlights": [
+        "Classifies each prompt into ordered AI stages and feeds every stage the previous one's output",
+        "Pricing gates before anything runs, repository-path isolation and rate-limit handling",
+        "13 P0 build-blocking tests guard the cost and security rules"
+      ],
+      "stack": ["Rust", "Tauri 2", "SQLite", "TypeScript", "JavaScript", "SVG"],
+      "screenshots": [
+        { "file": "pawffice-town.webp", "caption": "The town: walk your cat around while the crew thread on the right takes prompts", "width": 1600, "height": 900 },
+        { "file": "pawffice-crew-answer.webp", "caption": "Crew members answer in the thread, each in their own role", "width": 1600, "height": 900 },
+        { "file": "pawffice-hiring.webp", "caption": "Onboarding: the CEO cat \"hires\" you with four questions", "width": 1600, "height": 900 },
+        { "file": "pawffice-wardrobe.webp", "caption": "The wardrobe: breed, coat and outfit for your cat", "width": 1600, "height": 900 }
+      ]
+    },
+    {
       "id": "myai",
       "title": "MyAI",
       "summary": "A self-hosted control platform that runs development work on a local PC from chat: tickets in, Claude Code runs, reviewed Git changes out.",
@@ -142,13 +147,13 @@
       "period": "2024 – Present",
       "location": "Taguig, Philippines",
       "highlights": [
-        "Co-built ArenaPlus V2 from day one and wrote 53% of its code (+270K lines across 413 commits), including the Gradle architecture, UI foundations and navigation",
-        "Led the move from a hybrid WebView app to native: ported V2 into the V1 shell as decoupled :v2 modules until the app ran native-only",
+        "Wrote 53% of ArenaPlus V2's code (270K+ lines, 413 commits), co-building it from day one: Gradle architecture, UI foundations, navigation",
+        "Shipped Arena Social solo in 30 days (~100% of the code): web to native, with custom navigators and sticky video playback",
+        "Led the switch from a hybrid WebView app to native-only, porting V2 into the V1 shell as decoupled :v2 modules",
         "Built the core wallet flows end to end: deposits, withdrawals, automated bank-linking and a custom Pay & Go withdrawal module",
-        "Shipped Arena Social solo in 30 days, turning a web interface into a native app with custom navigators and sticky video playback",
-        "Integrated Adjust SDK 5.8 with automated channel attribution, campaign triggers and first-deposit bonus delivery",
-        "Optimised the Altenar and Saba sports-betting APIs, built a shake-to-open API debugging tool, and added skeleton loading and bet-validated NBA livestream gating",
-        "Integrated third-party eKYC, reduced memory pressure under heavy real-time traffic, and prepared the app for Google Play's 16 KB page sizes"
+        "Added 16 KB page-size support for Google Play compliance, integrated third-party eKYC, and optimised layouts for memory under heavy real-time traffic",
+        "Optimised the Altenar and Saba sports-betting API integrations, built a shake-to-open API debugger, and added skeleton loaders and bet-validated NBA livestream gating",
+        "Integrated Adjust SDK 5.8 with automated channel attribution, campaign triggers and first-deposit bonus delivery"
       ]
     },
     {
@@ -187,7 +192,7 @@
   "skills": [
     {
       "name": "Android",
-      "items": ["Kotlin", "Android SDK", "Jetpack Compose", "Java", "Material 3", "Android Studio"]
+      "items": ["Kotlin", "Jetpack Compose", "Android SDK", "Java", "Material 3", "Kotlin Multiplatform", "Compose Multiplatform", "Android Studio"]
     },
     {
       "name": "Architecture",

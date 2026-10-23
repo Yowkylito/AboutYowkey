@@ -1,8 +1,10 @@
 package dev.yowkey.portfolio.ui
 
+import dev.yowkey.portfolio.model.Award
 import dev.yowkey.portfolio.model.Experience
 import dev.yowkey.portfolio.model.Project
 import dev.yowkey.portfolio.model.Service
+import dev.yowkey.portfolio.model.SkillGroup
 import dev.yowkey.portfolio.samplePortfolio
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -47,6 +49,18 @@ class PageItemsTest {
         val starts = sectionStarts(buildPageItems(portfolio, 1, 1))
         assertEquals(starts.values.sorted(), starts.values.toList())
         assertEquals(0, starts[Section.Home])
+    }
+
+    /** Evidence before claims: the job, its awards, then work, keywords, and the focus areas last. */
+    @Test
+    fun sectionsFollowTheHiringReadOrder() {
+        val full = portfolio.copy(recognition = listOf(Award("A", "D")), skills = listOf(SkillGroup("G", listOf("K"))))
+        val expected = listOf(
+            Section.Home, Section.Experience, Section.Recognition, Section.Projects,
+            Section.Skills, Section.Services, Section.Contact,
+        )
+        for (columns in 1..2) assertEquals(expected, sectionStarts(buildPageItems(full, columns, columns)).keys.toList())
+        assertEquals(expected, Section.entries, "the enum is the page order; keep them in step")
     }
 
     @Test

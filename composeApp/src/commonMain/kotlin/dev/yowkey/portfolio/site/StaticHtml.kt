@@ -39,24 +39,25 @@ object StaticHtml {
 
     fun robots(portfolio: Portfolio): String = "User-agent: *\nAllow: /\nSitemap: ${portfolio.siteUrl}sitemap.xml\n"
 
-    /** The semantic body: one `<section>` per part of the page, in the same order as the Compose UI. */
+    /** The semantic body: one `<section>` per part of the page, in the same order as the Compose UI (`Section`). */
     fun content(portfolio: Portfolio): String = buildString {
         val p = portfolio.profile
         appendLine("<header class=\"hero\">")
-        p.availability?.let { appendLine("<p class=\"eyebrow\">${escape(it)}</p>") }
+        val eyebrow = listOfNotNull(p.location, p.availability)
+        if (eyebrow.isNotEmpty()) appendLine("<p class=\"eyebrow\">${eyebrow.joinToString(" · ") { escape(it) }}</p>")
         appendLine("<h1>${escape(p.name)}</h1>")
         appendLine("<p class=\"headline\">${escape(p.headline)}</p>")
+        if (p.proof.isNotEmpty()) {
+            appendLine("<ul class=\"proof\">")
+            p.proof.forEach { appendLine("<li><strong>${escape(it.value)}</strong> ${escape(it.label)}</li>") }
+            appendLine("</ul>")
+        }
+        links(listOfNotNull(p.email?.let { Link("Email me", "mailto:$it") }, Link("See projects", "#projects")))
         appendLine("<p>${escape(p.summary)}</p>")
-        p.location?.let { appendLine("<p class=\"muted\">${escape(it)}</p>") }
         appendLine("</header>")
 
-        if (portfolio.services.isNotEmpty()) {
-            appendLine("<section id=\"services\"><h2>Services</h2><ul class=\"cards\">")
-            portfolio.services.forEach {
-                appendLine("<li><h3>${escape(it.title)}</h3><p>${escape(it.description)}</p></li>")
-            }
-            appendLine("</ul></section>")
-        }
+        experience(portfolio)
+        recognition(portfolio)
 
         if (portfolio.projects.isNotEmpty()) {
             appendLine("<section id=\"projects\"><h2>Projects</h2>")
@@ -76,28 +77,6 @@ object StaticHtml {
             appendLine("</section>")
         }
 
-        if (portfolio.experience.isNotEmpty()) {
-            appendLine("<section id=\"experience\"><h2>Experience</h2>")
-            portfolio.experience.forEach { job ->
-                appendLine("<article><h3>${escape(job.role)} · ${escape(job.company)}</h3>")
-                val meta = listOfNotNull(job.period, job.location).joinToString(" · ") { escape(it) }
-                appendLine("<p class=\"muted\">$meta</p>")
-                list(job.highlights)
-                appendLine("</article>")
-            }
-            appendLine("</section>")
-        }
-
-        if (portfolio.recognition.isNotEmpty()) {
-            appendLine("<section id=\"recognition\"><h2>Recognition</h2>")
-            portfolio.recognition.forEach { award ->
-                appendLine("<article><h3>${escape(award.title)}</h3>")
-                award.date?.let { appendLine("<p class=\"muted\">${escape(it)}</p>") }
-                appendLine("<p>${escape(award.detail)}</p></article>")
-            }
-            appendLine("</section>")
-        }
-
         if (portfolio.skills.isNotEmpty()) {
             appendLine("<section id=\"skills\"><h2>Skills</h2>")
             portfolio.skills.forEach { group ->
@@ -105,6 +84,14 @@ object StaticHtml {
                 appendLine("<p>${group.items.joinToString(" · ") { escape(it) }}</p>")
             }
             appendLine("</section>")
+        }
+
+        if (portfolio.services.isNotEmpty()) {
+            appendLine("<section id=\"services\"><h2>Focus areas</h2><ul class=\"cards\">")
+            portfolio.services.forEach {
+                appendLine("<li><h3>${escape(it.title)}</h3><p>${escape(it.description)}</p></li>")
+            }
+            appendLine("</ul></section>")
         }
 
         appendLine("<section id=\"contact\"><h2>Contact</h2>")
@@ -171,6 +158,32 @@ object StaticHtml {
                 '\'' -> append("&#39;")
                 else -> append(c)
             }
+        }
+    }
+
+    private fun StringBuilder.experience(portfolio: Portfolio) {
+        if (portfolio.experience.isNotEmpty()) {
+            appendLine("<section id=\"experience\"><h2>Experience</h2>")
+            portfolio.experience.forEach { job ->
+                appendLine("<article><h3>${escape(job.role)} · ${escape(job.company)}</h3>")
+                val meta = listOfNotNull(job.period, job.location).joinToString(" · ") { escape(it) }
+                appendLine("<p class=\"muted\">$meta</p>")
+                list(job.highlights)
+                appendLine("</article>")
+            }
+            appendLine("</section>")
+        }
+    }
+
+    private fun StringBuilder.recognition(portfolio: Portfolio) {
+        if (portfolio.recognition.isNotEmpty()) {
+            appendLine("<section id=\"recognition\"><h2>Recognition</h2>")
+            portfolio.recognition.forEach { award ->
+                appendLine("<article><h3>${escape(award.title)}</h3>")
+                award.date?.let { appendLine("<p class=\"muted\">${escape(it)}</p>") }
+                appendLine("<p>${escape(award.detail)}</p></article>")
+            }
+            appendLine("</section>")
         }
     }
 }
