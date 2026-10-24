@@ -218,9 +218,23 @@ JDK 17+ (Android Studio's bundled JBR works).
 
 ## Deploy
 
-`.github/workflows/pages.yml` scans for secrets, runs the tests, builds the bundle and deploys it on every push to
-`main`, then runs Lighthouse against the live URL. Pull requests get the same build and tests without the deploy.
-One-time setup: **Settings → Pages → Source: GitHub Actions**.
+The site is served by Cloudflare Pages, project `aboutyowkey`, at https://aboutyowkey.pages.dev/. The repository is
+private, and GitHub Pages serves private repositories only on a paid plan, so the site moved there on 2026-10-24.
+
+`.github/workflows/pages.yml` scans for secrets, runs the tests and builds the bundle on every push and pull request.
+On `main` it then deploys the bundle to Cloudflare Pages and runs Lighthouse against the live URL, once the
+repository has the `CLOUDFLARE_API_TOKEN` (with the Cloudflare Pages: Edit permission) and `CLOUDFLARE_ACCOUNT_ID`
+secrets; until then the deploy is skipped with a note in the run's summary, and the site is deployed from a Mac
+signed in with `npx wrangler login`:
+
+```bash
+./gradlew :composeApp:wasmJsBrowserDistribution
+npx --prefix worker wrangler pages deploy composeApp/build/dist/wasmJs/productionExecutable --project-name aboutyowkey --branch main
+```
+
+The site's address is in three places that must agree: `siteUrl` in portfolio.json (canonical links, sitemap),
+`ALLOWED_ORIGINS` and `SITE_URL` in `worker/wrangler.toml` (the backend answers only the site's own pages), and the
+Lighthouse URL in pages.yml.
 
 ## Android app
 
@@ -278,8 +292,8 @@ app's requests there instead (the emulator reaches the computer at 10.0.2.2), an
 
 The bar's proof chip (the notes' rating and the visit count, while the hero is on screen), the "Notes from visitors" dashboard
 and cards and the "Leave a note" form under Contact are real data, kept by a small backend of the site's own: a
-Cloudflare Worker with a D1 (SQLite) database, in [`worker/`](../worker/). GitHub Pages serves files only, so this is
-the one piece that runs on a server. Cloudflare's free plan covers it many times over (100,000 requests a day), and
+Cloudflare Worker with a D1 (SQLite) database, in [`worker/`](../worker/). Cloudflare Pages serves files only, so
+this is the one piece that runs on a server. Cloudflare's free plan covers it many times over (100,000 requests a day), and
 it never sleeps.
 
 What it keeps, and nothing more:

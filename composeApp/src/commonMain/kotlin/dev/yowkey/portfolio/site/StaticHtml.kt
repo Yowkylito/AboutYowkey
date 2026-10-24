@@ -70,7 +70,7 @@ object StaticHtml {
      * The page's `{{csp}}`: scripts only from the site itself and the page's own inline ones, by hash (so an injected
      * one runs nowhere), Wasm compiled for the app, requests and form posts only to the site and its backend
      * (`api`), no plugins, no `<base>`. Styles stay inline, as the page and the app write them. `frame-ancestors`
-     * cannot be set from a `<meta>`; GitHub Pages sends no headers to set it with.
+     * cannot be set from a `<meta>`; it would take a header from the host.
      */
     fun contentSecurityPolicy(portfolio: Portfolio, inlineScripts: List<String>): String {
         val api = portfolio.api?.let { Regex("^https?://[^/]+").find(it)?.value }
