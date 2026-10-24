@@ -83,6 +83,12 @@ const PUBLIC = "consent = 1 AND hidden_at IS NULL";
 /** A rating the page counts: any note's that the owner has not hidden, its words public or not. */
 const COUNTED = "rating IS NOT NULL AND hidden_at IS NULL";
 const ENOUGH_FOR_TODAY = "That is plenty for one day, thank you. Try again tomorrow.";
+/**
+ * Whether this visitor (?1, today's id) already sent these words (?2) today: a resend after an answer that never
+ * arrived (a timeout, a lost connection, a second press of a plain form's button). It is answered as the first was,
+ * before the limits, and kept once: no second row, no second alert, no 429 for a note that is in.
+ */
+const RESENT = "COALESCE(MAX(message = ?2), 0) AS resent";
 
 /** The minutes one device waits between notes: NOTE_GAP_MINUTES when it is a whole number (0 turns it off), else 5. */
 function noteGapMinutes(env) {
@@ -165,36 +171,54 @@ function localDay(env, now) {
 
 // ---- Visits ----
 
-async function visitCounts(db, today) {
-  const row = await db
+/**
+ * The rows of any day but today (?1) in `visitors` and `clickers`, whose keys start with the day. Written as two
+ * ranges so SQLite seeks them in the key: `day <> ?1` read every one of today's rows, on every new visitor, and D1
+ * bills and limits the rows a query reads (5 million a day on the free plan), so a busy day's reads grew as its square.
+ */
+const NOT_TODAY = "day < ?1 OR day > ?1";
+
+function visitCountsQuery(db, today) {
+  return db
     .prepare(
       "SELECT COALESCE(SUM(count), 0) AS total, MIN(day) AS since, " +
         "COALESCE((SELECT count FROM visits WHERE day = ?1), 0) AS today FROM visits",
     )
-    .bind(today)
-    .first();
+    .bind(today);
+}
+
+function visitTotals(row) {
   return { total: row.total, today: row.today, since: row.since };
 }
 
+async function visitCounts(db, today) {
+  return visitTotals(await visitCountsQuery(db, today).first());
+}
+
+/**
+ * Counts the visit unless this visitor is already counted today, then reads the counts: one batch, so one round
+ * trip to D1 rather than up to five, and one transaction, so the count, the country and the visitor's id are kept
+ * together or not at all (a failure never leaves an id that would keep its visitor from ever being counted today).
+ * The counts go up only while the id is not there yet, which the batch's third statement then puts there.
+ */
 async function recordVisit(request, env, now) {
   const today = localDay(env, now);
   const agent = request.headers.get("User-Agent") || "";
   if (isBot(agent)) return visitCounts(env.DB, today);
   const visitor = await visitorId(request, env, today, agent);
-  const inserted = await env.DB.prepare("INSERT OR IGNORE INTO visitors (day, visitor) VALUES (?1, ?2)").bind(today, visitor).run();
-  if (inserted.meta.changes === 1) {
-    await env.DB
-      .prepare("INSERT INTO visits (day, count) VALUES (?1, 1) ON CONFLICT (day) DO UPDATE SET count = count + 1")
-      .bind(today)
-      .run();
-    await env.DB
-      .prepare("INSERT INTO visit_countries (day, country, count) VALUES (?1, ?2, 1) ON CONFLICT (day, country) DO UPDATE SET count = count + 1")
-      .bind(today, countryOf(request))
-      .run();
+  const db = env.DB;
+  const isNew = "WHERE NOT EXISTS (SELECT 1 FROM visitors WHERE day = ?1 AND visitor = ?2)";
+  const results = await db.batch([
+    db.prepare(`INSERT INTO visits (day, count) SELECT ?1, 1 ${isNew} ON CONFLICT (day) DO UPDATE SET count = count + 1`).bind(today, visitor),
+    db
+      .prepare(`INSERT INTO visit_countries (day, country, count) SELECT ?1, ?3, 1 ${isNew} ON CONFLICT (day, country) DO UPDATE SET count = count + 1`)
+      .bind(today, visitor, countryOf(request)),
+    db.prepare("INSERT OR IGNORE INTO visitors (day, visitor) VALUES (?1, ?2)").bind(today, visitor),
     // An id carries its day, so an earlier day's rows can never match again: nothing about a visitor outlives the day.
-    await env.DB.prepare("DELETE FROM visitors WHERE day <> ?1").bind(today).run();
-  }
-  return visitCounts(env.DB, today);
+    db.prepare(`DELETE FROM visitors WHERE ${NOT_TODAY}`).bind(today),
+    visitCountsQuery(db, today),
+  ]);
+  return visitTotals(results.at(-1).results[0]);
 }
 
 function isBot(agent) {
@@ -230,8 +254,8 @@ export function trackedLinks(env) {
 }
 
 /**
- * A click on one of the page's tracked links, counted like a visit: once per visitor per day per link, never for a
- * bot, and the day's ids deleted once a new day's click is counted. The page sends it with `navigator.sendBeacon`,
+ * A click on one of the page's tracked links, counted like a visit (in one batch, the same way): once per visitor per
+ * day per link, never for a bot, and the earlier days' ids deleted. The page sends it with `navigator.sendBeacon`,
  * which posts text/plain (any other type would need a preflight it cannot make), so that is read as JSON too.
  */
 async function recordClick(request, env, now, cors) {
@@ -243,19 +267,19 @@ async function recordClick(request, env, now, cors) {
   if (isBot(agent)) return json({ ok: true, counted: false }, 200, cors);
   const today = localDay(env, now);
   const visitor = await visitorId(request, env, today, agent);
-  const inserted = await env.DB
-    .prepare("INSERT OR IGNORE INTO clickers (day, link, visitor) VALUES (?1, ?2, ?3)")
-    .bind(today, link, visitor)
-    .run();
-  const counted = inserted.meta.changes === 1;
-  if (counted) {
-    await env.DB
-      .prepare("INSERT INTO clicks (day, link, count) VALUES (?1, ?2, 1) ON CONFLICT (day, link) DO UPDATE SET count = count + 1")
-      .bind(today, link)
-      .run();
-    await env.DB.prepare("DELETE FROM clickers WHERE day <> ?1").bind(today).run();
-  }
-  return json({ ok: true, counted }, 200, cors);
+  const db = env.DB;
+  const [, claimed] = await db.batch([
+    db
+      .prepare(
+        "INSERT INTO clicks (day, link, count) SELECT ?1, ?2, 1 " +
+          "WHERE NOT EXISTS (SELECT 1 FROM clickers WHERE day = ?1 AND link = ?2 AND visitor = ?3) " +
+          "ON CONFLICT (day, link) DO UPDATE SET count = count + 1",
+      )
+      .bind(today, link, visitor),
+    db.prepare("INSERT OR IGNORE INTO clickers (day, link, visitor) VALUES (?1, ?2, ?3)").bind(today, link, visitor),
+    db.prepare(`DELETE FROM clickers WHERE ${NOT_TODAY}`).bind(today),
+  ]);
+  return json({ ok: true, counted: claimed.meta.changes === 1 }, 200, cors);
 }
 
 /** A day's clicks as `{ linkedin: 2, github: 1 }`: every tracked link, 0 when nobody clicked it, then any others. */
@@ -382,15 +406,16 @@ async function submitFeedback(request, env, now, cors, alerts) {
 
   const today = localDay(env, now);
   const visitor = await visitorId(request, env, today, request.headers.get("User-Agent") || "");
-  const { n, last } = await env.DB
-    .prepare("SELECT COUNT(*) AS n, MAX(created_at) AS last FROM feedback WHERE visitor = ?1")
-    .bind(visitor)
+  const note = normalizeFeedback(fields);
+  const { n, last, resent } = await env.DB
+    .prepare(`SELECT COUNT(*) AS n, MAX(created_at) AS last, ${RESENT} FROM feedback WHERE visitor = ?1`)
+    .bind(visitor, note.message)
     .first();
+  if (resent) return reply(body.form, { ok: true }, 201, cors, env);
   if (n >= LIMITS.notesPerDay) return reply(body.form, { error: ENOUGH_FOR_TODAY }, 429, cors, env);
   const gap = noteGapMinutes(env);
   const wait = last && gap ? Date.parse(last) + gap * 60000 - now.getTime() : 0;
   if (wait > 0) return reply(body.form, { error: oneNoteAtATime(gap, wait) }, 429, cors, env);
-  const note = normalizeFeedback(fields);
   const { meta } = await env.DB
     .prepare(
       "INSERT INTO feedback (created_at, day, name, contact, rating, message, visitor, consent, relation) " +
@@ -505,9 +530,13 @@ async function submitMessage(request, env, now, cors, alerts) {
 
   const today = localDay(env, now);
   const visitor = await visitorId(request, env, today, request.headers.get("User-Agent") || "");
-  const { n } = await env.DB.prepare("SELECT COUNT(*) AS n FROM messages WHERE visitor = ?1").bind(visitor).first();
-  if (n >= LIMITS.messagesPerDay) return answer({ error: ENOUGH_FOR_TODAY }, 429);
   const message = normalizeMessage(fields);
+  const { n, resent } = await env.DB
+    .prepare(`SELECT COUNT(*) AS n, ${RESENT} FROM messages WHERE visitor = ?1`)
+    .bind(visitor, message.message)
+    .first();
+  if (resent) return answer({ ok: true }, 201);
+  if (n >= LIMITS.messagesPerDay) return answer({ error: ENOUGH_FOR_TODAY }, 429);
   const { meta } = await env.DB
     .prepare("INSERT INTO messages (created_at, day, name, contact, topic, message, visitor) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)")
     .bind(now.toISOString(), today, message.name, message.contact, message.topic, message.message, visitor)
@@ -878,16 +907,30 @@ async function numbersFor(env, days) {
     rows("SELECT day, COUNT(*) AS count FROM messages WHERE day BETWEEN ?1 AND ?2 GROUP BY day"),
     rows("SELECT day, country, count FROM visit_countries WHERE day BETWEEN ?1 AND ?2 ORDER BY count DESC, country"),
   ]);
-  const countOn = (list, date) => list.find((row) => row.day === date)?.count ?? 0;
+  // Each list grouped by day once: looking each day up in every list read a year's rows 366 times (~50 ms of CPU, where
+  // the free plan allows a request 10).
+  const [visitsOn, clicksOn, notesOn, messagesOn, countriesOn] = [visits, clicks, notes, messages, countries].map(byDay);
+  const countOn = (rowsOn, date) => rowsOn.get(date)?.[0].count ?? 0;
   const links = trackedLinks(env);
   return days.map((date) => ({
     day: date,
-    visits: countOn(visits, date),
-    clicks: clickCounts(links, clicks.filter((row) => row.day === date)),
-    notes: countOn(notes, date),
-    messages: countOn(messages, date),
-    countries: countries.filter((row) => row.day === date).map((row) => ({ country: row.country, count: row.count })),
+    visits: countOn(visitsOn, date),
+    clicks: clickCounts(links, clicksOn.get(date) ?? []),
+    notes: countOn(notesOn, date),
+    messages: countOn(messagesOn, date),
+    countries: (countriesOn.get(date) ?? []).map((row) => ({ country: row.country, count: row.count })),
   }));
+}
+
+/** [rows] by their `day`, each day's in the order they came. */
+function byDay(rows) {
+  const days = new Map();
+  for (const row of rows) {
+    const list = days.get(row.day);
+    if (list) list.push(row);
+    else days.set(row.day, [row]);
+  }
+  return days;
 }
 
 async function adminAction(request, env, kind, id, now) {
@@ -967,21 +1010,24 @@ async function removeDevice(request, env) {
 
 /**
  * The cron's job at 23:59 local time: the day's numbers, kept in `daily_reports` and sent to the owner. Cloudflare
- * may run a cron twice; a second run the same day rewrites the row with the newer numbers and sends nothing more.
+ * may run a cron twice, even at once; the run whose insert makes the day's row sends the alert, and any other
+ * rewrites the row with the newer numbers and sends nothing more.
  */
 export async function dailyReport(env, ctx, { now = new Date(), fetch } = {}) {
   const today = localDay(env, now);
   const [{ visits, clicks, notes, messages }] = await numbersFor(env, [today]);
-  const seen = await env.DB.prepare("SELECT 1 AS seen FROM daily_reports WHERE day = ?1").bind(today).first();
-  await env.DB
-    .prepare(
-      "INSERT INTO daily_reports (day, visits, clicks, notes, messages, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6) " +
-        "ON CONFLICT (day) DO UPDATE SET visits = excluded.visits, clicks = excluded.clicks, notes = excluded.notes, messages = excluded.messages",
-    )
-    .bind(today, visits, JSON.stringify(clicks), notes, messages, now.toISOString())
+  const values = [today, visits, JSON.stringify(clicks), notes, messages];
+  // Claiming the day is one statement, so two runs cannot both see it unclaimed and both send.
+  const { meta } = await env.DB
+    .prepare("INSERT INTO daily_reports (day, visits, clicks, notes, messages, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6) ON CONFLICT (day) DO NOTHING")
+    .bind(...values, now.toISOString())
     .run();
+  const first = meta.changes === 1;
+  if (!first) {
+    await env.DB.prepare("UPDATE daily_reports SET visits = ?2, clicks = ?3, notes = ?4, messages = ?5 WHERE day = ?1").bind(...values).run();
+  }
   const report = { day: today, visits, clicks, notes, messages };
-  if (!seen) await notify(env, ctx, { kind: "daily", ...dailyText(report), refId: null }, { now, fetch });
+  if (first) await notify(env, ctx, { kind: "daily", ...dailyText(report), refId: null }, { now, fetch });
   return report;
 }
 

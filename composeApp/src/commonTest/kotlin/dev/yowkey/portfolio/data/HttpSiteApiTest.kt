@@ -7,6 +7,8 @@ import dev.yowkey.portfolio.model.RatingSummary
 import dev.yowkey.portfolio.model.Relation
 import dev.yowkey.portfolio.model.SiteNotes
 import dev.yowkey.portfolio.model.VisitCount
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.test.currentTime
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -136,6 +138,40 @@ class HttpSiteApiTest {
         val gateway = FakeTransport(HttpReply(502, "Bad gateway"))
         val plain = assertFailsWith<SiteApiException> { HttpSiteApi(gateway, true).sendFeedback(api, FeedbackDraft(message = "x")) }
         assertEquals("The note could not be sent (HTTP 502). Try again, or email me.", plain.message)
+    }
+
+    /** What the browser's fetch says when it cannot connect, as `FetchTransport` hands it on. */
+    private class Unreachable : HttpTransport {
+        override suspend fun send(method: String, url: String, body: String?): HttpReply =
+            throw SiteApiException("No connection: TypeError: Failed to fetch")
+    }
+
+    /** A server that takes the request and never answers; the browser's fetch has no timeout of its own. */
+    private class Silent : HttpTransport {
+        override suspend fun send(method: String, url: String, body: String?): HttpReply = awaitCancellation()
+    }
+
+    /** The form shows the exception's message, so it is the form's sentence (the static page's too), not the browser's. */
+    @Test
+    fun aNoteOrMessageThatCannotLeaveSaysSoInTheFormsWords() = runTest {
+        val note = assertFailsWith<SiteApiException> { HttpSiteApi(Unreachable(), true).sendFeedback(api, FeedbackDraft(message = "x")) }
+        assertEquals("The note could not be sent. Check the connection and try again.", note.message)
+        val message = assertFailsWith<SiteApiException> {
+            HttpSiteApi(Unreachable(), true).sendMessage(api, MessageDraft(contact = "a@b.c", message = "x"))
+        }
+        assertEquals("The message could not be sent. Check the connection and try again.", message.message)
+    }
+
+    /** Else "Sending…" (and its locked button) or "Loading…" (and "Show more") would wait for good. */
+    @Test
+    fun aServerThatNeverAnswersIsGivenUpOn() = runTest {
+        val note = assertFailsWith<SiteApiException> { HttpSiteApi(Silent(), true).sendFeedback(api, FeedbackDraft(message = "x")) }
+        assertEquals("The note could not be sent. Check the connection and try again.", note.message)
+        assertEquals(20_000, currentTime, "20 s: past the desktop's and the phone's own timeouts, which say it first there")
+        assertFailsWith<SiteApiException> { HttpSiteApi(Silent(), true).sendMessage(api, MessageDraft(contact = "a@b.c", message = "x")) }
+        assertFailsWith<SiteApiException> { HttpSiteApi(Silent(), true).loadNotes(api) }
+        assertFailsWith<SiteApiException> { HttpSiteApi(Silent(), true).recordVisit(api) }
+        assertFailsWith<SiteApiException> { HttpSiteApi(Silent(), true).trackClick(api, "github") }
     }
 
     @Test

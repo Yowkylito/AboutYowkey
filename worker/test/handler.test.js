@@ -125,6 +125,63 @@ test("yesterday's visitor ids are dropped when a new day is counted, and the add
   ]);
 });
 
+test("a visit waits on D1 once, counted or not, and its writes stand or fall together", async () => {
+  // Each first / all / run / batch is a round trip from the Worker to the database, which may be a continent away.
+  let trips = 0;
+  const { prepare, batch } = env.DB;
+  const counted = (bound) => ({
+    ...bound,
+    first: (...args) => (trips++, bound.first(...args)),
+    all: () => (trips++, bound.all()),
+    run: () => (trips++, bound.run()),
+  });
+  env.DB.prepare = (sql) => {
+    const statement = prepare(sql);
+    return { ...counted(statement), bind: (...params) => counted(statement.bind(...params)) };
+  };
+  env.DB.batch = (statements) => (trips++, batch(statements));
+  const visit = async (options) => {
+    trips = 0;
+    const answer = await (await call("/visits", { method: "POST", ...options })).json();
+    return { answer, trips };
+  };
+
+  assert.deepEqual(await visit(), { answer: { total: 1, today: 1, since: "2026-10-24" }, trips: 1 }, "new today");
+  assert.deepEqual(await visit(), { answer: { total: 1, today: 1, since: "2026-10-24" }, trips: 1 }, "already counted");
+  assert.deepEqual(await visit({ now: DAY_TWO }), { answer: { total: 2, today: 1, since: "2026-10-24" }, trips: 1 }, "new the next day");
+  for (const counted of [true, false]) {
+    trips = 0;
+    assert.deepEqual(await (await click("github", { now: DAY_TWO })).json(), { ok: true, counted });
+    assert.equal(trips, 1, "a click too");
+  }
+
+  // A write that fails takes the others of its visit with it: no count without its country, no lost id.
+  env.DB.raw.exec("CREATE TRIGGER broken BEFORE INSERT ON visit_countries BEGIN SELECT RAISE(ABORT, 'disk full'); END");
+  assert.equal((await call("/visits", { method: "POST", address: "198.51.100.2", now: DAY_TWO })).status, 500);
+  assert.deepEqual(query("SELECT day, count FROM visits ORDER BY day"), [
+    { day: "2026-10-24", count: 1 },
+    { day: "2026-10-25", count: 1 },
+  ]);
+  assert.deepEqual(query("SELECT day, COUNT(*) AS n FROM visitors GROUP BY day"), [{ day: "2026-10-25", n: 1 }]);
+});
+
+test("a new visitor or click seeks the day's ids in the key, never reading all of today's", async () => {
+  const statements = [];
+  const prepare = env.DB.prepare;
+  env.DB.prepare = (sql) => (statements.push(sql), prepare(sql));
+  await call("/visits", { method: "POST" });
+  await click("linkedin");
+  const plan = (sql) => {
+    const params = Math.max(...Array.from(sql.matchAll(/\?(\d+)/g), (match) => Number(match[1])));
+    return env.DB.raw.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...Array(params).fill("2026-10-24"));
+  };
+  const plans = statements.filter((sql) => /\b(visitors|clickers)\b/.test(sql)).map((sql) => [sql, plan(sql)]);
+  assert.ok(plans.some(([sql]) => sql.startsWith("DELETE FROM visitors")) && plans.some(([sql]) => sql.startsWith("DELETE FROM clickers")));
+  for (const [sql, plan] of plans) {
+    for (const { detail } of plan) assert.doesNotMatch(detail, /^SCAN (visitors|clickers)\b/, `${sql}: ${detail}`);
+  }
+});
+
 // ---- Browsers and origins ----
 
 test("the site's pages get CORS headers, a preflight a 204, and another page is turned away", async () => {
@@ -341,6 +398,42 @@ test(`a visitor may leave ${LIMITS.notesPerDay} notes a day`, async () => {
   assert.equal((await post("/feedback", { message: "someone else" }, { address: "198.51.100.2" })).status, 201);
   assert.equal((await post("/feedback", { message: "next day" }, { now: DAY_TWO })).status, 201);
   assert.equal(feedbackRows().length, LIMITS.notesPerDay + 2);
+});
+
+test("a note sent again, its first answer lost, is answered as the first was and kept once", async () => {
+  delete env.NOTE_GAP_MINUTES;
+  const at = (minutes) => new Date(Date.parse(DAY_ONE) + minutes * 60000).toISOString();
+  const first = await post("/feedback", { message: "Lovely work", rating: 5 }, { now: at(0) });
+  assert.equal(first.status, 201);
+  const again = await post("/feedback", { message: " Lovely work ", rating: 5 }, { now: at(0.5) });
+  assert.equal(again.status, 201, "not the 5-minute rule's 429: the note is in");
+  assert.deepEqual(await again.json(), { ok: true });
+  const form = await call("/feedback", {
+    method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "message=Lovely+work&rating=5", now: at(1),
+  });
+  assert.equal(form.status, 201);
+  assert.match(await form.text(), /Your note is in/);
+  assert.equal(feedbackRows().length, 1);
+  assert.equal(notificationRows().length, 1, "and the owner hears of it once");
+
+  assert.equal((await post("/feedback", { message: "Something else" }, { now: at(1) })).status, 429, "new words still wait their turn");
+  assert.equal((await post("/feedback", { message: "Lovely work" }, { now: at(1), address: "198.51.100.2" })).status, 201, "another visitor's");
+  assert.equal(feedbackRows().length, 2);
+});
+
+test("a message sent again, its first answer lost, is answered as the first was and kept once", async () => {
+  const send = (options) => post("/messages", { contact: "ada@example.com", topic: "job", message: "Are you free?" }, options);
+  assert.equal((await send()).status, 201);
+  const again = await send();
+  assert.equal(again.status, 201);
+  assert.deepEqual(await again.json(), { ok: true });
+  assert.equal(messageRows().length, 1);
+  assert.equal(notificationRows().length, 1, "one alert, not two");
+  for (let i = 1; i < LIMITS.messagesPerDay; i++) assert.equal((await post("/messages", { contact: "ada@example.com", message: `more ${i}` })).status, 201);
+  assert.equal((await send()).status, 201, "a resend past the day's limit is still the message that is in");
+  assert.equal(messageRows().length, LIMITS.messagesPerDay);
+  assert.equal((await send({ now: DAY_TWO })).status, 201);
+  assert.equal(messageRows().length, LIMITS.messagesPerDay + 1, "the same words the next day are a new message");
 });
 
 test("one note per device every 5 minutes, by default and as NOTE_GAP_MINUTES says", async () => {
@@ -957,6 +1050,17 @@ test("the daily report: today's numbers kept once per day, and one alert however
     ],
   });
   assert.equal((await appJson("/admin/reports?limit=1")).items.length, 1);
+});
+
+test("two runs of the cron at once still send one alert", async () => {
+  await call("/visits", { method: "POST" });
+  const runs = await Promise.all([
+    dailyReport(env, ctx, { now: new Date(REPORT_TIME), fetch: fetchStub }),
+    dailyReport(env, ctx, { now: new Date("2026-10-24T15:59:01.000Z"), fetch: fetchStub }),
+  ]);
+  assert.deepEqual(runs[0], runs[1]);
+  assert.deepEqual(query("SELECT day, visits, created_at FROM daily_reports"), [{ day: "2026-10-24", visits: 1, created_at: REPORT_TIME }]);
+  assert.equal(query("SELECT id FROM notifications WHERE kind = 'daily'").length, 1);
 });
 
 test("the Worker's entry point hands the cron its scheduled time, and requests their context", async () => {
