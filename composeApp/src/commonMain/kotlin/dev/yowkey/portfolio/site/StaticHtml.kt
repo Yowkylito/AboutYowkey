@@ -48,11 +48,40 @@ object StaticHtml {
             "build" to build,
         )
         val placeholder = Regex("\\{\\{(\\w+)}}")
-        val unknown = placeholder.findAll(template).map { it.groupValues[1] }.toSet() - values.keys
+        val unknown = placeholder.findAll(template).map { it.groupValues[1] }.toSet() - values.keys - "csp"
         require(unknown.isEmpty()) { "index.template.html uses unknown placeholders: $unknown" }
         // One pass over the template: a value that contains "{{content}}" stays text instead of being filled in turn.
-        return placeholder.replace(template) { values.getValue(it.groupValues[1]) }
+        fun fill(csp: String) = placeholder.replace(template) { (values + ("csp" to csp)).getValue(it.groupValues[1]) }
+        // The policy names the page's own inline scripts by hash, so they are read from the page as it will ship.
+        val scripts = INLINE_SCRIPT.findAll(fill("")).map { it.groupValues[1] }.toList()
+        return fill(escape(contentSecurityPolicy(portfolio, scripts)))
     }
+
+    /**
+     * The page's `{{csp}}`: scripts only from the site itself and the page's own inline ones, by hash (so an injected
+     * one runs nowhere), Wasm compiled for the app, requests and form posts only to the site and its backend
+     * (`api`), no plugins, no `<base>`. Styles stay inline, as the page and the app write them. `frame-ancestors`
+     * cannot be set from a `<meta>`; GitHub Pages sends no headers to set it with.
+     */
+    fun contentSecurityPolicy(portfolio: Portfolio, inlineScripts: List<String>): String {
+        val api = portfolio.api?.let { Regex("^https?://[^/]+").find(it)?.value }
+        val scripts = inlineScripts.distinct().joinToString("") { " ${Sha256.cspSource(it)}" }
+        return listOf(
+            "default-src 'self'",
+            "script-src 'self' 'wasm-unsafe-eval'$scripts",
+            "style-src 'self' 'unsafe-inline'",
+            "img-src 'self' data: blob:",
+            "media-src 'self' blob:",
+            "font-src 'self' data:",
+            "connect-src 'self'" + (api?.let { " $it" } ?: ""),
+            "form-action " + (api ?: "'none'"),
+            "object-src 'none'",
+            "base-uri 'self'",
+        ).joinToString("; ")
+    }
+
+    /** An inline script the browser runs: `<script>` with no attributes (the JSON-LD block has a type, and only data). */
+    private val INLINE_SCRIPT = Regex("<script>([\\s\\S]*?)</script>")
 
     fun sitemap(portfolio: Portfolio): String = """
         |<?xml version="1.0" encoding="UTF-8"?>
