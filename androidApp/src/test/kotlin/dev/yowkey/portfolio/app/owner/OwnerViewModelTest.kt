@@ -71,6 +71,13 @@ class OwnerViewModelTest {
     }
 
     @Test
+    fun aNotificationsLinkLoadsItsTabOnce() = runTest(main) {
+        val owner = owner()
+        owner.start(OwnerLink.Notes(5))
+        assertEquals(listOf("GET /admin/feedback?limit=100"), worker.requests)
+    }
+
+    @Test
     fun aLoadUnderwayWhenTheOwnerSignsOutLeavesNothingBehind() = runTest(main) {
         val access = FakeAccess(worker)
         val owner = OwnerViewModel(access, FakeDevice())

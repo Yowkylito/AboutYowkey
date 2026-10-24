@@ -162,7 +162,8 @@ class OwnerViewModel(
 
     /** The first screen: [link]'s place when a shortcut or notification opened the app, else admin if signed in. */
     fun start(link: OwnerLink?) {
-        if (link != null) open(link) else _nav.value = OwnerNav(portfolio = !signedIn.value)
+        if (link != null) return open(link) // which loads the place's tab itself
+        _nav.value = OwnerNav(portfolio = !signedIn.value)
         if (!_nav.value.portfolio) refresh(_nav.value.tab)
     }
 
