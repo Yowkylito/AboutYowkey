@@ -885,16 +885,30 @@ async function numbersFor(env, days) {
     rows("SELECT day, COUNT(*) AS count FROM messages WHERE day BETWEEN ?1 AND ?2 GROUP BY day"),
     rows("SELECT day, country, count FROM visit_countries WHERE day BETWEEN ?1 AND ?2 ORDER BY count DESC, country"),
   ]);
-  const countOn = (list, date) => list.find((row) => row.day === date)?.count ?? 0;
+  // Each list grouped by day once: looking each day up in every list read a year's rows 366 times (~50 ms of CPU, where
+  // the free plan allows a request 10).
+  const [visitsOn, clicksOn, notesOn, messagesOn, countriesOn] = [visits, clicks, notes, messages, countries].map(byDay);
+  const countOn = (rowsOn, date) => rowsOn.get(date)?.[0].count ?? 0;
   const links = trackedLinks(env);
   return days.map((date) => ({
     day: date,
-    visits: countOn(visits, date),
-    clicks: clickCounts(links, clicks.filter((row) => row.day === date)),
-    notes: countOn(notes, date),
-    messages: countOn(messages, date),
-    countries: countries.filter((row) => row.day === date).map((row) => ({ country: row.country, count: row.count })),
+    visits: countOn(visitsOn, date),
+    clicks: clickCounts(links, clicksOn.get(date) ?? []),
+    notes: countOn(notesOn, date),
+    messages: countOn(messagesOn, date),
+    countries: (countriesOn.get(date) ?? []).map((row) => ({ country: row.country, count: row.count })),
   }));
+}
+
+/** [rows] by their `day`, each day's in the order they came. */
+function byDay(rows) {
+  const days = new Map();
+  for (const row of rows) {
+    const list = days.get(row.day);
+    if (list) list.push(row);
+    else days.set(row.day, [row]);
+  }
+  return days;
 }
 
 async function adminAction(request, env, kind, id, now) {
