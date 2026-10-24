@@ -22,7 +22,9 @@ Rules the build enforces (it fails rather than ship a broken page):
 ### The portrait
 
 `"photo": "portrait.webp"` in `profile` puts my photo in the hero, standing on a tinted stage with its echo trail
-and sound lines (see `HeroPortrait.kt`). It must be a cut-out: transparent around the person, cropped to them, with
+(see `HeroPortrait.kt`). Once per page load it dashes in from the stage's left edge, and the name, headline, proof,
+buttons and summary read in after it lands (`HeroEntrance.kt`, on the timeline in `HeroMotion.kt`, which the static
+page plays too). It must be a cut-out: transparent around the person, cropped to them, with
 the bottom edge where the photo ends so the figure stands on the stage's floor. On a Mac, Photos or Preview can lift
 the subject out of a photo (or a short Swift script with Vision's `VNGenerateForegroundInstanceMaskRequest`); save it
 as a PNG, then:
@@ -180,6 +182,10 @@ and its runtime is several megabytes. So the build also renders `portfolio.json`
 1. The browser shows that HTML straight away. It is a complete, styled version of the page.
 2. If the browser supports WasmGC, the Compose app loads behind it, invisible.
 3. Once Compose has drawn real content, the page swaps to it.
+
+The hero's entrance plays on the HTML first, in CSS written from the app's own timeline, and only where the visitor
+allows motion. When the app takes over it reads how far that entrance has got and keeps to it frame by frame, so the
+swap never hides words that are already showing and brings them in again.
 
 Browsers without WasmGC, or a failed download, just keep the HTML version. It carries everything the detail
 screens do, one `<article id="project-<id>">` per project, and a `#/projects/<id>` link scrolls to that article

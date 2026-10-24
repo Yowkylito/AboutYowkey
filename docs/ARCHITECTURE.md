@@ -112,6 +112,11 @@ composeApp/  com.android.kotlin.multiplatform.library (namespace dev.yowkey.port
 - Scroll-driven visuals read state in the draw/layer phase: the top bar's divider (`drawBehind { scrolled() }`) and
   the reveal (`graphicsLayer { alpha = progress.value }`). Scrolling recomposes nothing; only a change of active
   section does, through `derivedStateOf`.
+- The hero's entrance (`ui/sections/HeroEntrance`: the portrait's dash, then the intro reading in) runs on one clock
+  kept above the list, read in the portrait's draw phase and the intro's layers, so it plays once per page load and
+  recomposes nothing (`HeroEntranceTest` counts). Its timeline (`HeroMotion`) is pure, and `StaticHtml.heroMotion`
+  writes the static page's CSS from it; on the web the app keeps to the static page's clock (`staticIntroMillis`,
+  expect/actual) until the entrance ends.
 - The model classes are `@Immutable`, so rows skip recomposition when their data is unchanged.
 - JSON is decoded on `Dispatchers.Default` (injected); Kotlin/Wasm has no IO dispatcher.
 - Card covers that are clips decode one frame at a time into one bitmap, only while on screen (`CoverPlayback`
