@@ -66,7 +66,7 @@ fun FeedbackSection(onOpen: () -> Unit, modifier: Modifier = Modifier, opener: F
 
 /**
  * The note form over the page: what happens to a note ([FeedbackCopy.FORM_INTRO]) before anyone writes one, then
- * the form. [drafts] keeps the draft while the dialog is closed, so it is there again when the dialog reopens. Once a
+ * the form; the thank-you, once it is sent, replaces both. [drafts] keeps the draft while the dialog is closed, so it is there again when the dialog reopens. Once a
  * note is sent the thank-you shows here; "Write another", or closing the dialog on the thank-you ([onClose]), goes
  * back to the empty form ([onReset]) and forgets the sent draft, so the next note starts empty.
  */
@@ -90,8 +90,11 @@ fun FeedbackDialog(
             onClose()
         },
     ) {
-        val intro = MaterialTheme.typography.bodyMedium
-        Text(FeedbackCopy.FORM_INTRO, style = intro, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.readingMeasure(intro))
+        // About the form, so it goes with it: the thank-you stands alone.
+        if (state !is FeedbackUiState.Sent) {
+            val intro = MaterialTheme.typography.bodyMedium
+            Text(FeedbackCopy.FORM_INTRO, style = intro, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.readingMeasure(intro))
+        }
         FeedbackForm(state, onSend, reset, wide, drafts = drafts)
     }
 }

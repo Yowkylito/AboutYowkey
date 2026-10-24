@@ -128,6 +128,7 @@ class FormDialogTest {
         assertEquals("Lovely site", sentNotes.single().message)
         val dialog = assertNotNull(dialog("${FeedbackCopy.TITLE}, ${FeedbackCopy.PUBLIC}"), "the dialog stays open")
         assertTrue(dialog.any { FeedbackCopy.THANKS in it.texts }, "the thank-you is in the dialog")
+        assertTrue(dialog.none { FeedbackCopy.FORM_INTRO in it.texts }, "and stands alone")
         assertEquals(0, dialog.count { SemanticsProperties.EditableText in it.config })
 
         click(closeButton())
