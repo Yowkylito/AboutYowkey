@@ -60,6 +60,7 @@ class YowkeyApplication : Application(), Configuration.Provider {
         single { AlertNotifier(androidContext(), get()) }
         single { OwnerSession(androidContext(), get(), get<UrlConnectionTransport>(), get(), get()) }
         single<OwnerDevice> { AndroidOwnerDevice(androidContext(), get(), get()) }
-        viewModel { OwnerViewModel(get<OwnerSession>().asAccess(), get()) }
+        // The third get() is the activity's SavedStateHandle, which Koin makes from the view model's creation extras.
+        viewModel { OwnerViewModel(get<OwnerSession>().asAccess(), get(), get()) }
     }
 }

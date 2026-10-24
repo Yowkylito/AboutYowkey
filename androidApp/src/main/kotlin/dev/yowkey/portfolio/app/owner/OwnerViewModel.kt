@@ -1,6 +1,7 @@
 package dev.yowkey.portfolio.app.owner
 
 import androidx.compose.runtime.Immutable
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.yowkey.portfolio.R
@@ -28,7 +29,9 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -79,15 +82,20 @@ data class PushInfo(val firebase: Boolean, val registered: Boolean, val notifica
  *
  * @param session the owner's session ([OwnerSession.asAccess] on the phone)
  * @param device the phone's side of the alerts, for Settings and the first sign-in
+ * @param saved the activity's saved state, which keeps the admin view's place through the process being killed
  */
 class OwnerViewModel(
     private val session: OwnerAccess,
     private val device: OwnerDevice,
+    private val saved: SavedStateHandle = SavedStateHandle(),
 ) : ViewModel() {
 
     val signedIn: StateFlow<Boolean> = session.signedIn
 
-    private val _nav = MutableStateFlow(OwnerNav())
+    /** Set when the activity's saved state brought a place back: the process was killed while the app was away. */
+    private val restored: OwnerNav? = saved.nav()
+
+    private val _nav = MutableStateFlow(restored ?: OwnerNav())
     val nav: StateFlow<OwnerNav> = _nav.asStateFlow()
 
     private val _signIn = MutableStateFlow(SignInState())
@@ -99,7 +107,9 @@ class OwnerViewModel(
     private val _messages = MutableStateFlow(Loadable<List<AdminMessage>>())
     val messages: StateFlow<Loadable<List<AdminMessage>>> = _messages.asStateFlow()
 
-    private val _filter = MutableStateFlow(MessageFilter.All)
+    private val _filter = MutableStateFlow(
+        saved.get<String>(KEY_FILTER)?.let { name -> MessageFilter.entries.firstOrNull { it.name == name } } ?: MessageFilter.All,
+    )
     val filter: StateFlow<MessageFilter> = _filter.asStateFlow()
 
     private val _notes = MutableStateFlow(Loadable<List<AdminNote>>())
@@ -130,6 +140,12 @@ class OwnerViewModel(
         viewModelScope.launch {
             signedIn.drop(1).collect { now -> if (!now) clear() }
         }
+        // The place and the filter go into the activity's saved state as they change, so a process killed while the
+        // app was away comes back where the owner left it rather than on the portfolio. MainActivity does not call
+        // start() then (it has saved state), so the place's data loads here.
+        _nav.onEach(saved::putNav).launchIn(viewModelScope)
+        _filter.onEach { saved[KEY_FILTER] = it.name }.launchIn(viewModelScope)
+        if (restored != null && !restored.portfolio) refresh(restored.tab)
     }
 
     /** The first screen: [link]'s place when a shortcut or notification opened the app, else admin if signed in. */
@@ -354,5 +370,33 @@ class OwnerViewModel(
 
     private companion object {
         const val DEFAULT_ZONE = "Asia/Manila"
+        const val KEY_FILTER = "owner.filter"
     }
+}
+
+private const val KEY_PORTFOLIO = "owner.portfolio"
+private const val KEY_TAB = "owner.tab"
+private const val KEY_MESSAGE = "owner.message"
+private const val KEY_NOTE = "owner.note"
+private const val KEY_DAILY = "owner.daily"
+
+/** [nav] as plain values, which is all a saved-state Bundle keeps. */
+private fun SavedStateHandle.putNav(nav: OwnerNav) {
+    this[KEY_PORTFOLIO] = nav.portfolio
+    this[KEY_TAB] = nav.tab.name
+    this[KEY_MESSAGE] = nav.messageId
+    this[KEY_NOTE] = nav.noteId
+    this[KEY_DAILY] = nav.dailyRecords
+}
+
+/** The place [putNav] kept; null when there is none (a fresh start). */
+private fun SavedStateHandle.nav(): OwnerNav? {
+    val tab = get<String>(KEY_TAB)?.let { name -> Tab.entries.firstOrNull { it.name == name } } ?: return null
+    return OwnerNav(
+        portfolio = get<Boolean>(KEY_PORTFOLIO) ?: true,
+        tab = tab,
+        messageId = get<Long>(KEY_MESSAGE),
+        noteId = get<Long>(KEY_NOTE),
+        dailyRecords = get<Boolean>(KEY_DAILY) ?: false,
+    )
 }
