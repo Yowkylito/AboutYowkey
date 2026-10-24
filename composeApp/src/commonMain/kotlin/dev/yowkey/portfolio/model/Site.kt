@@ -193,19 +193,25 @@ fun oneDecimal(value: Double): String {
 
 /** "2026-10-24" → "Oct 2026"; null for anything that is not such a date. */
 fun monthAndYear(day: String): String? {
-    val match = Regex("""(\d{4})-(\d{2})-\d{2}""").matchEntire(day) ?: return null
+    val match = IsoDay.matchEntire(day) ?: return null
     val month = match.groupValues[2].toInt().takeIf { it in 1..12 } ?: return null
     return "${Months[month - 1]} ${match.groupValues[1]}"
 }
 
 /** "2026-10-23" → "Oct 23, 2026"; null for anything that is not such a date. */
 fun fullDate(day: String): String? {
-    val match = Regex("""(\d{4})-(\d{2})-(\d{2})""").matchEntire(day) ?: return null
+    val match = IsoDay.matchEntire(day) ?: return null
     val month = match.groupValues[2].toInt().takeIf { it in 1..12 } ?: return null
     return "${Months[month - 1]} ${match.groupValues[3].toInt()}, ${match.groupValues[1]}"
 }
 
 private val Months = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+/**
+ * A `YYYY-MM-DD` day: year, month and day as groups 1 to 3. Compiled once: [PublicNote.dateLine] runs in every note
+ * card's composition, and a pattern built per call is compiled per call.
+ */
+private val IsoDay = Regex("""(\d{4})-(\d{2})-(\d{2})""")
 
 /**
  * How a note's writer knows the owner, as the note form asks (optional). The star sheet sorts notes by it, and a
