@@ -31,7 +31,7 @@
  * Bindings and settings (wrangler.toml): DB (D1), ALLOWED_ORIGINS, SITE_URL, TIME_ZONE, TRACKED_LINKS. Secrets:
  * ADMIN_TOKEN, VISITOR_SALT, and FCM_SERVICE_ACCOUNT for push (optional: without it alerts are records the app polls).
  */
-import { linkLabel, relationLabel, renderInbox, renderNotice, topicLabel } from "./inbox.js";
+import { linkLabel, PAGE_HEADERS, relationLabel, renderInbox, renderNotice, topicLabel } from "./inbox.js";
 import { notify } from "./push.js";
 
 export const LIMITS = Object.freeze({
@@ -730,7 +730,7 @@ async function authorize(secret, env, { basic = false } = {}) {
   return html(
     renderNotice("Sign in", "The inbox is the site owner's. Any user name; the password is ADMIN_TOKEN.", null),
     401,
-    { "WWW-Authenticate": 'Basic realm="Portfolio inbox", charset="UTF-8"' },
+    { "WWW-Authenticate": 'Basic realm="Portfolio inbox", charset="UTF-8"', "Cache-Control": "no-store" },
   );
 }
 
@@ -1003,12 +1003,14 @@ function counted(n, word) {
 function json(payload, status = 200, headers = {}) {
   return new Response(JSON.stringify(payload), {
     status,
-    headers: { "Content-Type": "application/json; charset=utf-8", ...headers },
+    // A visitor's words in JSON are never read as a page, whatever a browser would guess.
+    headers: { "Content-Type": "application/json; charset=utf-8", "X-Content-Type-Options": "nosniff", ...headers },
   });
 }
 
+/** Every page, the inbox, its sign-in and the notices, with PAGE_HEADERS: never framed, no script but its own. */
 function html(markup, status = 200, headers = {}) {
-  return new Response(markup, { status, headers: { "Content-Type": "text/html; charset=utf-8", ...headers } });
+  return new Response(markup, { status, headers: { "Content-Type": "text/html; charset=utf-8", ...PAGE_HEADERS, ...headers } });
 }
 
 /** JSON for the page's script; a page for a browser that posted the plain form without it. */

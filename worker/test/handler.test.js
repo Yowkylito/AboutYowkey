@@ -443,6 +443,43 @@ test("the inbox asks for the password, then shows the notes and the visits, esca
   assert.match(page, /<meta name="robots" content="noindex, nofollow">/);
 });
 
+test("the owner's pages may not be framed, run only their own confirm() handlers, and send no referrer", async () => {
+  await post("/feedback", { message: "private, so it has Show on the site" });
+  await post("/messages", { contact: "ada@example.com", message: "hello" });
+  const open = await call("/inbox", { headers: basic(env.ADMIN_TOKEN) });
+  const page = await open.text();
+  const policy = open.headers.get("Content-Security-Policy") || "";
+  for (const directive of ["default-src 'none'", "frame-ancestors 'none'", "form-action 'self'", "base-uri 'none'"]) {
+    assert.ok(policy.includes(directive), `the policy has ${directive}: ${policy}`);
+  }
+  // Every inline handler the page has is allowed by its hash, and nothing else is: a framed or injected page runs nothing.
+  const handlers = [...page.matchAll(/ on\w+="([^"]*)"/g)].map((match) => match[1].replace(/&#39;/g, "'"));
+  assert.equal(new Set(handlers).size, 3, "Delete (note), Delete (message) and Show on the site");
+  const { createHash } = await import("node:crypto");
+  for (const handler of handlers) {
+    assert.ok(policy.includes(`'sha256-${createHash("sha256").update(handler).digest("base64")}'`), `the policy allows ${handler}`);
+  }
+  assert.doesNotMatch(policy, /'unsafe-inline'[^;]*script|script-src[^;]*'unsafe-inline'/, "no inline script beyond the hashes");
+
+  const pages = [
+    ["the inbox", open],
+    ["the password prompt", await call("/inbox")],
+    ["a refused button", await call("/inbox/notes/1", { method: "POST", headers: { ...basic(env.ADMIN_TOKEN), "Content-Type": "application/x-www-form-urlencoded", "Sec-Fetch-Site": "cross-site" }, body: "action=hide" })],
+    ["a plain form's thank-you", await call("/feedback", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "message=hi", address: "198.51.100.9" })],
+  ];
+  for (const [what, response] of pages) {
+    assert.match(response.headers.get("Content-Type"), /^text\/html/, what);
+    assert.equal(response.headers.get("Content-Security-Policy"), policy, what);
+    assert.equal(response.headers.get("X-Frame-Options"), "DENY", what);
+    assert.equal(response.headers.get("Referrer-Policy"), "no-referrer", what);
+    assert.equal(response.headers.get("X-Content-Type-Options"), "nosniff", what);
+  }
+  assert.equal(pages[1][1].headers.get("Cache-Control"), "no-store", "the password prompt is not kept either");
+  for (const response of [await call("/notes"), await owner("/admin/summary"), await call("/nope")]) {
+    assert.equal(response.headers.get("X-Content-Type-Options"), "nosniff", "JSON is never sniffed as a page");
+  }
+});
+
 // ---- Edges ----
 
 test("health, unknown routes and a broken database", async () => {

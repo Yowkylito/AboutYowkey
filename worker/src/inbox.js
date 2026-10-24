@@ -10,6 +10,34 @@ const LINK_LABELS = { linkedin: "LinkedIn", github: "GitHub" };
 /** The app's `Relation` labels, so the inbox, the alert and the note card say it the same way. */
 const RELATION_LABELS = { colleague: "Colleague", friend: "Friend", special: "Special someone", other: "Other" };
 
+/**
+ * The page's only script: the confirm() of the buttons that cannot be undone. Each is allowed by its hash in
+ * PAGE_HEADERS (the tests check that every handler on the page is), so an injected one would not run.
+ */
+const CONFIRM_DELETE_NOTE = "return confirm('Delete this note for good?')";
+const CONFIRM_MAKE_PUBLIC = "return confirm('Only if the writer agreed: show this note on the site?')";
+const CONFIRM_DELETE_MESSAGE = "return confirm('Delete this message for good?')";
+
+/**
+ * What every page here is sent with. The browser sends the inbox's saved password with any request to this origin,
+ * so no other site may frame these pages (a framed button would pass the same-origin check), they run nothing but
+ * the confirm() handlers above, post only here, and send no referrer along with their links.
+ */
+export const PAGE_HEADERS = Object.freeze({
+  "Content-Security-Policy": [
+    "default-src 'none'",
+    "style-src 'unsafe-inline'",
+    // CONFIRM_DELETE_NOTE, CONFIRM_MAKE_PUBLIC, CONFIRM_DELETE_MESSAGE
+    "script-src 'unsafe-hashes' 'sha256-zY3iYRSQDJXbUMSgNR4AsxVn2VZ8q5qlVfSOBzJkN/A=' 'sha256-YF7z7fKimeZnwJTnK6nX2xJAomwf/T7lAUFwdRgmnCg=' 'sha256-+90hzeHH+mu8ObWA6aWX+IrEsiCWO3OrV+Dj9Gdbycw='",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+    "base-uri 'none'",
+  ].join("; "),
+  "X-Frame-Options": "DENY",
+  "Referrer-Policy": "no-referrer",
+  "X-Content-Type-Options": "nosniff",
+});
+
 export function topicLabel(topic) {
   return TOPIC_LABELS[topic] || "Other";
 }
@@ -112,12 +140,12 @@ function status(item) {
 /** Hide or Unhide, then Pin for a note on the site or Unpin for a pinned one, then Delete. */
 function buttons(item) {
   const button = (action, label, extra = "") => `<button name="action" value="${action}"${extra}>${label}</button>`;
-  const remove = button("delete", "Delete", ' class="danger" onclick="return confirm(\'Delete this note for good?\')"');
+  const remove = button("delete", "Delete", ` class="danger" onclick="${CONFIRM_DELETE_NOTE}"`);
   const pin = item.pinned_at ? button("unpin", "Unpin") : onTheSite(item) ? button("pin", "Pin") : "";
   // A private note goes on the site only on the owner's word that its writer agreed, so the button asks for it.
   const show = item.consent
     ? ""
-    : button("make-public", "Show on the site", ' onclick="return confirm(\'Only if the writer agreed: show this note on the site?\')"');
+    : button("make-public", "Show on the site", ` onclick="${CONFIRM_MAKE_PUBLIC}"`);
   return show + (item.hidden_at ? button("unhide", "Unhide") : button("hide", "Hide")) + pin + remove;
 }
 
@@ -137,7 +165,7 @@ function messageButtons(item) {
   const button = (action, label, extra = "") => `<button name="action" value="${action}"${extra}>${label}</button>`;
   const read = item.read_at ? button("unread", "Mark unread") : button("read", "Mark read", ' class="primary"');
   const archive = item.archived_at ? button("unarchive", "Unarchive") : button("archive", "Archive");
-  return read + archive + button("delete", "Delete", ' class="danger" onclick="return confirm(\'Delete this message for good?\')"');
+  return read + archive + button("delete", "Delete", ` class="danger" onclick="${CONFIRM_DELETE_MESSAGE}"`);
 }
 
 function stars(rating) {
