@@ -125,6 +125,63 @@ test("yesterday's visitor ids are dropped when a new day is counted, and the add
   ]);
 });
 
+test("a visit waits on D1 once, counted or not, and its writes stand or fall together", async () => {
+  // Each first / all / run / batch is a round trip from the Worker to the database, which may be a continent away.
+  let trips = 0;
+  const { prepare, batch } = env.DB;
+  const counted = (bound) => ({
+    ...bound,
+    first: (...args) => (trips++, bound.first(...args)),
+    all: () => (trips++, bound.all()),
+    run: () => (trips++, bound.run()),
+  });
+  env.DB.prepare = (sql) => {
+    const statement = prepare(sql);
+    return { ...counted(statement), bind: (...params) => counted(statement.bind(...params)) };
+  };
+  env.DB.batch = (statements) => (trips++, batch(statements));
+  const visit = async (options) => {
+    trips = 0;
+    const answer = await (await call("/visits", { method: "POST", ...options })).json();
+    return { answer, trips };
+  };
+
+  assert.deepEqual(await visit(), { answer: { total: 1, today: 1, since: "2026-10-24" }, trips: 1 }, "new today");
+  assert.deepEqual(await visit(), { answer: { total: 1, today: 1, since: "2026-10-24" }, trips: 1 }, "already counted");
+  assert.deepEqual(await visit({ now: DAY_TWO }), { answer: { total: 2, today: 1, since: "2026-10-24" }, trips: 1 }, "new the next day");
+  for (const counted of [true, false]) {
+    trips = 0;
+    assert.deepEqual(await (await click("github", { now: DAY_TWO })).json(), { ok: true, counted });
+    assert.equal(trips, 1, "a click too");
+  }
+
+  // A write that fails takes the others of its visit with it: no count without its country, no lost id.
+  env.DB.raw.exec("CREATE TRIGGER broken BEFORE INSERT ON visit_countries BEGIN SELECT RAISE(ABORT, 'disk full'); END");
+  assert.equal((await call("/visits", { method: "POST", address: "198.51.100.2", now: DAY_TWO })).status, 500);
+  assert.deepEqual(query("SELECT day, count FROM visits ORDER BY day"), [
+    { day: "2026-10-24", count: 1 },
+    { day: "2026-10-25", count: 1 },
+  ]);
+  assert.deepEqual(query("SELECT day, COUNT(*) AS n FROM visitors GROUP BY day"), [{ day: "2026-10-25", n: 1 }]);
+});
+
+test("a new visitor or click seeks the day's ids in the key, never reading all of today's", async () => {
+  const statements = [];
+  const prepare = env.DB.prepare;
+  env.DB.prepare = (sql) => (statements.push(sql), prepare(sql));
+  await call("/visits", { method: "POST" });
+  await click("linkedin");
+  const plan = (sql) => {
+    const params = Math.max(...Array.from(sql.matchAll(/\?(\d+)/g), (match) => Number(match[1])));
+    return env.DB.raw.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...Array(params).fill("2026-10-24"));
+  };
+  const plans = statements.filter((sql) => /\b(visitors|clickers)\b/.test(sql)).map((sql) => [sql, plan(sql)]);
+  assert.ok(plans.some(([sql]) => sql.startsWith("DELETE FROM visitors")) && plans.some(([sql]) => sql.startsWith("DELETE FROM clickers")));
+  for (const [sql, plan] of plans) {
+    for (const { detail } of plan) assert.doesNotMatch(detail, /^SCAN (visitors|clickers)\b/, `${sql}: ${detail}`);
+  }
+});
+
 // ---- Browsers and origins ----
 
 test("the site's pages get CORS headers, a preflight a 204, and another page is turned away", async () => {
@@ -326,6 +383,21 @@ test("a note is checked before it is kept, and the first problem is the answer",
   assert.equal(feedbackRows()[0].message, "42");
 });
 
+test("a body that says it is too large is turned away before it is read", async () => {
+  for (const path of ["/feedback", "/messages", "/clicks"]) {
+    let read = false;
+    const body = new ReadableStream(
+      { pull(controller) { read = true; controller.enqueue(new TextEncoder().encode("{}")); controller.close(); } },
+      { highWaterMark: 0 }, // pulled only when someone reads
+    );
+    const headers = { "Content-Type": "application/json", "Content-Length": String(LIMITS.body * 64), "User-Agent": CHROME, Origin: SITE };
+    const request = new Request(`https://api.example${path}`, { method: "POST", headers, body, duplex: "half" });
+    const response = await handleRequest(request, env, ctx, { now: new Date(DAY_ONE), fetch: fetchStub });
+    assert.equal(response.status, 413, path);
+    assert.equal(read, false, `${path}: not a byte of it was read`);
+  }
+});
+
 test("the trap field keeps bots out without telling them", async () => {
   const response = await post("/feedback", { message: "Buy now", website: "https://spam.example" });
   assert.equal(response.status, 201);
@@ -343,6 +415,43 @@ test(`a visitor may leave ${LIMITS.notesPerDay} notes a day`, async () => {
   assert.equal(feedbackRows().length, LIMITS.notesPerDay + 2);
 });
 
+test("a note sent again, its first answer lost, is answered as the first was and kept once", async () => {
+  delete env.NOTE_GAP_MINUTES;
+  const at = (minutes) => new Date(Date.parse(DAY_ONE) + minutes * 60000).toISOString();
+  const first = await post("/feedback", { message: "Lovely work", rating: 5 }, { now: at(0) });
+  assert.equal(first.status, 201);
+  const again = await post("/feedback", { message: " Lovely work ", rating: 5 }, { now: at(0.5) });
+  assert.equal(again.status, 201, "not the 5-minute rule's 429: the note is in");
+  assert.deepEqual(await again.json(), { ok: true });
+  const form = await call("/feedback", {
+    method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "message=Lovely+work&rating=5", now: at(1),
+  });
+  assert.equal(form.status, 201);
+  assert.match(await form.text(), /Your note is in/);
+  assert.equal(feedbackRows().length, 1);
+  assert.equal(notificationRows().length, 1, "and the owner hears of it once");
+
+  assert.equal((await post("/feedback", { message: "Something else" }, { now: at(1) })).status, 429, "new words still wait their turn");
+  assert.equal((await post("/feedback", { message: "Lovely work", rating: 4 }, { now: at(1) })).status, 429, "and so do new stars");
+  assert.equal((await post("/feedback", { message: "Lovely work" }, { now: at(1), address: "198.51.100.2" })).status, 201, "another visitor's");
+  assert.equal(feedbackRows().length, 2);
+});
+
+test("a message sent again, its first answer lost, is answered as the first was and kept once", async () => {
+  const send = (options) => post("/messages", { contact: "ada@example.com", topic: "job", message: "Are you free?" }, options);
+  assert.equal((await send()).status, 201);
+  const again = await send();
+  assert.equal(again.status, 201);
+  assert.deepEqual(await again.json(), { ok: true });
+  assert.equal(messageRows().length, 1);
+  assert.equal(notificationRows().length, 1, "one alert, not two");
+  for (let i = 1; i < LIMITS.messagesPerDay; i++) assert.equal((await post("/messages", { contact: "ada@example.com", message: `more ${i}` })).status, 201);
+  assert.equal((await send()).status, 201, "a resend past the day's limit is still the message that is in");
+  assert.equal(messageRows().length, LIMITS.messagesPerDay);
+  assert.equal((await send({ now: DAY_TWO })).status, 201);
+  assert.equal(messageRows().length, LIMITS.messagesPerDay + 1, "the same words the next day are a new message");
+});
+
 test("one note per device every 5 minutes, by default and as NOTE_GAP_MINUTES says", async () => {
   delete env.NOTE_GAP_MINUTES;
   const at = (minutes) => new Date(Date.parse(DAY_ONE) + minutes * 60000).toISOString();
@@ -353,9 +462,9 @@ test("one note per device every 5 minutes, by default and as NOTE_GAP_MINUTES sa
   const almost = await post("/feedback", { message: "again" }, { now: at(4.5) });
   assert.equal((await almost.json()).error, "One note every 5 minutes, thank you. Try again in 1 minute.");
   assert.equal((await post("/feedback", { message: "another device" }, { now: at(1), address: "198.51.100.2" })).status, 201, "a different device");
-  assert.equal((await post("/feedback", { message: "other browser" }, { now: at(1), agent: CHROME.replace("130", "131") })).status, 201, "a different browser");
+  assert.equal((await post("/feedback", { message: "other browser" }, { now: at(1), agent: CHROME.replace("130", "131") })).status, 429, "the same address in another browser");
   assert.equal((await post("/feedback", { message: "later" }, { now: at(5) })).status, 201, "five minutes on");
-  assert.equal(feedbackRows().length, 4);
+  assert.equal(feedbackRows().length, 3);
 
   const form = await call("/feedback", {
     method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "message=burst", now: at(6),
@@ -367,6 +476,61 @@ test("one note per device every 5 minutes, by default and as NOTE_GAP_MINUTES sa
   assert.equal((await post("/feedback", { message: "two minutes on" }, { now: at(7) })).status, 201);
   env.NOTE_GAP_MINUTES = "ten";
   assert.equal((await post("/feedback", { message: "too soon" }, { now: at(8) })).status, 429, "anything but a whole number means the default");
+});
+
+/** The shim, with each query a moment away as D1's are, so requests sent at once interleave as they do on Cloudflare. */
+function roundTrips(db) {
+  const later = (result) => new Promise((resolve) => setTimeout(() => resolve(result()), 1));
+  const statement = (bound) => ({
+    first: (column) => later(() => bound.first(column)),
+    all: () => later(() => bound.all()),
+    run: () => later(() => bound.run()),
+  });
+  return { ...db, prepare: (sql) => ({ ...statement(db.prepare(sql)), bind: (...params) => statement(db.prepare(sql).bind(...params)) }) };
+}
+
+test("the limits are the address's: another browser, another IPv6 address in the same /64, or a burst sent at once get no more", async () => {
+  const agents = Array.from({ length: LIMITS.notesPerDay + 2 }, (_, i) => `${CHROME} Edg/${i}`);
+  for (const [i, agent] of agents.entries()) {
+    assert.equal((await post("/feedback", { message: `note ${i}` }, { agent })).status, i < LIMITS.notesPerDay ? 201 : 429, `browser ${i}`);
+  }
+  for (const [i, agent] of agents.slice(0, LIMITS.messagesPerDay + 1).entries()) {
+    const sent = await post("/messages", { contact: "a@example.com", message: `message ${i}` }, { agent });
+    assert.equal(sent.status, i < LIMITS.messagesPerDay ? 201 : 429, `message from browser ${i}`);
+  }
+
+  const v6 = (address) => post("/feedback", { message: address }, { address });
+  for (let i = 1; i <= LIMITS.notesPerDay; i++) assert.equal((await v6(`2001:db8:a:b::${i}`)).status, 201);
+  assert.equal((await v6("2001:0db8:000a:000b:ffff::1")).status, 429, "the same /64, written another way");
+  assert.equal((await v6("2001:db8:a:c::1")).status, 201, "the next /64 is someone else");
+
+  // All at once, with D1 a round trip away: each passes the count before any is kept, so the insert must hold the line.
+  env.DB = roundTrips(env.DB);
+  const burst = await Promise.all(
+    Array.from({ length: 12 }, (_, i) => post("/feedback", { message: `burst ${i}` }, { address: "198.51.100.77" })),
+  );
+  assert.equal(burst.filter((response) => response.status === 201).length, LIMITS.notesPerDay);
+  assert.equal(burst.filter((response) => response.status === 429).length, 12 - LIMITS.notesPerDay);
+  const messages = await Promise.all(
+    Array.from({ length: 8 }, (_, i) => post("/messages", { contact: "b@example.com", message: `m ${i}` }, { address: "198.51.100.78" })),
+  );
+  assert.equal(messages.filter((response) => response.status === 201).length, LIMITS.messagesPerDay);
+
+  env.NOTE_GAP_MINUTES = "5";
+  const gapBurst = await Promise.all(
+    Array.from({ length: 4 }, (_, i) => post("/feedback", { message: `gap ${i}` }, { address: "198.51.100.79" })),
+  );
+  assert.equal(gapBurst.filter((response) => response.status === 201).length, 1, "one note every 5 minutes, even sent at once");
+});
+
+test("a sender's id is kept only for its day: the next day's first note or message clears the old ones", async () => {
+  await post("/feedback", { message: "day one" });
+  await post("/messages", { contact: "a@example.com", message: "day one" });
+  assert.match(feedbackRows()[0].visitor, /^[0-9a-f]{64}$/, "today's id holds today's limit");
+  await post("/feedback", { message: "day two" }, { now: DAY_TWO, address: "198.51.100.2" });
+  await post("/messages", { contact: "b@example.com", message: "day two" }, { now: DAY_TWO, address: "198.51.100.2" });
+  assert.deepEqual(feedbackRows().map((row) => row.visitor === ""), [true, false]);
+  assert.deepEqual(messageRows().map((row) => row.visitor === ""), [true, false]);
 });
 
 test("a plain form post gets a page back, with the way home", async () => {
@@ -441,6 +605,84 @@ test("the inbox asks for the password, then shows the notes and the visits, esca
   assert.match(page, /★★★<span class="dim">★★<\/span>/);
   assert.match(page, /<span>2026-10-25<\/span><strong>1<\/strong>/);
   assert.match(page, /<meta name="robots" content="noindex, nofollow">/);
+});
+
+test(`an address gets ${LIMITS.ownerTries} wrong owner passwords per ${LIMITS.ownerWindowMinutes} minutes, on any owner route`, async () => {
+  const at = (minutes) => new Date(Date.parse(DAY_ONE) + minutes * 60000).toISOString();
+  const guess = (token, options = {}) => call("/admin/summary", { ...options, headers: { Authorization: `Bearer ${token}` } });
+  for (let i = 0; i < LIMITS.ownerTries - 2; i++) assert.equal((await guess(`wrong-${i}`)).status, 401);
+  assert.equal((await call("/inbox", { headers: basic("wrong-inbox") })).status, 401);
+  assert.equal((await call("/feedback", { headers: { Authorization: "Bearer wrong-feedback" } })).status, 401, "the last try");
+
+  const locked = await guess("wrong-again", { now: at(1) });
+  assert.equal(locked.status, 429);
+  assert.equal(locked.headers.get("Retry-After"), String((LIMITS.ownerWindowMinutes - 1) * 60), "until the window ends");
+  assert.equal((await guess(env.ADMIN_TOKEN, { now: at(1) })).status, 429, "the right password is not tried either");
+  const lockedInbox = await call("/inbox", { headers: basic(env.ADMIN_TOKEN), now: at(1) });
+  assert.equal(lockedInbox.status, 429);
+  assert.match(await lockedInbox.text(), /Too many wrong passwords/);
+  assert.equal((await guess(env.ADMIN_TOKEN, { now: at(1), address: "198.51.100.2" })).status, 200, "another address is not held up");
+
+  // Asking without a password (a browser's first visit) and the right password cost nothing.
+  for (let i = 0; i < LIMITS.ownerTries + 5; i++) {
+    assert.equal((await call("/inbox", { address: "198.51.100.3", now: at(2) })).status, 401);
+    assert.equal((await guess(env.ADMIN_TOKEN, { address: "198.51.100.3", now: at(2) })).status, 200);
+  }
+  assert.deepEqual(query("SELECT since, count FROM owner_tries"), [{ since: DAY_ONE, count: LIMITS.ownerTries + 3 }], "only the wrong tries are kept");
+  assert.equal((await guess(env.ADMIN_TOKEN, { now: at(LIMITS.ownerWindowMinutes) })).status, 200, "the next window");
+  assert.deepEqual(query("SELECT count FROM owner_tries"), [], "an earlier window's tries go");
+
+  // Guesses sent at once are counted before any is checked.
+  env.DB = roundTrips(env.DB);
+  const burst = await Promise.all(Array.from({ length: 30 }, (_, i) => guess(`burst-${i}`, { address: "198.51.100.4", now: at(16) })));
+  assert.equal(burst.filter((response) => response.status === 401).length, LIMITS.ownerTries);
+  assert.equal(burst.filter((response) => response.status === 429).length, 30 - LIMITS.ownerTries);
+});
+
+test("without the owner_tries table (its migration not applied yet), the owner still gets in", async () => {
+  env.DB.raw.exec("DROP TABLE owner_tries");
+  const errors = mock.method(console, "error", () => {});
+  assert.equal((await call("/admin/summary", { headers: { Authorization: "Bearer wrong" } })).status, 401);
+  assert.equal((await owner("/admin/summary")).status, 200);
+  assert.ok(errors.mock.callCount() >= 1, "and the missing table is logged");
+  errors.mock.restore();
+});
+
+test("the owner's pages may not be framed, run only their own confirm() handlers, and send no referrer", async () => {
+  await post("/feedback", { message: "private, so it has Show on the site" });
+  await post("/messages", { contact: "ada@example.com", message: "hello" });
+  const open = await call("/inbox", { headers: basic(env.ADMIN_TOKEN) });
+  const page = await open.text();
+  const policy = open.headers.get("Content-Security-Policy") || "";
+  for (const directive of ["default-src 'none'", "frame-ancestors 'none'", "form-action 'self'", "base-uri 'none'"]) {
+    assert.ok(policy.includes(directive), `the policy has ${directive}: ${policy}`);
+  }
+  // Every inline handler the page has is allowed by its hash, and nothing else is: a framed or injected page runs nothing.
+  const handlers = [...page.matchAll(/ on\w+="([^"]*)"/g)].map((match) => match[1].replace(/&#39;/g, "'"));
+  assert.equal(new Set(handlers).size, 3, "Delete (note), Delete (message) and Show on the site");
+  const { createHash } = await import("node:crypto");
+  for (const handler of handlers) {
+    assert.ok(policy.includes(`'sha256-${createHash("sha256").update(handler).digest("base64")}'`), `the policy allows ${handler}`);
+  }
+  assert.doesNotMatch(policy, /'unsafe-inline'[^;]*script|script-src[^;]*'unsafe-inline'/, "no inline script beyond the hashes");
+
+  const pages = [
+    ["the inbox", open],
+    ["the password prompt", await call("/inbox")],
+    ["a refused button", await call("/inbox/notes/1", { method: "POST", headers: { ...basic(env.ADMIN_TOKEN), "Content-Type": "application/x-www-form-urlencoded", "Sec-Fetch-Site": "cross-site" }, body: "action=hide" })],
+    ["a plain form's thank-you", await call("/feedback", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "message=hi", address: "198.51.100.9" })],
+  ];
+  for (const [what, response] of pages) {
+    assert.match(response.headers.get("Content-Type"), /^text\/html/, what);
+    assert.equal(response.headers.get("Content-Security-Policy"), policy, what);
+    assert.equal(response.headers.get("X-Frame-Options"), "DENY", what);
+    assert.equal(response.headers.get("Referrer-Policy"), "no-referrer", what);
+    assert.equal(response.headers.get("X-Content-Type-Options"), "nosniff", what);
+  }
+  assert.equal(pages[1][1].headers.get("Cache-Control"), "no-store", "the password prompt is not kept either");
+  for (const response of [await call("/notes"), await owner("/admin/summary"), await call("/nope")]) {
+    assert.equal(response.headers.get("X-Content-Type-Options"), "nosniff", "JSON is never sniffed as a page");
+  }
 });
 
 // ---- Edges ----
@@ -694,18 +936,20 @@ const ADMIN_ROUTES = [
 test("every /admin route needs the token, and nothing it answers is cached", async () => {
   await post("/feedback", { message: "x" });
   await post("/messages", { contact: "x", message: "x" });
-  for (const [method, path, payload] of ADMIN_ROUTES) {
+  for (const [i, [method, path, payload]] of ADMIN_ROUTES.entries()) {
+    // Each route's wrong tries from an address of its own, so they stay under the sign-in limit (tested on its own).
+    const address = `198.51.100.${100 + i}`;
     const headers = payload ? { "Content-Type": "application/json" } : {};
     const body = payload ? JSON.stringify(payload) : undefined;
-    const none = await call(path, { method, headers, body, origin: null });
+    const none = await call(path, { method, headers, body, origin: null, address });
     assert.equal(none.status, 401, `${method} ${path} without a token`);
     assert.deepEqual(await none.json(), { error: "Unauthorized." });
     assert.equal(none.headers.get("Cache-Control"), "no-store");
-    assert.equal((await app(path, { method, payload, token: "wrong" })).status, 401, `${method} ${path} with a wrong token`);
-    assert.equal((await app(path, { method, payload, token: `${env.ADMIN_TOKEN}x` })).status, 401, `${method} ${path}, a longer token`);
-    const basicInstead = await call(path, { method, headers: { ...headers, ...basic(env.ADMIN_TOKEN) }, body, origin: null });
+    assert.equal((await app(path, { method, payload, token: "wrong", address })).status, 401, `${method} ${path} with a wrong token`);
+    assert.equal((await app(path, { method, payload, token: `${env.ADMIN_TOKEN}x`, address })).status, 401, `${method} ${path}, a longer token`);
+    const basicInstead = await call(path, { method, headers: { ...headers, ...basic(env.ADMIN_TOKEN) }, body, origin: null, address });
     assert.equal(basicInstead.status, 401, `${method} ${path}: the inbox's Basic password is not the app's Bearer token`);
-    const allowed = await app(path, { method, payload });
+    const allowed = await app(path, { method, payload, address });
     assert.equal(allowed.status, path.endsWith("no-such-route") ? 404 : 200, `${method} ${path} with the token`);
     assert.equal(allowed.headers.get("Cache-Control"), "no-store", `${method} ${path}`);
     assert.equal(allowed.headers.get("Access-Control-Allow-Origin"), null, "a native app needs no CORS");
@@ -957,6 +1201,17 @@ test("the daily report: today's numbers kept once per day, and one alert however
     ],
   });
   assert.equal((await appJson("/admin/reports?limit=1")).items.length, 1);
+});
+
+test("two runs of the cron at once still send one alert", async () => {
+  await call("/visits", { method: "POST" });
+  const runs = await Promise.all([
+    dailyReport(env, ctx, { now: new Date(REPORT_TIME), fetch: fetchStub }),
+    dailyReport(env, ctx, { now: new Date("2026-10-24T15:59:01.000Z"), fetch: fetchStub }),
+  ]);
+  assert.deepEqual(runs[0], runs[1]);
+  assert.deepEqual(query("SELECT day, visits, created_at FROM daily_reports"), [{ day: "2026-10-24", visits: 1, created_at: REPORT_TIME }]);
+  assert.equal(query("SELECT id FROM notifications WHERE kind = 'daily'").length, 1);
 });
 
 test("the Worker's entry point hands the cron its scheduled time, and requests their context", async () => {

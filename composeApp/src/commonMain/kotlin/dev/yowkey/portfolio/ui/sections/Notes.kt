@@ -58,10 +58,11 @@ internal fun NoteCard(note: PublicNote, modifier: Modifier = Modifier) {
                 note.rating?.let { StarRow(it, glyphSize = 14.dp) }
             }
             val badge = note.badge
-            if (note.dateLine != null || note.pinned || badge != null) {
+            val dateLine = note.dateLine
+            if (dateLine != null || note.pinned || badge != null) {
                 Spacer(Modifier.height(6.dp))
                 WrapRow(horizontalSpacing = 8.dp, verticalSpacing = 6.dp) {
-                    note.dateLine?.let {
+                    dateLine?.let {
                         Text(
                             it,
                             style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 0.2.sp),

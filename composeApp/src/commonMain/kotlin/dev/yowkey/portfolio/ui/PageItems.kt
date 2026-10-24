@@ -87,8 +87,9 @@ sealed interface PageItem {
     }
 
     /**
-     * The private message form, right under the contact block and ahead of everything public (the published notes,
-     * then the note form); only when the content names the site's backend ([Portfolio.api]).
+     * The private message's title, line and button (the form opens over the page), right under the contact block and
+     * ahead of everything public (the published notes, then Feedback); only when the content names the site's backend
+     * ([Portfolio.api]).
      */
     data object Message : PageItem {
         override val key = "message"
@@ -96,8 +97,8 @@ sealed interface PageItem {
     }
 
     /**
-     * The notes' title and ratings dashboard, between the message form and the notes; once the backend has answered
-     * (its numbers come with the notes).
+     * The notes' title and ratings dashboard, between the message and the notes; once the backend has answered (its
+     * numbers come with the notes).
      */
     data object Ratings : PageItem {
         override val key = "ratings"
@@ -116,7 +117,10 @@ sealed interface PageItem {
         override val section = Section.Contact
     }
 
-    /** The note form, under the notes it may join; only when the content names the site's backend ([Portfolio.api]). */
+    /**
+     * Feedback's title, line and button (the note form opens over the page), under the notes a note joins; only when
+     * the content names the site's backend ([Portfolio.api]).
+     */
     data object Feedback : PageItem {
         override val key = "feedback"
         override val section = Section.Contact
@@ -130,9 +134,9 @@ sealed interface PageItem {
 
 /**
  * Flattens the portfolio into rows for the current column counts, in [Section] order. Empty sections produce no rows
- * at all. With the site's backend, the Contact section continues with the private message form, then (once the
- * backend has answered, [notesLoaded]) the ratings dashboard and [notes], the public notes shown so far, chunked
- * like the project cards, with "Show more" when [moreNotes]; then the note form. Without a backend there is none.
+ * at all. With the site's backend, the Contact section continues with the private message, then (once the backend
+ * has answered, [notesLoaded]) the ratings dashboard and [notes], the public notes shown so far, chunked like the
+ * project cards, with "Show more" when [moreNotes]; then Feedback. Without a backend there is none of them.
  */
 fun buildPageItems(
     portfolio: Portfolio,

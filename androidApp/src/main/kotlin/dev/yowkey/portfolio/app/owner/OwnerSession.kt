@@ -60,19 +60,25 @@ class OwnerSession(
         return summary
     }
 
-    /** Tells the worker to stop pushing here (best effort, briefly), then forgets the owner. */
+    /**
+     * Tells the worker to stop pushing here (best effort, briefly), then forgets the owner. The forgetting is in a
+     * `finally`, so a sign-out cancelled while the worker is asked (the screen closing) still leaves no token behind.
+     */
     suspend fun signOut() {
-        val pushToken = store.pushToken
-        if (pushToken != null) {
-            try {
-                withTimeout(5_000) { api().unregisterDevice(pushToken) }
-            } catch (e: TimeoutCancellationException) {
-                // Offline: FCM drops the token below anyway, and the worker deletes tokens FCM calls unregistered.
-            } catch (e: AdminApiException) {
-                // Same.
+        try {
+            val pushToken = store.pushToken
+            if (pushToken != null) {
+                try {
+                    withTimeout(5_000) { api().unregisterDevice(pushToken) }
+                } catch (e: TimeoutCancellationException) {
+                    // Offline: FCM drops the token below anyway, and the worker deletes tokens FCM calls unregistered.
+                } catch (e: AdminApiException) {
+                    // Same.
+                }
             }
+        } finally {
+            forget()
         }
-        forget()
     }
 
     /** The worker stopped accepting the token (it was changed): sign out here, without asking it anything. */

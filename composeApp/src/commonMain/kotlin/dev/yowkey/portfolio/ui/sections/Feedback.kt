@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
@@ -20,16 +19,21 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.TextFieldColors
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.SaveableStateHolder
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -45,13 +49,62 @@ import dev.yowkey.portfolio.model.Relation
 import dev.yowkey.portfolio.ui.FeedbackUiState
 import dev.yowkey.portfolio.ui.components.StarGlyph
 import dev.yowkey.portfolio.ui.components.StatusBadge
+import dev.yowkey.portfolio.ui.theme.ControlOutline
 
 /**
- * The public note form, after the notes it joins as soon as it is sent: name and email (both optional, the email
- * never shown), how the writer knows the owner (optional, shown on the note as a badge), an overall impression out
- * of five, the message, Send. [state] is the ViewModel's: while a note is on its way the button waits; a failure's
- * sentence shows beside it; once sent, the form gives way to a thank-you and a way to write another. The draft is
- * saveable, so scrolling the row off the screen and back keeps it; the thank-you need not be.
+ * The Feedback section, under the notes a note joins as soon as it is sent: its title with the "Public" badge, who it
+ * is for, and the button that opens the form over the page ([FeedbackDialog]). Outlined, where the message's button is
+ * filled: the private message is the section's way to reach the owner, a public note the lighter thing to do.
+ */
+@Composable
+fun FeedbackSection(onOpen: () -> Unit, modifier: Modifier = Modifier, opener: FocusRequester? = null) {
+    FormSection(
+        FeedbackCopy.TITLE, FeedbackCopy.PUBLIC, FeedbackCopy.INTRO, FeedbackCopy.OPEN,
+        primary = false, onOpen = onOpen, opener = opener, modifier = modifier,
+    )
+}
+
+/**
+ * The note form over the page: what happens to a note ([FeedbackCopy.FORM_INTRO]) before anyone writes one, then
+ * the form; the thank-you, once it is sent, replaces both. [drafts] keeps the draft while the dialog is closed, so it is there again when the dialog reopens. Once a
+ * note is sent the thank-you shows here; "Write another", or closing the dialog on the thank-you ([onClose]), goes
+ * back to the empty form ([onReset]) and forgets the sent draft, so the next note starts empty.
+ */
+@Composable
+fun FeedbackDialog(
+    state: FeedbackUiState,
+    onSend: (FeedbackDraft) -> Unit,
+    onReset: () -> Unit,
+    wide: Boolean,
+    onClose: () -> Unit,
+    drafts: SaveableStateHolder = rememberSaveableStateHolder(),
+) {
+    val reset = {
+        drafts.removeState(DRAFT_KEY)
+        onReset()
+    }
+    FormDialog(
+        FeedbackCopy.TITLE, FeedbackCopy.PUBLIC, FeedbackCopy.CLOSE,
+        onClose = {
+            if (state is FeedbackUiState.Sent) reset()
+            onClose()
+        },
+    ) {
+        // About the form, so it goes with it: the thank-you stands alone.
+        if (state !is FeedbackUiState.Sent) {
+            val intro = MaterialTheme.typography.bodyMedium
+            Text(FeedbackCopy.FORM_INTRO, style = intro, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.readingMeasure(intro))
+        }
+        FeedbackForm(state, onSend, reset, wide, drafts = drafts)
+    }
+}
+
+/**
+ * The public note form: name and email (both optional, the email never shown), how the writer knows the owner
+ * (optional, shown on the note as a badge), an overall impression out of five, the message, Send. [state] is the
+ * ViewModel's: while a note is on its way the button waits; a failure's sentence shows beside it; once sent, the form
+ * gives way to a thank-you and a way to write another. The draft's fields are saveable, kept in [drafts] while the
+ * form is not on screen (its dialog closed, or the thank-you up).
  */
 @Composable
 fun FeedbackForm(
@@ -60,12 +113,11 @@ fun FeedbackForm(
     onReset: () -> Unit,
     wide: Boolean,
     modifier: Modifier = Modifier,
+    drafts: SaveableStateHolder = rememberSaveableStateHolder(),
 ) {
-    Column(modifier.widthIn(max = 640.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        FormTitle(FeedbackCopy.TITLE, FeedbackCopy.PUBLIC)
-        val intro = MaterialTheme.typography.bodyMedium
-        Text(FeedbackCopy.INTRO, style = intro, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.readingMeasure(intro))
-        if (state is FeedbackUiState.Sent) SentNote(onReset) else DraftForm(state, onSend, wide)
+    Box(modifier) {
+        if (state is FeedbackUiState.Sent) SentNote(onReset)
+        else drafts.SaveableStateProvider(DRAFT_KEY) { DraftForm(state, onSend, wide) }
     }
 }
 
@@ -74,16 +126,20 @@ fun FeedbackForm(
  * forms of the Contact section cannot be mistaken for each other. One heading node: "Message me, Private".
  */
 @Composable
-internal fun FormTitle(title: String, audience: String) {
+internal fun FormTitle(title: String, audience: String, modifier: Modifier = Modifier) {
     Row(
-        Modifier.semantics(mergeDescendants = true) { heading() },
+        modifier.semantics(mergeDescendants = true) { heading() },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(title, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onBackground)
+        Text(title, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface)
         StatusBadge(audience)
     }
 }
+
+/** The forms' text fields: at rest each is edged in [ControlOutline], so an empty one still shows where it is. */
+@Composable
+internal fun formFieldColors(): TextFieldColors = OutlinedTextFieldDefaults.colors(unfocusedBorderColor = ControlOutline)
 
 @Composable
 private fun DraftForm(state: FeedbackUiState, onSend: (FeedbackDraft) -> Unit, wide: Boolean) {
@@ -107,6 +163,7 @@ private fun DraftForm(state: FeedbackUiState, onSend: (FeedbackDraft) -> Unit, w
                 placeholder = { Text("Optional") },
                 singleLine = true,
                 enabled = !sending,
+                colors = formFieldColors(),
             )
         }
         val contactField: @Composable (Modifier) -> Unit = { fieldModifier ->
@@ -119,6 +176,7 @@ private fun DraftForm(state: FeedbackUiState, onSend: (FeedbackDraft) -> Unit, w
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                 enabled = !sending,
+                colors = formFieldColors(),
             )
         }
         if (wide) {
@@ -143,6 +201,7 @@ private fun DraftForm(state: FeedbackUiState, onSend: (FeedbackDraft) -> Unit, w
             supportingText = { Text("${message.length} / ${FeedbackDraft.MAX_MESSAGE}") },
             isError = problem != null && message.isBlank(),
             enabled = !sending,
+            colors = formFieldColors(),
         )
         val shown = problem ?: (state as? FeedbackUiState.Failed)?.message
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -197,25 +256,26 @@ private fun RelationChips(relation: String, onPick: (Relation) -> Unit, enabled:
 
 /**
  * Five stars, one tap each: a radio group, so a screen reader hears "4 · Good, selected". Tapping the chosen star
- * again clears the rating; it is optional, after all.
+ * again clears the rating; it is optional, after all. Each star is a 48 dp target, and an unlit one is drawn in
+ * [ControlOutline], since its outline is all that shows the control is there.
  */
 @Composable
 private fun RatingRow(rating: Int, onRate: (Int) -> Unit, enabled: Boolean) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(FeedbackCopy.RATING, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Row(Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(Modifier.selectableGroup()) {
             for (star in 1..5) {
                 val lit = star <= rating
                 val label = FeedbackCopy.ratingLabel(star)
                 Box(
                     Modifier
-                        .size(40.dp)
+                        .size(48.dp)
                         .clip(CircleShape)
                         .selectable(selected = star == rating, enabled = enabled, role = Role.RadioButton) { onRate(star) }
                         .semantics { contentDescription = label },
                     contentAlignment = Alignment.Center,
                 ) {
-                    StarGlyph(filled = lit, color = if (lit) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline)
+                    StarGlyph(filled = lit, color = if (lit) MaterialTheme.colorScheme.primary else ControlOutline)
                 }
             }
         }
@@ -225,7 +285,10 @@ private fun RatingRow(rating: Int, onRate: (Int) -> Unit, enabled: Boolean) {
 @Composable
 private fun SentNote(onReset: () -> Unit) {
     Column(Modifier.semantics { liveRegion = LiveRegionMode.Polite }, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(FeedbackCopy.THANKS, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
+        Text(FeedbackCopy.THANKS, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
         OutlinedButton(onClick = onReset) { Text(FeedbackCopy.ANOTHER) }
     }
 }
+
+/** Where [FeedbackDialog] keeps the draft in its [SaveableStateHolder] while it is closed. */
+private const val DRAFT_KEY = "feedback-draft"

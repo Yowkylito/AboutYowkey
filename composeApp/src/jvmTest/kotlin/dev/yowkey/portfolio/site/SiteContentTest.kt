@@ -6,6 +6,7 @@ import dev.yowkey.portfolio.model.GalleryItem
 import dev.yowkey.portfolio.model.MessageCopy
 import dev.yowkey.portfolio.model.Portfolio
 import dev.yowkey.portfolio.model.Profile
+import dev.yowkey.portfolio.ui.sections.HeroStage
 import dev.yowkey.portfolio.model.Project
 import dev.yowkey.portfolio.model.PublicNote
 import dev.yowkey.portfolio.model.Relation
@@ -25,6 +26,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /** Runs against the real content and template, so what ships is what is tested. */
@@ -37,6 +39,28 @@ class SiteContentTest {
     private val gallery = portfolio.projects.flatMap { it.gallery }
     private val stills = gallery.filterNot { it.isClip }
     private val clips = gallery.filter { it.isClip }
+
+    /**
+     * The shipped page's policy, read the way a browser reads it: it comes before every script, and each inline
+     * script the page has (hashed here with the JVM's own SHA-256) is allowed by it, so none is blocked.
+     */
+    @Test
+    fun theShippedPagesPolicyAllowsEachOfItsInlineScripts() {
+        val meta = Regex("<meta http-equiv=\"Content-Security-Policy\" content=\"([^\"]+)\">").find(page)
+        assertNotNull(meta, "the page has its policy")
+        assertTrue(page.indexOf(meta.value) < page.indexOf("<script"), "the policy comes before the first script")
+        val policy = meta.groupValues[1].replace("&#39;", "'")
+        val scripts = Regex("<script>([\\s\\S]*?)</script>").findAll(page).map { it.groupValues[1] }.toList()
+        assertTrue(scripts.size >= 5, "the theme, the bar, the notes, the message form and the boot scripts")
+        val sha256 = java.security.MessageDigest.getInstance("SHA-256")
+        scripts.forEach { script ->
+            val hash = java.util.Base64.getEncoder().encodeToString(sha256.digest(script.toByteArray(Charsets.UTF_8)))
+            assertTrue("'sha256-$hash'" in policy, "a script the policy would block: ${script.trim().take(80)}")
+        }
+        assertFalse(Regex("<script(?! type=\"application/ld\\+json\")[^>]+>").containsMatchIn(page), "no other kind of inline script")
+        val api = assertNotNull(portfolio.api)
+        assertTrue("connect-src 'self' $api;" in policy && "form-action $api;" in policy, policy)
+    }
 
     @Test
     fun everyProjectAndJobIsInTheCrawlablePage() {
@@ -76,13 +100,12 @@ class SiteContentTest {
 
     /** The seven-second skim: every point is in the hero, ahead of the first section. */
     @Test
-    fun heroShowsProofAvailabilityAndContact() {
+    fun heroShowsProofAndContact() {
         val hero = page.substringAfter("<header class=\"hero\">").substringBefore("</header>")
         val proof = portfolio.profile.proof
         assertTrue(proof.size >= 2, "the hero needs at least two proof points")
         proof.forEach { assertTrue(StaticHtml.escape(it.label) in hero, "hero lacks proof ${it.value}") }
-        listOfNotNull(portfolio.profile.location, portfolio.profile.availability, portfolio.profile.email)
-            .forEach { assertTrue(StaticHtml.escape(it) in hero, "hero lacks $it") }
+        portfolio.profile.email?.let { assertTrue(StaticHtml.escape(it) in hero, "hero lacks $it") }
     }
 
     /** The page is light unless the visitor switched; a saved choice is applied before the styles, so it never flashes. */
@@ -276,10 +299,22 @@ class SiteContentTest {
         listOf(0 to 0, bitmap.width - 1 to 0).forEach { (x, y) ->
             assertEquals(0, bitmap.getColor(x, y) ushr 24, "${file.name} is not cut out: its corner ($x, $y) is opaque")
         }
+        // The name's box on the stage is kept clear of a figure this wide at most, before the photo has loaded.
+        val aspect = bitmap.width.toFloat() / bitmap.height
+        assertTrue(aspect <= HeroStage.FIGURE_ASPECT, "${file.name} is ${aspect}x as wide as tall; the stage allows ${HeroStage.FIGURE_ASPECT}")
         val hero = page.substringAfter("<header class=\"hero\">").substringBefore("</header>")
         assertTrue(hero.indexOf(StaticHtml.resourceUrl(path)) in 0 until hero.indexOf("<h1>"), "the portrait does not lead the hero")
         val shipped = File(resources, Profile.PHOTO_DIR).listFiles().orEmpty().map { it.name }.toSet()
         assertEquals(setOf(portfolio.profile.photo), shipped, "shipped but unused, remove them")
+    }
+
+    /** The shipped page's styles carry the hero's entrance, and the colour its split needs in either theme. */
+    @Test
+    fun thePageCarriesTheHerosEntrance() {
+        val styles = page.substringAfter("<style>").substringBefore("</style>")
+        assertTrue(StaticHtml.heroMotion() in styles, "the entrance is not in the page's styles")
+        assertTrue(StaticHtml.heroStage(portfolio.profile) in styles, "the stage's rules are not in the page's styles")
+        assertEquals(2, Regex("--on-stage: #[0-9A-F]{6};").findAll(styles).count(), "the stage's ink, light and dark")
     }
 
     @Test
@@ -378,6 +413,49 @@ class SiteContentTest {
         assertTrue("navigator.sendBeacon(link.dataset.api + \"/clicks\", JSON.stringify({ link: name }))" in page)
         assertTrue("addEventListener(\"auxclick\"" in page, "a middle click counts too")
         assertTrue(MessageCopy.THANKS in page, "the static form thanks the visitor as the app does")
+    }
+
+    /**
+     * Each form opens in a modal dialog, which only the page's script can open: without it (no `js` class, which
+     * the head's script sets before the first paint) the template shows each form in its section and hides the
+     * buttons. With it, the dialogs open modal, close on the backdrop, give the focus back, and close when the app
+     * takes over, as the star sheet does. Their script is a plain inline one, so the policy's hashes cover it.
+     */
+    @Test
+    fun theFormsOpenInDialogsAndShowInlineWithoutTheScript() {
+        if (portfolio.api == null) return
+        val css = page.substringAfter("<style>").substringBefore("</style>")
+        assertTrue("document.documentElement.classList.add(\"js\");" in page.substringBefore("<style>"), "set before the first paint")
+        assertTrue(":root:not(.js) .open-form, :root:not(.js) .dialog-head { display: none; }" in css, "no button without the script")
+        val inline = css.substringAfter(":root:not(.js) .form-dialog {", missingDelimiterValue = "").substringBefore("}")
+        listOf("position: static;", "display: block;", "max-height: none;", "overflow: visible;")
+            .forEach { assertTrue(it in inline, "without the script the form shows in its section: $it") }
+        assertTrue(".form-dialog:not([open]) { display: none; }" in css, "with it, a dialog shows only while open")
+        assertTrue("width: min(560px, calc(100% - 32px));" in css && "max-height: calc(100dvh - 32px);" in css && "border-radius: 28px;" in css)
+        assertTrue(
+            Regex("@media \\(prefers-reduced-motion: no-preference\\) \\{\\s*\\.form-dialog\\[open] \\{ animation: dialog-in ").containsMatchIn(css),
+            "the dialog's entrance plays only where motion is welcome",
+        )
+        assertEquals(1, Regex("animation: dialog-in").findAll(css).count(), "and nowhere else")
+
+        val script = Regex("<script>([\\s\\S]*?)</script>").findAll(page).map { it.groupValues[1] }
+            .single { "button.open-form[aria-controls]" in it }
+        listOf(
+            "if (modal) { if (!dialog.open) dialog.showModal(); }",
+            "dialog.addEventListener(\"close\", closed);",
+            "if (!document.body.classList.contains(\"app-ready\")) opener.focus();",
+            "if (pressedOutside && onBackdrop(event)) close();",
+            "(event.shiftKey ? last : first).focus();",
+            "if (document.body.classList.contains(\"app-ready\")) closers.forEach(function (close) { close(); });",
+        ).forEach { assertTrue(it in script, "the dialogs' script lacks $it") }
+    }
+
+    /** The policy blocks inline event handlers, so the shipped page, template and content, has none. */
+    @Test
+    fun theShippedPageHasNoInlineHandlers() {
+        val markup = page.replace(Regex("<script[\\s\\S]*?</script>|<style>[\\s\\S]*?</style>|<!--[\\s\\S]*?-->"), "")
+        assertNull(Regex("<[a-zA-Z][^>]*\\son[a-z]+\\s*=", RegexOption.IGNORE_CASE).find(markup)?.value)
+        assertFalse("javascript:" in markup)
     }
 
     /**

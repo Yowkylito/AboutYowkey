@@ -5,12 +5,14 @@ import dev.yowkey.portfolio.model.MessageDraft
 import dev.yowkey.portfolio.model.Portfolio
 import dev.yowkey.portfolio.model.SiteNotes
 import dev.yowkey.portfolio.model.VisitCount
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlin.random.Random
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * The site's own backend (`worker/`, a Cloudflare Worker over a D1 database): the visit count, the clicks on the
@@ -101,8 +103,27 @@ class HttpSiteApi(
 
     private val json = Json { ignoreUnknownKeys = true }
 
+    /**
+     * One exchange, given up after [TIMEOUT]. The desktop's and the phone's transports time out on their own, sooner;
+     * the browser's `fetch` never does, so a server that took the request and went quiet would keep a form at
+     * "Sending…", its button locked, or "Show more" at "Loading…", for good.
+     */
+    private suspend fun exchange(method: String, url: String, body: String?): HttpReply =
+        withTimeoutOrNull(TIMEOUT) { transport.send(method, url, body) }
+            ?: throw SiteApiException("No answer in ${TIMEOUT.inWholeSeconds} s")
+
+    /**
+     * [exchange] for a form, whose failure the form shows as it is: a note or message that never reached the server
+     * says so in the form's words (the static page's too), not the platform's ("TypeError: Failed to fetch").
+     */
+    private suspend fun post(url: String, body: String, unsent: String): HttpReply = try {
+        exchange("POST", url, body)
+    } catch (e: SiteApiException) {
+        throw SiteApiException(unsent, e)
+    }
+
     override suspend fun recordVisit(api: String): VisitCount {
-        val reply = transport.send(if (countsVisits) "POST" else "GET", "$api/visits", null)
+        val reply = exchange(if (countsVisits) "POST" else "GET", "$api/visits", null)
         if (!reply.isSuccess) throw SiteApiException("visits: HTTP ${reply.status}")
         return try {
             json.decodeFromString(VisitCount.serializer(), reply.body)
@@ -120,7 +141,7 @@ class HttpSiteApi(
             // A new value each time, so no copy of an earlier answer, from this page load or the last, can match.
             if (fresh) "fresh=${Random.nextInt(1, Int.MAX_VALUE)}" else null,
         )
-        val reply = transport.send("GET", "$api/notes" + query.joinToString("&", prefix = "?").takeIf { query.isNotEmpty() }.orEmpty(), null)
+        val reply = exchange("GET", "$api/notes" + query.joinToString("&", prefix = "?").takeIf { query.isNotEmpty() }.orEmpty(), null)
         if (!reply.isSuccess) throw SiteApiException("notes: HTTP ${reply.status}")
         return try {
             json.decodeFromString(SiteNotes.serializer(), reply.body)
@@ -132,7 +153,7 @@ class HttpSiteApi(
     override suspend fun sendFeedback(api: String, draft: FeedbackDraft) {
         draft.problems.firstOrNull()?.let { throw SiteApiException(it) }
         val body = json.encodeToString(FeedbackDraft.serializer(), draft.normalized())
-        val reply = transport.send("POST", "$api/feedback", body)
+        val reply = post("$api/feedback", body, unsent = "The note could not be sent. Check the connection and try again.")
         if (reply.isSuccess) return
         throw SiteApiException(serverSentence(reply.body) ?: "The note could not be sent (HTTP ${reply.status}). Try again, or email me.")
     }
@@ -142,14 +163,14 @@ class HttpSiteApi(
         val url = "$api/clicks"
         val body = buildJsonObject { put("link", link) }.toString()
         if (beacon?.send(url, body) == true) return
-        val reply = transport.send("POST", url, body)
+        val reply = exchange("POST", url, body)
         if (!reply.isSuccess) throw SiteApiException("clicks: HTTP ${reply.status}")
     }
 
     override suspend fun sendMessage(api: String, draft: MessageDraft) {
         draft.problems.firstOrNull()?.let { throw SiteApiException(it) }
         val body = json.encodeToString(MessageDraft.serializer(), draft.normalized())
-        val reply = transport.send("POST", "$api/messages", body)
+        val reply = post("$api/messages", body, unsent = "The message could not be sent. Check the connection and try again.")
         if (reply.isSuccess) return
         throw SiteApiException(serverSentence(reply.body) ?: "The message could not be sent (HTTP ${reply.status}). Try again, or email me.")
     }
@@ -159,5 +180,10 @@ class HttpSiteApi(
         json.parseToJsonElement(body).jsonObject["error"]?.jsonPrimitive?.content
     } catch (e: Exception) {
         null
+    }
+
+    internal companion object {
+        /** Past the desktop's and the phone's own timeouts (10 s to connect, 15 s to answer), so theirs speak first. */
+        val TIMEOUT = 20.seconds
     }
 }

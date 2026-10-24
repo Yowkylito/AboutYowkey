@@ -140,6 +140,19 @@ kotlin {
     }
 }
 
+/**
+ * The Compose compiler's stability reports, on request only: `./gradlew -PcomposeReports :composeApp:compileKotlinJvm
+ * --rerun` writes which composables skip and which parameters are unstable to build/compose (the destinations are not
+ * task inputs, so a compile from the build cache writes nothing without --rerun). Off by default, since they slow
+ * every compile and nothing reads them in CI.
+ */
+composeCompiler {
+    if (providers.gradleProperty("composeReports").isPresent) {
+        reportsDestination = layout.buildDirectory.dir("compose/reports")
+        metricsDestination = layout.buildDirectory.dir("compose/metrics")
+    }
+}
+
 compose.resources {
     packageOfResClass = "dev.yowkey.portfolio.resources"
     generateResClass = always

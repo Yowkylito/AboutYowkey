@@ -1,13 +1,13 @@
 package dev.yowkey.portfolio.ui.sections
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
@@ -20,10 +20,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.SaveableStateHolder
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.liveRegion
@@ -37,12 +40,54 @@ import dev.yowkey.portfolio.model.MessageTopic
 import dev.yowkey.portfolio.ui.MessageUiState
 
 /**
- * The private message form, first under the Contact block: name (optional), how to reach you (required), what it is
- * about (one of four chips, or none), the message, Send. Its title carries a "Private" badge and its intro says only
- * the owner reads it, against the note form's "Public" further down. [state] is the ViewModel's, as for the note
- * form: while a message is on its way the button waits; a failure's sentence shows beside it, read out when it
- * appears; once sent, the form gives way to a thank-you and "Send another". The draft is saveable, so scrolling the
- * row off the screen and back keeps it.
+ * The message section, first under the Contact block: its title with the "Private" badge, a line saying that only the
+ * owner reads a message, against the Feedback section's "Public" further down, and the button that opens the form
+ * over the page ([MessageDialog]). Filled, as the page's main way to reach the owner after email.
+ */
+@Composable
+fun MessageSection(onOpen: () -> Unit, modifier: Modifier = Modifier, opener: FocusRequester? = null) {
+    FormSection(
+        MessageCopy.TITLE, MessageCopy.PRIVATE, MessageCopy.INTRO, MessageCopy.OPEN,
+        primary = true, onOpen = onOpen, opener = opener, modifier = modifier,
+    )
+}
+
+/**
+ * The private message form over the page. [drafts] keeps the draft while the dialog is closed, so it is there again
+ * when the dialog reopens. Once a message is sent the thank-you shows here; "Send another", or closing the dialog on
+ * the thank-you ([onClose]), goes back to the empty form ([onReset]) and forgets the sent draft, so the next message
+ * starts empty.
+ */
+@Composable
+fun MessageDialog(
+    state: MessageUiState,
+    onSend: (MessageDraft) -> Unit,
+    onReset: () -> Unit,
+    wide: Boolean,
+    onClose: () -> Unit,
+    drafts: SaveableStateHolder = rememberSaveableStateHolder(),
+) {
+    val reset = {
+        drafts.removeState(DRAFT_KEY)
+        onReset()
+    }
+    FormDialog(
+        MessageCopy.TITLE, MessageCopy.PRIVATE, MessageCopy.CLOSE,
+        onClose = {
+            if (state is MessageUiState.Sent) reset()
+            onClose()
+        },
+    ) {
+        MessageForm(state, onSend, reset, wide, drafts = drafts)
+    }
+}
+
+/**
+ * The private message form: name (optional), how to reach you (required), what it is about (one of four chips, or
+ * none), the message, Send. [state] is the ViewModel's, as for the note form: while a message is on its way the button
+ * waits; a failure's sentence shows beside it, read out when it appears; once sent, the form gives way to a thank-you
+ * and "Send another". The draft's fields are saveable, kept in [drafts] while the form is not on screen (its dialog
+ * closed, or the thank-you up).
  */
 @Composable
 fun MessageForm(
@@ -51,12 +96,11 @@ fun MessageForm(
     onReset: () -> Unit,
     wide: Boolean,
     modifier: Modifier = Modifier,
+    drafts: SaveableStateHolder = rememberSaveableStateHolder(),
 ) {
-    Column(modifier.widthIn(max = 640.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        FormTitle(MessageCopy.TITLE, MessageCopy.PRIVATE)
-        val intro = MaterialTheme.typography.bodyMedium
-        Text(MessageCopy.INTRO, style = intro, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.readingMeasure(intro))
-        if (state is MessageUiState.Sent) SentMessage(onReset) else MessageDraftForm(state, onSend, wide)
+    Box(modifier) {
+        if (state is MessageUiState.Sent) SentMessage(onReset)
+        else drafts.SaveableStateProvider(DRAFT_KEY) { MessageDraftForm(state, onSend, wide) }
     }
 }
 
@@ -81,6 +125,7 @@ private fun MessageDraftForm(state: MessageUiState, onSend: (MessageDraft) -> Un
                 placeholder = { Text("Optional") },
                 singleLine = true,
                 enabled = !sending,
+                colors = formFieldColors(),
             )
         }
         val contactField: @Composable (Modifier) -> Unit = { fieldModifier ->
@@ -97,6 +142,7 @@ private fun MessageDraftForm(state: MessageUiState, onSend: (MessageDraft) -> Un
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                 isError = problem != null && contact.isBlank(),
                 enabled = !sending,
+                colors = formFieldColors(),
             )
         }
         if (wide) {
@@ -120,6 +166,7 @@ private fun MessageDraftForm(state: MessageUiState, onSend: (MessageDraft) -> Un
             supportingText = { Text("${message.length} / ${MessageDraft.MAX_MESSAGE}") },
             isError = problem != null && message.isBlank(),
             enabled = !sending,
+            colors = formFieldColors(),
         )
         val shown = problem ?: (state as? MessageUiState.Failed)?.message
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -174,7 +221,10 @@ private fun TopicChips(topic: String, onPick: (MessageTopic) -> Unit, enabled: B
 @Composable
 private fun SentMessage(onReset: () -> Unit) {
     Column(Modifier.semantics { liveRegion = LiveRegionMode.Polite }, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(MessageCopy.THANKS, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
+        Text(MessageCopy.THANKS, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
         OutlinedButton(onClick = onReset) { Text(MessageCopy.ANOTHER) }
     }
 }
+
+/** Where [MessageDialog] keeps the draft in its [SaveableStateHolder] while it is closed. */
+private const val DRAFT_KEY = "message-draft"

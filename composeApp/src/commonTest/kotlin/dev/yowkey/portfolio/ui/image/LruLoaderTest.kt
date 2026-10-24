@@ -26,6 +26,24 @@ class LruLoaderTest {
         assertEquals(listOf("a", "b", "c", "b"), loads, "a was served from cache; b had to load again")
     }
 
+    /** A peek answers from the cache alone, at once, and counts as a use: a peeked entry is the last to go. */
+    @Test
+    fun peeksWithoutLoading() = runTest {
+        val loads = mutableListOf<String>()
+        val loader = LruLoader<String, String>(capacity = 2, dispatcher = StandardTestDispatcher(testScheduler)) {
+            loads += it
+            it.uppercase()
+        }
+
+        assertEquals(null, loader.peek("a"), "not cached: nothing, and nothing loaded")
+        loader.get("a")
+        loader.get("b")
+        assertEquals("A", loader.peek("a"))
+        loader.get("c") // evicts b, the peek having touched a
+        assertEquals(listOf("a", "c"), loader.cachedKeys())
+        assertEquals(listOf("a", "b", "c"), loads)
+    }
+
     /** As the viewer cache weighs them: a still is big, a clip (file + one frame) is a fraction of it. */
     @Test
     fun weighsEntriesAgainstOneBudget() = runTest {

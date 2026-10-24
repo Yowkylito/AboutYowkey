@@ -39,7 +39,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfoV2
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -74,12 +73,18 @@ import dev.yowkey.portfolio.ui.components.rememberRevealProgress
 import dev.yowkey.portfolio.ui.sections.AwardList
 import dev.yowkey.portfolio.ui.sections.CardRow
 import dev.yowkey.portfolio.ui.sections.ContactBlock
-import dev.yowkey.portfolio.ui.sections.FeedbackForm
+import dev.yowkey.portfolio.ui.sections.ContactForm
+import dev.yowkey.portfolio.ui.sections.ContactForms
+import dev.yowkey.portfolio.ui.sections.FeedbackDialog
+import dev.yowkey.portfolio.ui.sections.FeedbackSection
 import dev.yowkey.portfolio.ui.sections.Footer
 import dev.yowkey.portfolio.ui.sections.GroupHeader
 import dev.yowkey.portfolio.ui.sections.Hero
+import dev.yowkey.portfolio.ui.sections.HeroEntrance
 import dev.yowkey.portfolio.ui.sections.JobEntry
-import dev.yowkey.portfolio.ui.sections.MessageForm
+import dev.yowkey.portfolio.ui.sections.MessageDialog
+import dev.yowkey.portfolio.ui.sections.MessageSection
+import dev.yowkey.portfolio.ui.sections.rememberContactForms
 import dev.yowkey.portfolio.ui.sections.MoreNotesButton
 import dev.yowkey.portfolio.ui.sections.NoteCards
 import dev.yowkey.portfolio.ui.sections.ProjectCard
@@ -88,12 +93,12 @@ import dev.yowkey.portfolio.ui.sections.ServiceCard
 import dev.yowkey.portfolio.ui.sections.SkillGroups
 import dev.yowkey.portfolio.ui.sections.StarNotesSheet
 import dev.yowkey.portfolio.ui.sections.WorkCard
+import dev.yowkey.portfolio.ui.sections.rememberHeroEntrance
 import dev.yowkey.portfolio.ui.detail.ProjectDetailScreen
 import dev.yowkey.portfolio.ui.navigation.Navigator
 import dev.yowkey.portfolio.ui.navigation.PageReading
 import dev.yowkey.portfolio.ui.navigation.ReadingFrame
 import dev.yowkey.portfolio.ui.navigation.Route
-import dev.yowkey.portfolio.ui.navigation.formFocus
 import dev.yowkey.portfolio.ui.navigation.rememberBackToTopShown
 import dev.yowkey.portfolio.ui.navigation.rememberPageReading
 import dev.yowkey.portfolio.ui.theme.LocalReducedMotion
@@ -293,6 +298,8 @@ private fun PortfolioContent(
     }
     val seen = remember { mutableSetOf<Any>() }
     val proofReveal = rememberProofReveal()
+    val heroEntrance = rememberHeroEntrance()
+    val forms = rememberContactForms()
     val reducedMotion = LocalReducedMotion.current
     val project = remember(portfolio, route) {
         (route as? Route.Project)?.let { r -> portfolio.projects.firstOrNull { it.id == r.id } }
@@ -317,8 +324,8 @@ private fun PortfolioContent(
         label = "screen",
     ) { shown ->
         if (shown == null) {
-            // The star sheet covers the page: the keys and Back to top stand aside while it is open.
-            val uncovered = showingList && notesControls.sheet == null
+            // The star sheet or a form's dialog covers the page: the keys and Back to top stand aside while one is open.
+            val uncovered = showingList && notesControls.sheet == null && forms.open == null
             ReadingFrame(reading, enabled = uncovered) {
                 PortfolioPage(
                     portfolio = portfolio,
@@ -327,8 +334,10 @@ private fun PortfolioContent(
                     listState = listState,
                     reading = reading,
                     seen = seen,
-                    // Read from the current route, not this child's: the list fading out must stop its covers now.
-                    coversActive = showingList && !reducedMotion,
+                    // Read from the current route, not this child's: the list fading out must stop its covers now. A
+                    // form's dialog stops them too: on the web a playing cover is a video element over the canvas,
+                    // which would show through the dialog.
+                    coversActive = showingList && !reducedMotion && forms.open == null,
                     visits = visits,
                     notes = notes,
                     feedback = feedback,
@@ -338,6 +347,8 @@ private fun PortfolioContent(
                     notesControls = notesControls,
                     coverKeepClear = { if (backToTop.value && uncovered) keepClearPx else 0 },
                     proofReveal = proofReveal,
+                    heroEntrance = heroEntrance,
+                    forms = forms,
                 )
                 BackToTop(
                     visible = { backToTop.value && uncovered },
@@ -352,8 +363,10 @@ private fun PortfolioContent(
 }
 
 /**
- * The page's list. [reading] runs its section jumps and learns from its form rows when the focus is in a form (see
- * [ReadingFrame], which hosts this). [proofReveal] is the bar's proof's entrance, kept by the caller so it plays once.
+ * The page's list. [reading] runs its section jumps (see [ReadingFrame], which hosts this). [proofReveal] is the bar's
+ * proof's entrance and [heroEntrance] the hero's, kept by the caller so each plays once. [forms] is which of the
+ * Contact section's forms is open over the page and the drafts they keep, kept by the caller above the list/detail
+ * switch, so a draft outlives a visit to a project's page.
  */
 @Composable
 fun PortfolioPage(
@@ -374,6 +387,8 @@ fun PortfolioPage(
     notesControls: NotesControls = NotesControls(),
     coverKeepClear: () -> Int = { 0 },
     proofReveal: ProofReveal = rememberProofReveal(),
+    heroEntrance: HeroEntrance = rememberHeroEntrance(),
+    forms: ContactForms = rememberContactForms(),
 ) {
     val items = remember(portfolio, layout, notes) {
         buildPageItems(
@@ -400,25 +415,7 @@ fun PortfolioPage(
     val navigate: (Section) -> Unit = remember(starts, jumpTo) { { section -> starts[section]?.let(jumpTo) } }
     // The bar's proof leads to the notes, which it sums up: their dashboard, landing as a section's header does.
     val openNotes: () -> Unit = remember(items, jumpTo) { { notesRow(items)?.let(jumpTo) } }
-    // Recomputed on every scroll frame (a few visible rows), but readers are only told when the set of ids changes.
-    val playingCovers = remember(items, coversActive) {
-        derivedStateOf {
-            if (!coversActive) return@derivedStateOf emptySet()
-            val info = listState.layoutInfo
-            CoverPlayback.select(
-                info.visibleItemsInfo.mapNotNull { visible ->
-                    val row = items.getOrNull(visible.index) as? PageItem.Projects ?: return@mapNotNull null
-                    val clear = CoverPlayback.clearOf(visible.offset, visible.size, info.viewportEndOffset, coverKeepClear())
-                    CoverPlayback.VisibleRow(
-                        coverClipIds = row.projects.filter { it.coverClip != null }.map { it.id },
-                        visibleFraction = if (!clear) 0f else CoverPlayback.visibleFraction(
-                            visible.offset, visible.size, info.viewportStartOffset, info.viewportEndOffset,
-                        ),
-                    )
-                },
-            )
-        }
-    }
+    val playingCovers = rememberPlayingCovers(listState, items, coversActive, coverKeepClear)
     val isCoverPlaying: (String) -> Boolean = remember(playingCovers) { { id -> id in playingCovers.value } }
 
     Column(modifier.fillMaxSize()) {
@@ -432,7 +429,16 @@ fun PortfolioPage(
             maxWidth = PageLayout.MaxWidth,
             scrolled = { listState.canScrollBackward },
             // A derived state: the bar hears of it only when it flips. The progress is read in the bar's draw phase.
-            heroPassed = rememberHeroPassed(listState),
+            // Where the hero's name ends in its row (its top spacing, then the hero's own measure): the bar takes the
+            // name up once that is under it.
+            heroPassed = rememberHeroPassed(
+                listState,
+                nameEnd = remember(heroEntrance, items, layout, density) {
+                    val top = with(density) { items.firstOrNull { it is PageItem.Hero }?.topSpacing(layout)?.roundToPx() ?: 0 }
+                    val end: () -> Int = { heroEntrance.nameEnd.let { if (it > 0) top + it else 0 } }
+                    end
+                },
+            ),
             progress = { listState.layoutInfo.readingProgress() },
             stats = stats,
             onOpenNotes = openNotes,
@@ -441,13 +447,11 @@ fun PortfolioPage(
         )
         LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
             items(items, key = { it.key }, contentType = { it::class.simpleName }) { item ->
-                val progress = rememberRevealProgress(item.key, seen, reducedMotion)
-                // A form row scrolled away with the focus in it goes without a word: let the reading keys back in.
-                if (item.holdsForm) DisposableEffect(item.key) { onDispose { reading.formFocusChanged(item.key, focused = false) } }
+                // The hero brings itself in (its HeroEntrance), so its row shows as it is.
+                val progress = rememberRevealProgress(item.key, seen, reducedMotion || item is PageItem.Hero)
                 Box(
                     Modifier
                         .fillMaxWidth()
-                        .then(if (item.holdsForm) Modifier.formFocus(reading, item.key) else Modifier)
                         .graphicsLayer {
                             alpha = progress.value
                             translationY = (1f - progress.value) * 28.dp.toPx()
@@ -463,12 +467,23 @@ fun PortfolioPage(
                     ) {
                         PageRow(
                             item, layout, platformLabel, numbered.indexOf(item.section) + 1, navigate, onOpenProject, isCoverPlaying,
-                            feedback, message, onOpenLink, notes, notesControls,
+                            forms, onOpenLink, notes, notesControls, heroEntrance,
                         )
                     }
                 }
             }
         }
+    }
+    // Over the page, not in their rows: a form's dialog stays whatever the list does underneath, even when the
+    // keyboard shortens the page and the row that opened it leaves the composition.
+    when (forms.open) {
+        ContactForm.Message -> MessageDialog(
+            message.state, message.onSend, message.onReset, wide = !layout.compact, onClose = forms::close, drafts = forms.drafts,
+        )
+        ContactForm.Feedback -> FeedbackDialog(
+            feedback.state, feedback.onSend, feedback.onReset, wide = !layout.compact, onClose = forms::close, drafts = forms.drafts,
+        )
+        null -> Unit
     }
     // Over the page, not in the dashboard's row: the sheet stays whatever the list does underneath.
     notesControls.sheet?.let { sheet ->
@@ -485,7 +500,7 @@ fun PortfolioPage(
 private fun PageItem.topSpacing(layout: PageLayout): Dp = when {
     this is PageItem.Hero -> if (layout.compact) 40.dp else 96.dp
     this is PageItem.Footer -> 96.dp
-    // The message form, the notes' dashboard, the note form: apart from what is above each, closer than a new section.
+    // The message, the notes' dashboard, the feedback: apart from what is above each, closer than a new section.
     this is PageItem.Message || this is PageItem.Ratings || this is PageItem.Feedback -> if (layout.compact) 48.dp else 64.dp
     this is PageItem.Notes && row == 0 -> 24.dp
     this is PageItem.MoreNotes -> 24.dp
@@ -505,11 +520,11 @@ private fun PageRow(
     onNavigate: (Section) -> Unit,
     onOpenProject: (String) -> Unit,
     isCoverPlaying: (String) -> Boolean,
-    feedback: FeedbackControls,
-    message: MessageControls,
+    forms: ContactForms,
     onOpenLink: (Link) -> Unit,
     notes: SiteNotes?,
     notesControls: NotesControls,
+    heroEntrance: HeroEntrance,
 ) {
     when (item) {
         is PageItem.Hero -> SelectionContainer {
@@ -519,6 +534,7 @@ private fun PageRow(
                 wide = layout.wideSections,
                 onSeeProjects = { onNavigate(Section.Projects) },
                 onContact = { onNavigate(Section.Contact) },
+                entrance = heroEntrance,
             )
         }
         is PageItem.Services -> SectionFrame(item, number, layout) {
@@ -555,7 +571,7 @@ private fun PageRow(
             ContactBlock(item.email, item.links, onOpenLink = onOpenLink)
         }
         PageItem.Message -> SectionFrame(item, number, layout) {
-            MessageForm(message.state, message.onSend, message.onReset, wide = !layout.compact)
+            MessageSection(onOpen = { forms.open(ContactForm.Message) }, opener = forms.opener(ContactForm.Message))
         }
         PageItem.Ratings -> SectionFrame(item, number, layout) {
             if (notes != null) RatingsDashboard(notes, notesControls.loading, notesControls.onOpenSheet, wide = !layout.compact)
@@ -567,7 +583,7 @@ private fun PageRow(
             MoreNotesButton(notesControls.loading, notesControls.onMore)
         }
         PageItem.Feedback -> SectionFrame(item, number, layout) {
-            FeedbackForm(feedback.state, feedback.onSend, feedback.onReset, wide = !layout.compact)
+            FeedbackSection(onOpen = { forms.open(ContactForm.Feedback) }, opener = forms.opener(ContactForm.Feedback))
         }
         PageItem.Footer -> Footer(platformLabel)
     }
@@ -612,14 +628,11 @@ private fun PageItem.landingInto(layout: PageLayout): Dp =
     if (this is PageItem.Hero) 0.dp else (topSpacing(layout) - HeaderLanding).coerceAtLeast(0.dp)
 
 /**
- * Where the bar's proof leads: the notes' dashboard, once the backend has answered with them; before that, the note
- * form; null without a backend, which has no proof to show either.
+ * Where the bar's proof leads: the notes' dashboard, once the backend has answered with them; before that, the
+ * Feedback section and its button; null without a backend, which has no proof to show either.
  */
 internal fun notesRow(items: List<PageItem>): Int? =
     items.indexOf(PageItem.Ratings).takeIf { it >= 0 } ?: items.indexOf(PageItem.Feedback).takeIf { it >= 0 }
-
-/** The rows with text fields: while the focus is in one, the reading keys leave its keys alone. */
-private val PageItem.holdsForm: Boolean get() = this == PageItem.Message || this == PageItem.Feedback
 
 @Composable
 fun LoadingPage(modifier: Modifier = Modifier) {

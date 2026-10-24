@@ -18,12 +18,16 @@ import dev.yowkey.portfolio.model.Screenshot
 import dev.yowkey.portfolio.model.Service
 import dev.yowkey.portfolio.model.SkillGroup
 import dev.yowkey.portfolio.ui.Section
+import dev.yowkey.portfolio.ui.sections.HeroMotion
+import dev.yowkey.portfolio.ui.sections.HeroStage
+import dev.yowkey.portfolio.ui.sections.SystemFontWidth
 import dev.yowkey.portfolio.validJson
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class StaticHtmlTest {
@@ -106,17 +110,109 @@ class StaticHtmlTest {
     }
 
     /**
-     * The availability is the hero's eyebrow, not the bar's: the bar has no pill any more, with an availability or
-     * without, and with a backend or without.
+     * The location and the availability stay in the content file but show on neither the bar nor the hero: the bar
+     * has no pill and the hero no eyebrow, with a backend or without.
      */
     @Test
-    fun theAvailabilityIsTheHerosNotTheBars() {
-        val owner = everySection.copy(profile = everySection.profile.copy(availability = "Open to relocation to any Country"))
+    fun theLocationAndTheAvailabilityShowOnNeitherTheBarNorTheHero() {
+        val owner = everySection.copy(
+            profile = everySection.profile.copy(location = "Quezon City, Philippines", availability = "Open to relocation to any Country"),
+        )
         listOf(owner, owner.copy(api = "https://api.example")).forEach {
             val bar = StaticHtml.bar(it)
             assertFalse("class=\"pill\"" in bar || "class=\"dot\"" in bar || "Open to relocation" in bar, bar)
-            assertTrue("<p class=\"eyebrow\">Open to relocation to any Country</p>" in StaticHtml.content(it))
+            val hero = StaticHtml.content(it).substringBefore("</header>")
+            assertFalse("class=\"eyebrow\"" in hero || "Open to relocation" in hero || "Quezon City" in hero, hero)
         }
+    }
+
+    /**
+     * The static hero plays the app's entrance, written from its timeline, so the app can take over mid-flight: only
+     * where motion is welcome and scripts run, the steps in reading order a stagger apart, and a clock as long as the
+     * entrance for the app to read. Every rule outside the guard is a keyframe, so without it nothing moves or hides.
+     */
+    @Test
+    fun theStaticHeroPlaysTheAppsEntranceOnlyWhereMotionIsWelcome() {
+        val css = StaticHtml.heroMotion()
+        assertTrue(css.startsWith("@media (prefers-reduced-motion: no-preference) {\n"), css.take(80))
+        val (guarded, rest) = css.split("\n}\n", limit = 2)
+        assertTrue("  .js .hero { animation: hero-intro ${HeroMotion.END_MS}ms linear both; }" in guarded, guarded)
+        assertTrue(guarded.lines().drop(1).all { it.startsWith("  .js .hero") }, "every rule needs the script and is the hero's")
+        assertTrue(rest.lines().filter { it.isNotBlank() }.all { it.startsWith("@keyframes hero-") }, rest)
+        listOf("hgroup > h1", ".headline", ".proof", ".links", ".links + p").forEachIndexed { i, step ->
+            val delay = HeroMotion.TEXT_AT_MS + i * HeroMotion.TEXT_STAGGER_MS
+            assertTrue("  .js .hero > $step { animation-delay: ${delay}ms; }" in guarded, "step $i, $step, at $delay ms")
+        }
+        val dash = Regex("hero-dash ${HeroMotion.DASH_MS}ms (linear\\([^)]*\\))").find(guarded)?.groupValues?.get(1)
+        assertTrue(dash != null && dash.startsWith("linear(0 0%, ") && dash.endsWith(", 1 100%)"), "the dash's spring, from 0 to 1: $dash")
+        assertFalse(Regex("\\d[eE][-+]?\\d").containsMatchIn(css), "a number CSS cannot read")
+        val page = StaticHtml.page(portfolio, "<style>{{heroMotion}}</style>{{content}}", "b")
+        assertTrue("<style>$css</style>" in page, "the template's styles carry it")
+        assertFalse("class=\"shout\"" in page, "the portrait has no sound lines")
+    }
+
+    private val owner = portfolio.copy(
+        profile = portfolio.profile.copy(
+            name = "Rodelito Tangonan",
+            headline = "Android Developer at DigiPlus since 2024 · Kotlin, Jetpack Compose, Clean Architecture",
+            photo = "portrait.webp",
+        ),
+    )
+
+    /**
+     * The name, then the role under it, then the headline with its lead marked, in reading order; the role in spans
+     * that the stage's rules hide from the end to cut it at whole words, reading whole without styles.
+     */
+    @Test
+    fun theHeroCarriesTheNameTheRoleAndTheHeadlineEachOnce() {
+        val hero = StaticHtml.content(owner).substringBefore("</header>")
+        val markup = listOf(
+            "<span class=\"trail\">\n<span class=\"echo\">",
+            "<hgroup>\n<h1>Rodelito Tangonan</h1>\n<p class=\"role\">Android Developer<span class=\"c1\"> at DigiPlus</span>" +
+                "<span class=\"c0\"> since 2024</span></p>\n</hgroup>",
+            "<p class=\"headline\"><span class=\"lead\">Android Developer at DigiPlus since 2024 · </span>" +
+                "Kotlin, Jetpack Compose, Clean Architecture</p>",
+        )
+        markup.forEach { assertTrue(it in hero, "the hero lacks $it\n$hero") }
+        val order = listOf("<figure", "<h1>", "class=\"role\"", "class=\"headline\"").map { hero.indexOf(it) }
+        assertEquals(order.sorted(), order, "portrait, name, role, headline")
+        val bare = StaticHtml.content(owner.copy(profile = owner.profile.copy(headline = "Engineer", photo = null)))
+        assertTrue("<hgroup class=\"whole\">\n<h1>Rodelito Tangonan</h1>\n</hgroup>\n<p class=\"headline\">Engineer</p>" in bare, bare)
+    }
+
+    /**
+     * The stage's rules follow [HeroStage]'s rule with the static page's estimate, width by width: on a 412px phone
+     * (a 372px hero) the name and the whole role stand on the stage and the headline keeps only its rest; at 360px
+     * they do not, and nothing is said about it; the tablet's taller stage takes the name at 36px. Each range rests
+     * the trail drawn back and, where motion is welcome, follows the staged timeline.
+     */
+    @Test
+    fun theStageRulesFollowTheRuleWidthByWidth() {
+        val css = StaticHtml.heroStage(owner.profile)
+        val phone = Regex("@media \\(max-width: 599px\\) \\{ @container hero ([^{]+) \\{\n([\\s\\S]*?)\n\\} \\}").findAll(css).toList()
+        assertTrue(phone.isNotEmpty(), css)
+        val first = Regex("\\((\\d+)px <= width|width >= (\\d+)px").find(phone.first().groupValues[1])!!.groupValues
+        val from = (first[1].ifEmpty { first[2] }).toInt()
+        assertNull(HeroStage.plan(owner.profile.name, HeroStage.roleOf(owner.profile.headline), from - 1f, 168f, 1f, SystemFontWidth))
+        assertNotNull(HeroStage.plan(owner.profile.name, HeroStage.roleOf(owner.profile.headline), from.toFloat(), 168f, 1f, SystemFontWidth))
+        assertTrue(from in 321..372, "staged from a ${from}px hero: a 412px phone, not a 360px one")
+        val at372 = phone.first { range ->
+            val bounds = Regex("\\d+").findAll(range.groupValues[1]).map { it.value.toInt() }.toList()
+            372 >= bounds[0] && (bounds.size == 1 || 372 < bounds[1])
+        }.groupValues[2]
+        listOf(
+            "  .hero .portrait ~ hgroup h1 { margin: 0; font-size: 30px;",
+            "color: var(--on-stage); text-wrap: wrap; }",
+            "  .hero .portrait ~ .headline .lead, .hero .portrait ~ hgroup.whole + .headline { display: none; }",
+            "  .hero .portrait .trail { --reach: 0.35; --mask: 1;",
+        ).forEach { assertTrue(it in at372, "a 372px hero lacks $it\n$at372") }
+        assertFalse(".c0" in at372, "the whole role")
+        assertTrue("@media (min-width: 600px) and (max-width: 839px) { @container hero (width >= " in css)
+        assertTrue("font-size: 36px;" in css, "the tablet's name")
+        val motion = "@media (max-width: 599px) and (prefers-reduced-motion: no-preference) { @container hero"
+        assertTrue(motion in css && "  .js .hero > hgroup > .role { animation-delay: ${HeroMotion.NAME_AT_MS + HeroMotion.NAME_STAGGER_MS}ms; }" in css)
+        assertTrue("  .js .hero .portrait .trail { animation: hero-back ${HeroMotion.DRAW_BACK_MS}ms linear(" in css)
+        assertEquals("", StaticHtml.heroStage(owner.profile.copy(photo = null)), "no portrait, no stage")
     }
 
     /** One link per section the page has, to its id, in its order, under the app's names for them. */
@@ -221,6 +317,51 @@ class StaticHtmlTest {
         assertFalse("</script><b>" in page)
     }
 
+    /**
+     * `<!--<script>` would send the parser into the script's "double escaped" state, where the element's own
+     * `</script>` no longer ends it and the rest of the page is swallowed. No `<` at all reaches the JSON-LD.
+     */
+    @Test
+    fun jsonLdHasNoAngleBracketToOpenAnythingWith() {
+        val hostile = portfolio.copy(profile = portfolio.profile.copy(summary = "<!--<script> a < b"))
+        val page = StaticHtml.page(hostile, "<script>{{jsonLd}}</script><main></main>", "949ee26")
+        val script = page.substringAfter("<script>").substringBefore("</script>")
+        assertFalse('<' in script, script)
+        assertTrue("\\u003c!--\\u003cscript> a \\u003c b" in script, "still the same JSON: $script")
+        assertTrue(page.endsWith("</script><main></main>"))
+    }
+
+    /**
+     * The policy allows each inline script by its hash (the boot script's with the build id in it), never the JSON-LD
+     * data block, and lets requests and form posts reach the backend's origin and nowhere else.
+     */
+    @Test
+    fun theContentSecurityPolicyNamesThePagesOwnScriptsAndBackend() {
+        val withApi = portfolio.copy(api = "https://api.example.dev")
+        val template = "<meta http-equiv=\"Content-Security-Policy\" content=\"{{csp}}\">" +
+            "<script type=\"application/ld+json\">{{jsonLd}}</script><script>theme()</script>" +
+            "<script>load(\"composeApp.js?v={{build}}\")</script>"
+        val page = StaticHtml.page(withApi, template, "949ee26")
+        val policy = page.substringAfter("content=\"").substringBefore('"').replace("&#39;", "'")
+        assertTrue("script-src 'self' 'wasm-unsafe-eval' ${Sha256.cspSource("theme()")} " +
+            "${Sha256.cspSource("load(\"composeApp.js?v=949ee26\")")};" in policy, policy)
+        assertTrue("connect-src 'self' https://api.example.dev;" in policy, policy)
+        assertTrue("form-action https://api.example.dev;" in policy, policy)
+        assertTrue("object-src 'none'" in policy && "base-uri 'self'" in policy && "default-src 'self'" in policy, policy)
+        assertFalse("unsafe-inline' 'sha" in policy || Regex("script-src[^;]*unsafe-inline").containsMatchIn(policy), policy)
+
+        val none = StaticHtml.page(portfolio.copy(api = null), template, "949ee26")
+        assertTrue("form-action &#39;none&#39;" in none, "no backend: no form may post anywhere")
+    }
+
+    /** A value that happens to contain `{{content}}` is text, not a second place for the content to land. */
+    @Test
+    fun placeholdersAreFilledOnceAndNeverInsideAValue() {
+        val tricky = portfolio.copy(profile = portfolio.profile.copy(summary = "Ask me about {{content}} or {{build}}"))
+        val page = StaticHtml.page(tricky, "<meta content=\"{{description}}\"><main>{{content}}</main>", "949ee26")
+        assertTrue("<meta content=\"Ask me about {{content}} or {{build}}\">" in page, page.substringBefore("<main>"))
+    }
+
     private val media = Screenshot("ride.webp", "A \"ride\" <clip>", 480, 270)
 
     @Test
@@ -312,7 +453,8 @@ class StaticHtmlTest {
                 "the bar for $it stars",
             )
         }
-        assertEquals(5, Regex("aria-haspopup=\"dialog\"").findAll(html).count(), "only the five bars open the sheet")
+        assertEquals(5, Regex("aria-haspopup=\"dialog\"").findAll(bars).count(), "the five bars open the sheet")
+        assertEquals(7, Regex("aria-haspopup=\"dialog\"").findAll(html).count(), "and only they and the two forms' buttons open a dialog")
         assertFalse("aria-pressed" in bars, "a bar is no longer a filter")
         assertFalse("filtering" in html)
     }
@@ -325,7 +467,7 @@ class StaticHtmlTest {
     @Test
     fun theStarSheetIsOnThePageReadyToFill() {
         val html = StaticHtml.content(portfolio.copy(api = "https://api.example"))
-        val notes = html.substringAfter("<div class=\"visitor-notes\"").substringBefore("<h3 id=\"feedback\">")
+        val notes = html.substringAfter("<div class=\"visitor-notes\"").substringBefore("<div class=\"form-entry\">\n<h3 id=\"feedback\">")
         val sheet = notes.substringAfter("<dialog ", missingDelimiterValue = "").substringBefore("</dialog>")
         assertTrue(sheet.startsWith("class=\"star-sheet\" aria-labelledby=\"star-sheet-title\">"), "a labelled dialog: ${sheet.take(80)}")
         assertTrue("<h4 id=\"star-sheet-title\"></h4>" in sheet, "the title it is labelled by")
@@ -425,6 +567,111 @@ class StaticHtmlTest {
             contact.indexOf("<form class=\"message\"") in 0 until contact.indexOf("class=\"visitor-notes\""),
             "the private form comes before the published notes and the note form",
         )
+    }
+
+    /** A form's place in the Contact section, its dialog and its form, as [StaticHtml.content] writes them. */
+    private class FormEntry(val entry: String) {
+        /** What the section shows: everything in the entry outside its dialog. */
+        val section = entry.substringBefore("<dialog")
+        val dialog = "<dialog" + entry.substringAfter("<dialog", missingDelimiterValue = "").substringBefore("</dialog>") + "</dialog>"
+    }
+
+    private fun formEntries(html: String): Map<String, FormEntry> =
+        Regex("<div class=\"form-entry\">\\n<h3 id=\"(\\w+)\">([\\s\\S]*?)</dialog>\\n</div>").findAll(html)
+            .associate { it.groupValues[1] to FormEntry(it.value) }
+
+    /**
+     * In the Contact section each form is its title (with the old id, so `#message` and `#feedback` still land
+     * there), its badge, one line and a button: no field at all. The button says it opens a dialog, and which.
+     */
+    @Test
+    fun eachFormIsATitleALineAndAButtonThatOpensItsDialog() {
+        val html = StaticHtml.content(portfolio.copy(api = "https://api.example"))
+        val entries = formEntries(html)
+        assertEquals(listOf("message", "feedback"), entries.keys.toList(), "the private form first, then the public one")
+        val copies = mapOf(
+            "message" to listOf(MessageCopy.TITLE, MessageCopy.PRIVATE, MessageCopy.INTRO, MessageCopy.OPEN),
+            "feedback" to listOf(FeedbackCopy.TITLE, FeedbackCopy.PUBLIC, FeedbackCopy.INTRO, FeedbackCopy.OPEN),
+        )
+        entries.forEach { (id, entry) ->
+            val (title, audience, intro, open) = copies.getValue(id).map { StaticHtml.escape(it) }
+            assertEquals(
+                "<div class=\"form-entry\">\n" +
+                    "<h3 id=\"$id\">$title <span class=\"badge\">$audience</span></h3>\n" +
+                    "<p class=\"note\">$intro</p>\n" +
+                    // Filled for the private form, outlined for the public one, as the app's.
+                    "<button class=\"open-form${if (id == "message") "" else " outlined"}\" type=\"button\" aria-haspopup=\"dialog\" aria-controls=\"$id-dialog\" " +
+                    "commandfor=\"$id-dialog\" command=\"show-modal\">$open</button>\n",
+                entry.section,
+            )
+        }
+        assertEquals("Feedback", FeedbackCopy.TITLE, "the owner's word for the public form")
+        // Outside the dialogs (and the star sheet, which holds no field either), the section asks nothing.
+        val contact = html.substringAfter("<section id=\"contact\">").substringBefore("</section>")
+        val outside = Regex("<dialog[\\s\\S]*?</dialog>").replace(contact, "")
+        listOf("<form", "<input", "<textarea", "<select", "<fieldset", "<label").forEach {
+            assertFalse(it in outside, "the section shows $it outside a dialog")
+        }
+    }
+
+    /**
+     * One modal dialog per form, labelled by its own copy of the title and badge, with a close button and the form
+     * itself, unchanged: the note form's dialog says first what happens to a note (and is described by it).
+     */
+    @Test
+    fun eachFormHasItsOwnDialog() {
+        val api = "https://api.example"
+        val html = StaticHtml.content(portfolio.copy(api = api))
+        assertEquals(3, Regex("<dialog ").findAll(html).count(), "the star sheet and one per form")
+        val entries = formEntries(html)
+        val forms = mapOf("message" to "<form class=\"message\"", "feedback" to "<form class=\"feedback\"")
+        entries.forEach { (id, entry) ->
+            val dialog = entry.dialog
+            val (title, audience) = when (id) {
+                "message" -> MessageCopy.TITLE to MessageCopy.PRIVATE
+                else -> FeedbackCopy.TITLE to FeedbackCopy.PUBLIC
+            }
+            val described = if (id == "feedback") " aria-describedby=\"feedback-dialog-intro\"" else ""
+            assertTrue(
+                dialog.startsWith("<dialog class=\"form-dialog\" id=\"$id-dialog\" aria-labelledby=\"$id-dialog-title\"$described>\n"),
+                dialog.take(160),
+            )
+            val order = listOf(
+                "<div class=\"dialog-head\"><h4 id=\"$id-dialog-title\">${StaticHtml.escape(title)} <span class=\"badge\">$audience</span></h4>",
+                "<button class=\"close\" type=\"button\" aria-label=\"Close\" commandfor=\"$id-dialog\" command=\"close\"><svg",
+                "<div class=\"dialog-body\">",
+                forms.getValue(id) + " method=\"post\" action=\"$api/$id" + (if (id == "message") "s" else "") + "\" data-api=\"$api\">",
+                "<button type=\"submit\">",
+                "<p class=\"status\" role=\"status\" aria-live=\"polite\"></p>\n</form>\n</div>\n</dialog>",
+            )
+            val positions = order.map { dialog.indexOf(it) }
+            assertTrue(positions.none { it < 0 } && positions == positions.sorted(), "$id: order ${order.zip(positions)}")
+            assertEquals(1, Regex("<form ").findAll(dialog).count(), "$id: one form in its dialog")
+            forms.filterKeys { it != id }.values.forEach { assertFalse(it in dialog, "$id's dialog holds the other form") }
+        }
+        assertEquals(MessageCopy.CLOSE, FeedbackCopy.CLOSE)
+        val feedback = entries.getValue("feedback").dialog
+        val intro = "<p class=\"dialog-intro\" id=\"feedback-dialog-intro\">${StaticHtml.escape(FeedbackCopy.FORM_INTRO)}</p>"
+        assertTrue(feedback.indexOf(intro) in 0 until feedback.indexOf("<form "), "what happens to a note, before the form")
+        assertFalse("dialog-intro" in entries.getValue("message").dialog, "the message's line is the section's")
+        // Every button that opens a dialog names one that is on the page.
+        Regex("aria-controls=\"([\\w-]+)\"").findAll(html).map { it.groupValues[1] }.filter { it.endsWith("-dialog") }.toList().let { ids ->
+            assertEquals(listOf("message-dialog", "feedback-dialog"), ids)
+            ids.forEach { assertEquals(1, Regex("<dialog [^>]*id=\"$it\"").findAll(html).count(), "#$it") }
+        }
+    }
+
+    /**
+     * The page's policy blocks inline event handlers (`onclick=`), so the markup has none: the template's scripts
+     * wire everything. Nor does it need any to work: the forms post plainly.
+     */
+    @Test
+    fun theMarkupHasNoInlineHandlers() {
+        val withApi = portfolio.copy(api = "https://api.example")
+        val markup = StaticHtml.bar(withApi) + StaticHtml.content(withApi) + StaticHtml.backToTop()
+        val handler = Regex("<[a-zA-Z][^>]*\\son[a-z]+\\s*=", RegexOption.IGNORE_CASE)
+        assertNull(handler.find(markup)?.value, "an inline handler")
+        assertFalse("javascript:" in markup)
     }
 
     /** With a backend, the profile's LinkedIn and GitHub links name themselves for the page's click beacon. */

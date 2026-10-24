@@ -31,7 +31,7 @@
  * Bindings and settings (wrangler.toml): DB (D1), ALLOWED_ORIGINS, SITE_URL, TIME_ZONE, TRACKED_LINKS. Secrets:
  * ADMIN_TOKEN, VISITOR_SALT, and FCM_SERVICE_ACCOUNT for push (optional: without it alerts are records the app polls).
  */
-import { linkLabel, relationLabel, renderInbox, renderNotice, topicLabel } from "./inbox.js";
+import { linkLabel, PAGE_HEADERS, relationLabel, renderInbox, renderNotice, topicLabel } from "./inbox.js";
 import { notify } from "./push.js";
 
 export const LIMITS = Object.freeze({
@@ -42,7 +42,7 @@ export const LIMITS = Object.freeze({
   notesPerDay: 5,
   /**
    * And at most one every this many minutes (wrangler.toml's NOTE_GAP_MINUTES overrides it), so a burst from one
-   * device is turned away before the day's limit is reached.
+   * address is turned away before the day's limit is reached.
    */
   noteGapMinutes: 5,
   /** Messages one visitor may send in a day; the next gets a 429. */
@@ -58,6 +58,9 @@ export const LIMITS = Object.freeze({
   token: 4096,
   /** Characters of a message or note an alert quotes. */
   preview: 120,
+  /** Wrong owner passwords one address may try in a window of `ownerWindowMinutes`; the next gets a 429. */
+  ownerTries: 10,
+  ownerWindowMinutes: 15,
 });
 
 export const DEFAULT_TIME_ZONE = "Asia/Manila";
@@ -84,7 +87,7 @@ const PUBLIC = "consent = 1 AND hidden_at IS NULL";
 const COUNTED = "rating IS NOT NULL AND hidden_at IS NULL";
 const ENOUGH_FOR_TODAY = "That is plenty for one day, thank you. Try again tomorrow.";
 
-/** The minutes one device waits between notes: NOTE_GAP_MINUTES when it is a whole number (0 turns it off), else 5. */
+/** The minutes one address waits between notes: NOTE_GAP_MINUTES when it is a whole number (0 turns it off), else 5. */
 function noteGapMinutes(env) {
   const set = String(env.NOTE_GAP_MINUTES ?? "").trim();
   return /^\d+$/.test(set) ? Number(set) : LIMITS.noteGapMinutes;
@@ -165,36 +168,54 @@ function localDay(env, now) {
 
 // ---- Visits ----
 
-async function visitCounts(db, today) {
-  const row = await db
+/**
+ * The rows of any day but today (?1) in `visitors` and `clickers`, whose keys start with the day. Written as two
+ * ranges so SQLite seeks them in the key: `day <> ?1` read every one of today's rows, on every new visitor, and D1
+ * bills and limits the rows a query reads (5 million a day on the free plan), so a busy day's reads grew as its square.
+ */
+const NOT_TODAY = "day < ?1 OR day > ?1";
+
+function visitCountsQuery(db, today) {
+  return db
     .prepare(
       "SELECT COALESCE(SUM(count), 0) AS total, MIN(day) AS since, " +
         "COALESCE((SELECT count FROM visits WHERE day = ?1), 0) AS today FROM visits",
     )
-    .bind(today)
-    .first();
+    .bind(today);
+}
+
+function visitTotals(row) {
   return { total: row.total, today: row.today, since: row.since };
 }
 
+async function visitCounts(db, today) {
+  return visitTotals(await visitCountsQuery(db, today).first());
+}
+
+/**
+ * Counts the visit unless this visitor is already counted today, then reads the counts: one batch, so one round
+ * trip to D1 rather than up to five, and one transaction, so the count, the country and the visitor's id are kept
+ * together or not at all (a failure never leaves an id that would keep its visitor from ever being counted today).
+ * The counts go up only while the id is not there yet, which the batch's third statement then puts there.
+ */
 async function recordVisit(request, env, now) {
   const today = localDay(env, now);
   const agent = request.headers.get("User-Agent") || "";
   if (isBot(agent)) return visitCounts(env.DB, today);
   const visitor = await visitorId(request, env, today, agent);
-  const inserted = await env.DB.prepare("INSERT OR IGNORE INTO visitors (day, visitor) VALUES (?1, ?2)").bind(today, visitor).run();
-  if (inserted.meta.changes === 1) {
-    await env.DB
-      .prepare("INSERT INTO visits (day, count) VALUES (?1, 1) ON CONFLICT (day) DO UPDATE SET count = count + 1")
-      .bind(today)
-      .run();
-    await env.DB
-      .prepare("INSERT INTO visit_countries (day, country, count) VALUES (?1, ?2, 1) ON CONFLICT (day, country) DO UPDATE SET count = count + 1")
-      .bind(today, countryOf(request))
-      .run();
+  const db = env.DB;
+  const isNew = "WHERE NOT EXISTS (SELECT 1 FROM visitors WHERE day = ?1 AND visitor = ?2)";
+  const results = await db.batch([
+    db.prepare(`INSERT INTO visits (day, count) SELECT ?1, 1 ${isNew} ON CONFLICT (day) DO UPDATE SET count = count + 1`).bind(today, visitor),
+    db
+      .prepare(`INSERT INTO visit_countries (day, country, count) SELECT ?1, ?3, 1 ${isNew} ON CONFLICT (day, country) DO UPDATE SET count = count + 1`)
+      .bind(today, visitor, countryOf(request)),
+    db.prepare("INSERT OR IGNORE INTO visitors (day, visitor) VALUES (?1, ?2)").bind(today, visitor),
     // An id carries its day, so an earlier day's rows can never match again: nothing about a visitor outlives the day.
-    await env.DB.prepare("DELETE FROM visitors WHERE day <> ?1").bind(today).run();
-  }
-  return visitCounts(env.DB, today);
+    db.prepare(`DELETE FROM visitors WHERE ${NOT_TODAY}`).bind(today),
+    visitCountsQuery(db, today),
+  ]);
+  return visitTotals(results.at(-1).results[0]);
 }
 
 function isBot(agent) {
@@ -208,6 +229,34 @@ function isBot(agent) {
 async function visitorId(request, env, today, agent) {
   const address = request.headers.get("CF-Connecting-IP") || "unknown";
   return sha256Hex(`${today}|${address}|${agent}|${env.VISITOR_SALT || ""}`);
+}
+
+/**
+ * Who is writing, for today's limits on notes and messages: a hash of the day, the sender's network and the salt.
+ * Not the browser, which a sender changes at will, and for IPv6 the /64 a device takes its addresses from. Kept
+ * only for its day (forgetOldSenders): without the browser in it, the salt alone could turn it back into an address.
+ */
+async function senderId(request, env, today) {
+  const address = request.headers.get("CF-Connecting-IP") || "unknown";
+  return sha256Hex(`${today}|sender|${networkOf(address)}|${env.VISITOR_SALT || ""}`);
+}
+
+/** All of an IPv4 address; the first 64 bits of an IPv6 one, written out in full so every spelling agrees. */
+export function networkOf(address) {
+  const value = String(address).trim().toLowerCase();
+  const mapped = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/.exec(value);
+  if (mapped) return mapped[1];
+  if (!value.includes(":")) return value;
+  const [head, tail] = value.split("::");
+  const left = head ? head.split(":") : [];
+  const right = tail ? tail.split(":") : [];
+  const groups = tail === undefined ? left : [...left, ...Array(Math.max(8 - left.length - right.length, 0)).fill("0"), ...right];
+  return `${groups.slice(0, 4).map((group) => group.padStart(4, "0")).join(":")}::/64`;
+}
+
+/** Clears the sender ids of [table]'s rows from before [today]: they only ever held a day's limit. */
+async function forgetOldSenders(db, table, today) {
+  await db.prepare(`UPDATE ${table} SET visitor = '' WHERE visitor <> '' AND day <> ?1`).bind(today).run();
 }
 
 /**
@@ -230,8 +279,8 @@ export function trackedLinks(env) {
 }
 
 /**
- * A click on one of the page's tracked links, counted like a visit: once per visitor per day per link, never for a
- * bot, and the day's ids deleted once a new day's click is counted. The page sends it with `navigator.sendBeacon`,
+ * A click on one of the page's tracked links, counted like a visit (in one batch, the same way): once per visitor per
+ * day per link, never for a bot, and the earlier days' ids deleted. The page sends it with `navigator.sendBeacon`,
  * which posts text/plain (any other type would need a preflight it cannot make), so that is read as JSON too.
  */
 async function recordClick(request, env, now, cors) {
@@ -243,19 +292,19 @@ async function recordClick(request, env, now, cors) {
   if (isBot(agent)) return json({ ok: true, counted: false }, 200, cors);
   const today = localDay(env, now);
   const visitor = await visitorId(request, env, today, agent);
-  const inserted = await env.DB
-    .prepare("INSERT OR IGNORE INTO clickers (day, link, visitor) VALUES (?1, ?2, ?3)")
-    .bind(today, link, visitor)
-    .run();
-  const counted = inserted.meta.changes === 1;
-  if (counted) {
-    await env.DB
-      .prepare("INSERT INTO clicks (day, link, count) VALUES (?1, ?2, 1) ON CONFLICT (day, link) DO UPDATE SET count = count + 1")
-      .bind(today, link)
-      .run();
-    await env.DB.prepare("DELETE FROM clickers WHERE day <> ?1").bind(today).run();
-  }
-  return json({ ok: true, counted }, 200, cors);
+  const db = env.DB;
+  const [, claimed] = await db.batch([
+    db
+      .prepare(
+        "INSERT INTO clicks (day, link, count) SELECT ?1, ?2, 1 " +
+          "WHERE NOT EXISTS (SELECT 1 FROM clickers WHERE day = ?1 AND link = ?2 AND visitor = ?3) " +
+          "ON CONFLICT (day, link) DO UPDATE SET count = count + 1",
+      )
+      .bind(today, link, visitor),
+    db.prepare("INSERT OR IGNORE INTO clickers (day, link, visitor) VALUES (?1, ?2, ?3)").bind(today, link, visitor),
+    db.prepare(`DELETE FROM clickers WHERE ${NOT_TODAY}`).bind(today),
+  ]);
+  return json({ ok: true, counted: claimed.meta.changes === 1 }, 200, cors);
 }
 
 /** A day's clicks as `{ linkedin: 2, github: 1 }`: every tracked link, 0 when nobody clicked it, then any others. */
@@ -381,23 +430,23 @@ async function submitFeedback(request, env, now, cors, alerts) {
   if (problems.length) return reply(body.form, { error: problems[0], problems }, 400, cors, env);
 
   const today = localDay(env, now);
-  const visitor = await visitorId(request, env, today, request.headers.get("User-Agent") || "");
-  const { n, last } = await env.DB
-    .prepare("SELECT COUNT(*) AS n, MAX(created_at) AS last FROM feedback WHERE visitor = ?1")
-    .bind(visitor)
-    .first();
-  if (n >= LIMITS.notesPerDay) return reply(body.form, { error: ENOUGH_FOR_TODAY }, 429, cors, env);
-  const gap = noteGapMinutes(env);
-  const wait = last && gap ? Date.parse(last) + gap * 60000 - now.getTime() : 0;
-  if (wait > 0) return reply(body.form, { error: oneNoteAtATime(gap, wait) }, 429, cors, env);
+  const visitor = await senderId(request, env, today);
   const note = normalizeFeedback(fields);
+  if (await resent(env.DB, "feedback", visitor, note.message, note.rating)) return reply(body.form, { ok: true }, 201, cors, env);
+  const refused = await noteRefusal(env, visitor, now);
+  if (refused) return reply(body.form, { error: refused }, 429, cors, env);
+  const since = new Date(now.getTime() - noteGapMinutes(env) * 60000).toISOString();
+  // The limits again, in the insert itself: notes sent at once all pass the check above before any is kept.
   const { meta } = await env.DB
     .prepare(
       "INSERT INTO feedback (created_at, day, name, contact, rating, message, visitor, consent, relation) " +
-        "VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        "SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9 WHERE (SELECT COUNT(*) FROM feedback WHERE visitor = ?7) < ?10 " +
+        "AND NOT EXISTS (SELECT 1 FROM feedback WHERE visitor = ?7 AND created_at > ?11)",
     )
-    .bind(now.toISOString(), today, note.name, note.contact, note.rating, note.message, visitor, note.consent ? 1 : 0, note.relation)
+    .bind(now.toISOString(), today, note.name, note.contact, note.rating, note.message, visitor, note.consent ? 1 : 0, note.relation, LIMITS.notesPerDay, since)
     .run();
+  if (meta.changes !== 1) return reply(body.form, { error: (await noteRefusal(env, visitor, now)) || ENOUGH_FOR_TODAY }, 429, cors, env);
+  await forgetOldSenders(env.DB, "feedback", today);
   // The owner's alert names the visitor (or "Someone"), never their contact.
   await alertOwner(env, alerts, {
     kind: "feedback",
@@ -406,6 +455,31 @@ async function submitFeedback(request, env, now, cors, alerts) {
     refId: Number(meta.last_row_id),
   });
   return reply(body.form, { ok: true }, 201, cors, env);
+}
+
+/**
+ * Whether this sender (today's id) already sent these words today, with the same stars for a note: a resend after an
+ * answer that never arrived (a timeout, a lost connection, a second press of a plain form's button). It is answered
+ * as the first was, before the limits, and kept once: no second row, no second alert, no 429 for a note that is in.
+ * A note whose stars changed is a new note, and meets the limits.
+ */
+async function resent(db, table, visitor, message, rating) {
+  const sameStars = table === "feedback" ? " AND rating IS ?3" : "";
+  const statement = db.prepare(`SELECT 1 AS sent FROM ${table} WHERE visitor = ?1 AND message = ?2${sameStars} LIMIT 1`);
+  const row = await (table === "feedback" ? statement.bind(visitor, message, rating) : statement.bind(visitor, message)).first();
+  return Boolean(row);
+}
+
+/** Why [visitor] may not leave a note at [now]: the day's notes used up, or the last one too recent. Null if they may. */
+async function noteRefusal(env, visitor, now) {
+  const { n, last } = await env.DB
+    .prepare("SELECT COUNT(*) AS n, MAX(created_at) AS last FROM feedback WHERE visitor = ?1")
+    .bind(visitor)
+    .first();
+  if (n >= LIMITS.notesPerDay) return ENOUGH_FOR_TODAY;
+  const gap = noteGapMinutes(env);
+  const wait = last && gap ? Date.parse(last) + gap * 60000 - now.getTime() : 0;
+  return wait > 0 ? oneNoteAtATime(gap, wait) : null;
 }
 
 /** "New note (★5) · Colleague": the stars when given, and who it is from when that is worth a badge. */
@@ -423,6 +497,8 @@ async function readBody(request, { form: forms = true, plain = false, tooLarge =
   const form = forms && type === "application/x-www-form-urlencoded";
   const isJson = type === "application/json" || (plain && type === "text/plain");
   if (!form && !isJson) return { form: false, error: forms ? "Send JSON or a URL-encoded form." : "Send JSON.", status: 415 };
+  // A body that says it is larger than any allowed one (UTF-8 takes at most 3 bytes a character) is never read.
+  if (Number(request.headers.get("Content-Length")) > LIMITS.body * 3) return { form, error: tooLarge, status: 413 };
   const text = await request.text();
   if (text.length > LIMITS.body) return { form, error: tooLarge, status: 413 };
   if (form) return { form, fields: Object.fromEntries(new URLSearchParams(text)) };
@@ -504,14 +580,21 @@ async function submitMessage(request, env, now, cors, alerts) {
   if (problems.length) return answer({ error: problems[0], problems }, 400);
 
   const today = localDay(env, now);
-  const visitor = await visitorId(request, env, today, request.headers.get("User-Agent") || "");
+  const visitor = await senderId(request, env, today);
+  const message = normalizeMessage(fields);
+  if (await resent(env.DB, "messages", visitor, message.message)) return answer({ ok: true }, 201);
   const { n } = await env.DB.prepare("SELECT COUNT(*) AS n FROM messages WHERE visitor = ?1").bind(visitor).first();
   if (n >= LIMITS.messagesPerDay) return answer({ error: ENOUGH_FOR_TODAY }, 429);
-  const message = normalizeMessage(fields);
+  // The limit again, in the insert itself, for messages sent at once.
   const { meta } = await env.DB
-    .prepare("INSERT INTO messages (created_at, day, name, contact, topic, message, visitor) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)")
-    .bind(now.toISOString(), today, message.name, message.contact, message.topic, message.message, visitor)
+    .prepare(
+      "INSERT INTO messages (created_at, day, name, contact, topic, message, visitor) " +
+        "SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7 WHERE (SELECT COUNT(*) FROM messages WHERE visitor = ?7) < ?8",
+    )
+    .bind(now.toISOString(), today, message.name, message.contact, message.topic, message.message, visitor, LIMITS.messagesPerDay)
     .run();
+  if (meta.changes !== 1) return answer({ error: ENOUGH_FOR_TODAY }, 429);
+  await forgetOldSenders(env.DB, "messages", today);
   // The one alert with a contact in it, for the owner's phone only: who to write back to.
   await alertOwner(env, alerts, {
     kind: "message",
@@ -571,14 +654,14 @@ async function alertOwner(env, { ctx, now, fetch }, alert) {
 // ---- The owner ----
 
 async function listFeedback(request, env, url, now) {
-  const entry = await authorize(bearerToken(request), env);
+  const entry = await authorize(bearerToken(request), env, { request, now });
   if (entry !== true) return entry;
   const [visits, items] = await Promise.all([visitCounts(env.DB, localDay(env, now)), feedbackItems(env.DB, limitOf(url, 100, 500))]);
   return json({ visits, items }, 200, { "Cache-Control": "no-store" });
 }
 
 async function inbox(request, env, now) {
-  const entry = await authorize(basicPassword(request), env, { basic: true });
+  const entry = await authorize(basicPassword(request), env, { basic: true, request, now });
   if (entry !== true) return entry;
   const today = localDay(env, now);
   const [visits, items, days, messages, clicks] = await Promise.all([
@@ -599,7 +682,7 @@ async function inbox(request, env, now) {
  * origin, a form on another site included, so only a post from this origin itself is acted on.
  */
 async function inboxAction(request, env, kind, id, now, url) {
-  const entry = await authorize(basicPassword(request), env, { basic: true });
+  const entry = await authorize(basicPassword(request), env, { basic: true, request, now });
   if (entry !== true) return entry;
   if (!fromThisOrigin(request, url)) {
     const things = kind === "notes" ? "Notes" : "Messages";
@@ -719,19 +802,65 @@ function limitOf(url, fallback, max) {
 
 /**
  * True for the owner, else the response that turns the caller away. With no ADMIN_TOKEN set nobody gets in, the
- * owner included: an inbox is never open by default.
+ * owner included: an inbox is never open by default. An address that has given LIMITS.ownerTries wrong passwords
+ * is turned away, the right one included, until the window ends (ownerTry).
  */
-async function authorize(secret, env, { basic = false } = {}) {
+async function authorize(secret, env, { basic = false, request, now }) {
   if (!env.ADMIN_TOKEN) {
     return json({ error: "ADMIN_TOKEN is not set on the worker: run `npx wrangler secret put ADMIN_TOKEN`." }, 503);
   }
-  if (await sameSecret(secret, env.ADMIN_TOKEN)) return true;
+  const attempt = typeof secret === "string" && secret ? await ownerTry(request, env, now) : null;
+  if (attempt?.wait) {
+    const minutes = Math.ceil(attempt.wait / 60);
+    const sentence = `Too many wrong passwords from here. Try again in ${minutes} ${minutes === 1 ? "minute" : "minutes"}.`;
+    const headers = { "Retry-After": String(attempt.wait), "Cache-Control": "no-store" };
+    return basic ? html(renderNotice("Not now", sentence, null), 429, headers) : json({ error: sentence }, 429, headers);
+  }
+  if (attempt && (await sameSecret(secret, env.ADMIN_TOKEN))) {
+    await attempt.right();
+    return true;
+  }
   if (!basic) return json({ error: "Unauthorized." }, 401);
   return html(
     renderNotice("Sign in", "The inbox is the site owner's. Any user name; the password is ADMIN_TOKEN.", null),
     401,
-    { "WWW-Authenticate": 'Basic realm="Portfolio inbox", charset="UTF-8"' },
+    { "WWW-Authenticate": 'Basic realm="Portfolio inbox", charset="UTF-8"', "Cache-Control": "no-store" },
   );
+}
+
+/**
+ * One password try from [request]'s address, counted in `owner_tries` before it is checked, so tries sent at once
+ * cannot all pass under the limit; `right()` gives it back. `wait` is the seconds left in the window once the
+ * address is over the limit. Without the table (migration 0005 not applied yet) nothing is counted.
+ */
+async function ownerTry(request, env, now) {
+  const window = LIMITS.ownerWindowMinutes * 60000;
+  const start = Math.floor(now.getTime() / window) * window;
+  const since = new Date(start).toISOString();
+  const address = request.headers.get("CF-Connecting-IP") || "unknown";
+  const client = await sha256Hex(`owner|${networkOf(address)}|${env.VISITOR_SALT || ""}`);
+  const tidy = () => env.DB.prepare("DELETE FROM owner_tries WHERE count <= 0 OR since <> ?1").bind(since).run();
+  try {
+    const count = await env.DB
+      .prepare(
+        "INSERT INTO owner_tries (client, since, count) VALUES (?1, ?2, 1) " +
+          "ON CONFLICT (client, since) DO UPDATE SET count = count + 1 RETURNING count",
+      )
+      .bind(client, since)
+      .first("count");
+    if (count > LIMITS.ownerTries) return { wait: Math.ceil((start + window - now.getTime()) / 1000) };
+    await tidy();
+  } catch (error) {
+    console.error("Owner tries not counted:", error);
+    return { wait: 0, right: async () => {} };
+  }
+  return {
+    wait: 0,
+    right: async () => {
+      await env.DB.prepare("UPDATE owner_tries SET count = count - 1 WHERE client = ?1 AND since = ?2").bind(client, since).run();
+      await tidy();
+    },
+  };
 }
 
 function bearerToken(request) {
@@ -785,7 +914,7 @@ async function sha256Hex(input) {
 
 /** The token is checked before the route, so a wrong one learns nothing about which routes exist. */
 async function admin(request, env, url, route, now, alerts) {
-  const entry = await authorize(bearerToken(request), env);
+  const entry = await authorize(bearerToken(request), env, { request, now });
   if (entry !== true) {
     entry.headers.set("Cache-Control", "no-store");
     return entry;
@@ -878,16 +1007,30 @@ async function numbersFor(env, days) {
     rows("SELECT day, COUNT(*) AS count FROM messages WHERE day BETWEEN ?1 AND ?2 GROUP BY day"),
     rows("SELECT day, country, count FROM visit_countries WHERE day BETWEEN ?1 AND ?2 ORDER BY count DESC, country"),
   ]);
-  const countOn = (list, date) => list.find((row) => row.day === date)?.count ?? 0;
+  // Each list grouped by day once: looking each day up in every list read a year's rows 366 times (~50 ms of CPU, where
+  // the free plan allows a request 10).
+  const [visitsOn, clicksOn, notesOn, messagesOn, countriesOn] = [visits, clicks, notes, messages, countries].map(byDay);
+  const countOn = (rowsOn, date) => rowsOn.get(date)?.[0].count ?? 0;
   const links = trackedLinks(env);
   return days.map((date) => ({
     day: date,
-    visits: countOn(visits, date),
-    clicks: clickCounts(links, clicks.filter((row) => row.day === date)),
-    notes: countOn(notes, date),
-    messages: countOn(messages, date),
-    countries: countries.filter((row) => row.day === date).map((row) => ({ country: row.country, count: row.count })),
+    visits: countOn(visitsOn, date),
+    clicks: clickCounts(links, clicksOn.get(date) ?? []),
+    notes: countOn(notesOn, date),
+    messages: countOn(messagesOn, date),
+    countries: (countriesOn.get(date) ?? []).map((row) => ({ country: row.country, count: row.count })),
   }));
+}
+
+/** [rows] by their `day`, each day's in the order they came. */
+function byDay(rows) {
+  const days = new Map();
+  for (const row of rows) {
+    const list = days.get(row.day);
+    if (list) list.push(row);
+    else days.set(row.day, [row]);
+  }
+  return days;
 }
 
 async function adminAction(request, env, kind, id, now) {
@@ -967,21 +1110,24 @@ async function removeDevice(request, env) {
 
 /**
  * The cron's job at 23:59 local time: the day's numbers, kept in `daily_reports` and sent to the owner. Cloudflare
- * may run a cron twice; a second run the same day rewrites the row with the newer numbers and sends nothing more.
+ * may run a cron twice, even at once; the run whose insert makes the day's row sends the alert, and any other
+ * rewrites the row with the newer numbers and sends nothing more.
  */
 export async function dailyReport(env, ctx, { now = new Date(), fetch } = {}) {
   const today = localDay(env, now);
   const [{ visits, clicks, notes, messages }] = await numbersFor(env, [today]);
-  const seen = await env.DB.prepare("SELECT 1 AS seen FROM daily_reports WHERE day = ?1").bind(today).first();
-  await env.DB
-    .prepare(
-      "INSERT INTO daily_reports (day, visits, clicks, notes, messages, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6) " +
-        "ON CONFLICT (day) DO UPDATE SET visits = excluded.visits, clicks = excluded.clicks, notes = excluded.notes, messages = excluded.messages",
-    )
-    .bind(today, visits, JSON.stringify(clicks), notes, messages, now.toISOString())
+  const values = [today, visits, JSON.stringify(clicks), notes, messages];
+  // Claiming the day is one statement, so two runs cannot both see it unclaimed and both send.
+  const { meta } = await env.DB
+    .prepare("INSERT INTO daily_reports (day, visits, clicks, notes, messages, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6) ON CONFLICT (day) DO NOTHING")
+    .bind(...values, now.toISOString())
     .run();
+  const first = meta.changes === 1;
+  if (!first) {
+    await env.DB.prepare("UPDATE daily_reports SET visits = ?2, clicks = ?3, notes = ?4, messages = ?5 WHERE day = ?1").bind(...values).run();
+  }
   const report = { day: today, visits, clicks, notes, messages };
-  if (!seen) await notify(env, ctx, { kind: "daily", ...dailyText(report), refId: null }, { now, fetch });
+  if (first) await notify(env, ctx, { kind: "daily", ...dailyText(report), refId: null }, { now, fetch });
   return report;
 }
 
@@ -1003,12 +1149,14 @@ function counted(n, word) {
 function json(payload, status = 200, headers = {}) {
   return new Response(JSON.stringify(payload), {
     status,
-    headers: { "Content-Type": "application/json; charset=utf-8", ...headers },
+    // A visitor's words in JSON are never read as a page, whatever a browser would guess.
+    headers: { "Content-Type": "application/json; charset=utf-8", "X-Content-Type-Options": "nosniff", ...headers },
   });
 }
 
+/** Every page, the inbox, its sign-in and the notices, with PAGE_HEADERS: never framed, no script but its own. */
 function html(markup, status = 200, headers = {}) {
-  return new Response(markup, { status, headers: { "Content-Type": "text/html; charset=utf-8", ...headers } });
+  return new Response(markup, { status, headers: { "Content-Type": "text/html; charset=utf-8", ...PAGE_HEADERS, ...headers } });
 }
 
 /** JSON for the page's script; a page for a browser that posted the plain form without it. */

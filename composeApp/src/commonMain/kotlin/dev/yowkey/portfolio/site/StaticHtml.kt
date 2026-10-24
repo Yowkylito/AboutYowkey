@@ -20,6 +20,13 @@ import kotlinx.serialization.json.put
 import dev.yowkey.portfolio.ui.components.initialsOf
 import dev.yowkey.portfolio.ui.components.roleOf
 import dev.yowkey.portfolio.ui.components.shorterForms
+import dev.yowkey.portfolio.model.Profile
+import dev.yowkey.portfolio.ui.sections.HeroMotion
+import dev.yowkey.portfolio.ui.sections.HeroStage
+import dev.yowkey.portfolio.ui.sections.SystemFontWidth
+import kotlin.math.abs
+import kotlin.math.min
+import kotlin.math.roundToLong
 
 /**
  * The crawlable HTML twin of the Compose UI. Search engines, link previews and browsers without WasmGC read this;
@@ -45,12 +52,45 @@ object StaticHtml {
             "bar" to bar(portfolio),
             "content" to content(portfolio),
             "toTop" to backToTop(),
+            "heroMotion" to heroMotion(),
+            "heroStage" to heroStage(profile),
             "build" to build,
         )
-        val unknown = Regex("\\{\\{(\\w+)}}").findAll(template).map { it.groupValues[1] }.toSet() - values.keys
+        val placeholder = Regex("\\{\\{(\\w+)}}")
+        val unknown = placeholder.findAll(template).map { it.groupValues[1] }.toSet() - values.keys - "csp"
         require(unknown.isEmpty()) { "index.template.html uses unknown placeholders: $unknown" }
-        return values.entries.fold(template) { html, (key, value) -> html.replace("{{$key}}", value) }
+        // One pass over the template: a value that contains "{{content}}" stays text instead of being filled in turn.
+        fun fill(csp: String) = placeholder.replace(template) { (values + ("csp" to csp)).getValue(it.groupValues[1]) }
+        // The policy names the page's own inline scripts by hash, so they are read from the page as it will ship.
+        val scripts = INLINE_SCRIPT.findAll(fill("")).map { it.groupValues[1] }.toList()
+        return fill(escape(contentSecurityPolicy(portfolio, scripts)))
     }
+
+    /**
+     * The page's `{{csp}}`: scripts only from the site itself and the page's own inline ones, by hash (so an injected
+     * one runs nowhere), Wasm compiled for the app, requests and form posts only to the site and its backend
+     * (`api`), no plugins, no `<base>`. Styles stay inline, as the page and the app write them. `frame-ancestors`
+     * cannot be set from a `<meta>`; GitHub Pages sends no headers to set it with.
+     */
+    fun contentSecurityPolicy(portfolio: Portfolio, inlineScripts: List<String>): String {
+        val api = portfolio.api?.let { Regex("^https?://[^/]+").find(it)?.value }
+        val scripts = inlineScripts.distinct().joinToString("") { " ${Sha256.cspSource(it)}" }
+        return listOf(
+            "default-src 'self'",
+            "script-src 'self' 'wasm-unsafe-eval'$scripts",
+            "style-src 'self' 'unsafe-inline'",
+            "img-src 'self' data: blob:",
+            "media-src 'self' blob:",
+            "font-src 'self' data:",
+            "connect-src 'self'" + (api?.let { " $it" } ?: ""),
+            "form-action " + (api ?: "'none'"),
+            "object-src 'none'",
+            "base-uri 'self'",
+        ).joinToString("; ")
+    }
+
+    /** An inline script the browser runs: `<script>` with no attributes (the JSON-LD block has a type, and only data). */
+    private val INLINE_SCRIPT = Regex("<script>([\\s\\S]*?)</script>")
 
     fun sitemap(portfolio: Portfolio): String = """
         |<?xml version="1.0" encoding="UTF-8"?>
@@ -170,7 +210,7 @@ object StaticHtml {
         "<path d=\"M13.6 10.1A5.9 5.9 0 0 1 5.9 2.4a5.9 5.9 0 1 0 7.7 7.7z\" fill=\"currentColor\"/></svg>"
 
     /** The hero portrait's trail, as the app's: seven echoes, farthest first. */
-    private const val PORTRAIT_ECHOES = 7
+    private const val PORTRAIT_ECHOES = HeroMotion.ECHOES
 
     /**
      * Noise that varies only down the page, pushing each row of an echo sideways (its vertical push is zeroed), so the
@@ -187,13 +227,179 @@ object StaticHtml {
         } + "</svg>"
 
     /**
-     * The shout's three sound lines left of the face, as the app's, drawn for a 224px-tall portrait (the CSS scales
-     * them to the others): nearest first, radius 49, 72 and 95, sweeping 50°, 64° and 78°.
+     * The hero's entrance on the static page, filling `{{heroMotion}}` in the template's styles: [HeroMotion]'s
+     * timeline written as CSS, so the static page plays the app's own choreography and the app can take over from it
+     * mid-flight without a jump. The figure dashes in on the same spring, sampled into a `linear()` easing; each echo
+     * follows its path a lag behind the one in front, widened and thinned with its speed; the landing shakes the
+     * figure, splits its colour (two drop shadows of its silhouette) and sends a burst out along the trail; then the
+     * intro's steps read in, in reading order. `.hero` runs one more animation, `hero-intro`, for the entrance's whole
+     * length: it changes nothing and is the clock the app reads (see `staticIntroMillis`).
+     *
+     * Only where motion is welcome and the page is scripted (the head's `js` class): otherwise the static page shows
+     * the still picture and every word at once, and every animation ends there, whatever loads or fails.
      */
-    private const val SHOUT_LINES = "<svg class=\"shout\" width=\"1\" height=\"1\" aria-hidden=\"true\" focusable=\"false\">" +
-        "<path d=\"M-44.4-20.7A49 49 0 0 0-44.4 20.7\" stroke-width=\"3\" opacity=\".85\"/>" +
-        "<path d=\"M-61.1-38.2A72 72 0 0 0-61.1 38.2\" stroke-width=\"2.5\" opacity=\".6\"/>" +
-        "<path d=\"M-73.8-59.8A95 95 0 0 0-73.8 59.8\" stroke-width=\"2\" opacity=\".38\"/></svg>"
+    fun heroMotion(): String = buildString {
+        val m = HeroMotion
+        val dash = "${m.DASH_MS}ms ${linearCurve(m.DASH_MS) { m.dash(it) }}"
+        // The smear (and the thinning) eases from its most to none as the dash's speed falls: its easing is the speed, inverted.
+        val smear = "${m.DASH_MS}ms ${linearCurve(m.DASH_MS) { 1f - m.speed(it) }}"
+        // Each part's swell lasts this long; the trail's echoes hear it a ripple step apart, the last at the end.
+        val swell = m.IMPACT_MS - m.ECHOES * m.RIPPLE_STEP_MS
+        appendLine("@media (prefers-reduced-motion: no-preference) {")
+        appendLine("  .js .hero { animation: hero-intro ${m.END_MS}ms linear both; }")
+        appendLine("  .js .hero .portrait { container-type: inline-size; }")
+        appendLine("  .js .hero .portrait .person { animation: hero-dash $dash both; }")
+        appendLine("  .js .hero .portrait .echo { animation: hero-dash $dash both, hero-smear $smear both; animation-delay: calc(var(--k) * ${m.ECHO_LAG_MS}ms); }")
+        appendLine("  .js .hero .portrait .person img { animation: hero-shake ${swell}ms linear ${m.IMPACT_AT_MS}ms both, hero-split ${swell}ms linear ${m.IMPACT_AT_MS}ms both; }")
+        appendLine(
+            "  .js .hero .portrait .echo i { animation: hero-burst ${swell}ms linear both, hero-thin $smear both; " +
+                "animation-delay: calc(${m.IMPACT_AT_MS}ms + var(--k) * ${m.RIPPLE_STEP_MS}ms), calc(var(--k) * ${m.ECHO_LAG_MS}ms); }",
+        )
+        appendLine("  ${STAGED_STEPS.joinToString(", ") { ".js .hero > $it" }} { animation: hero-step ${m.TEXT_MS}ms $EASE_OUT_CUBIC both; }")
+        PLAIN_STEPS.forEachIndexed { i, step ->
+            appendLine("  .js .hero > $step { animation-delay: ${m.textAt(i, staged = false)}ms; }")
+        }
+        appendLine("}")
+        appendLine("@keyframes hero-intro { from { --hero-intro: 0; } to { --hero-intro: 1; } }")
+        // The staged trail draws back from its full reach and strength, and from showing over the name's place.
+        appendLine("@keyframes hero-back { from { --reach: 1; --mask: 0; opacity: 1; } }")
+        // From just past the stage's start edge: the portrait's width (its container) less the figure's inset.
+        appendLine("@keyframes hero-dash { from { translate: calc(20px - 100cqw) 0; } }")
+        appendLine("@keyframes hero-smear { from { scale: ${decimal(1f + m.SMEAR, 2)} 1; } }")
+        appendLine("@keyframes hero-thin { from { opacity: ${decimal(1f - m.THIN, 2)}; } }")
+        appendLine("@keyframes hero-step { from { opacity: 0; translate: -${decimal(m.TEXT_SHIFT_DP, 1)}px 0; } }")
+        append("@keyframes hero-shake {")
+        // Sampled four times a cycle of its quicker sine, until the swell has all but died away.
+        val every = 12
+        (0..swell step every).forEach { at ->
+            val loud = m.swellAt(at.toFloat(), swell + m.ECHOES * m.RIPPLE_STEP_MS, echo = 0)
+            if (at > 0 && loud < 0.03f) return@forEach
+            val (x, y) = m.shake(at / 1000f)
+            append(" ${decimal(100f * at / swell, 2)}% { translate: ${decimal(m.SHAKE_DP * loud * x, 2)}px ${decimal(m.SHAKE_DP * loud * y, 2)}px; }")
+        }
+        appendLine(" to { translate: 0 0; } }")
+        val peak = "${decimal(100f * m.ATTACK, 1)}%"
+        val split = decimal(m.SPLIT_DP, 1)
+        appendLine(
+            "@keyframes hero-split { from, to { filter: drop-shadow(0 0 0 transparent) drop-shadow(0 0 0 transparent); } " +
+                "from, $peak { animation-timing-function: $EASE_OUT_QUAD; } " +
+                "$peak { filter: drop-shadow(-${split}px 0 0 color-mix(in srgb, var(--accent) 85%, transparent)) " +
+                "drop-shadow(${split}px 0 0 color-mix(in srgb, var(--on-stage) 85%, transparent)); } }",
+        )
+        appendLine(
+            "@keyframes hero-burst { from, to { translate: 0 0; } from, $peak { animation-timing-function: $EASE_OUT_QUAD; } " +
+                "$peak { translate: calc(var(--k) * var(--step) * -${decimal(m.BURST, 2)}) 0; } }",
+        )
+    }
+
+    /**
+     * Where the hero's name stands on the static page, filling `{{heroStage}}` in the template's styles: on a single
+     * column, on the portrait's stage with the role under it wherever [HeroStage]'s rule lets them, as in the app. CSS
+     * cannot measure text, so the rule is worked out here for every width the hero can have (it is the `hero`
+     * container), with [SystemFontWidth]'s generous widths; the app takes at least those widths too, so the two
+     * decide alike at every width and the hand-off moves nothing. Each width range that stands them on the stage
+     * places the name (at the plan's size) and the role (cut to the plan's form), hides what of the headline the stage
+     * already says, rests the trail drawn back and clear of them, and, where motion is welcome, follows the staged
+     * timeline: the trail draws back, then the name, the role and the rest read in. Nothing without a portrait.
+     */
+    fun heroStage(profile: Profile): String = buildString {
+        if (profile.photoPath == null) return@buildString
+        val role = HeroStage.roleOf(profile.headline)
+        val forms = shorterForms(role)
+        fun plans(widths: IntRange, height: Float) = widths
+            .map { it to HeroStage.plan(profile.name, role, min(it, STAGE_MAX).toFloat(), height, 1f, SystemFontWidth) }
+            .fold(mutableListOf<Triple<Int, Int, HeroStage.Plan?>>()) { runs, (width, plan) ->
+                val last = runs.lastOrNull()
+                if (last != null && last.third == plan) runs[runs.lastIndex] = Triple(last.first, width, plan)
+                else runs += Triple(width, width, plan)
+                runs
+            }
+        // Phones: the stage is 168px tall under 600px; from 600px to the wide layout's 840px, 208px.
+        listOf(Triple("(max-width: 599px)", 200..599, 168f), Triple("(min-width: 600px) and (max-width: 839px)", 400..839, 208f))
+            .forEach { (media, widths, height) ->
+                val runs = plans(widths, height)
+                runs.forEachIndexed { i, (from, to, plan) ->
+                    if (plan == null) return@forEachIndexed
+                    val range = if (i == runs.lastIndex) "(width >= ${from}px)" else "(${from}px <= width < ${to + 1}px)"
+                    appendLine("@media $media { @container hero $range {")
+                    stagedLayout(plan, forms, height)
+                    appendLine("} }")
+                    appendLine("@media $media and (prefers-reduced-motion: no-preference) { @container hero $range {")
+                    stagedMotion()
+                    appendLine("} }")
+                }
+            }
+    }
+
+    private fun StringBuilder.stagedLayout(plan: HeroStage.Plan, forms: List<String>, height: Float) {
+        val s = HeroStage
+        val figure = s.FIGURE_INSET_DP + height * s.FIGURE_ASPECT
+        val hidden = (0 until forms.indexOf(plan.role).coerceAtLeast(0)).joinToString(", ") { ".hero .portrait ~ hgroup .role .c$it" }
+        appendLine(
+            "  .hero .portrait ~ hgroup { position: absolute; left: ${decimal(s.PAD_DP, 1)}px; " +
+                "top: ${decimal(height * s.STAGE_TOP + s.V_PAD_DP, 2)}px; " +
+                "width: calc(min(${STAGE_MAX}px, 100cqw) - ${decimal(figure + s.LANE_DP + s.PAD_DP, 2)}px); " +
+                "height: ${decimal(s.boxHeight(height), 2)}px; margin: 0; display: flex; flex-direction: column; " +
+                "justify-content: center; gap: ${decimal(s.GAP_DP, 1)}px; }",
+        )
+        // Wrapped word by word, as the rule counts the lines: a balanced or "pretty" wrap could take a line more.
+        appendLine(
+            "  .hero .portrait ~ hgroup h1 { margin: 0; font-size: ${decimal(plan.nameSp, 1)}px; " +
+                "line-height: ${decimal(s.NAME_LINE, 2)}; letter-spacing: -.02em; color: var(--on-stage); text-wrap: wrap; }",
+        )
+        appendLine(
+            "  .hero .portrait ~ hgroup .role { display: block; margin: 0; font-size: ${decimal(plan.roleSp, 1)}px; " +
+                "line-height: ${decimal(s.ROLE_LINE, 2)}; font-weight: 500; color: var(--on-stage); text-wrap: wrap; }",
+        )
+        if (hidden.isNotEmpty()) appendLine("  $hidden { display: none; }")
+        if (plan.wholeRole) appendLine("  .hero .portrait ~ .headline .lead, .hero .portrait ~ hgroup.whole + .headline { display: none; }")
+        appendLine(
+            "  .hero .portrait .trail { --reach: ${decimal(HeroMotion.REST_REACH, 2)}; --mask: 1; " +
+                "--clear: calc(100% - ${decimal(figure + s.LANE_DP, 2)}px); opacity: ${decimal(HeroMotion.REST_FADE, 2)}; }",
+        )
+    }
+
+    private fun StringBuilder.stagedMotion() {
+        val m = HeroMotion
+        STAGED_STEPS.forEachIndexed { i, step ->
+            appendLine("  .js .hero > $step { animation-delay: ${m.textAt(i, staged = true)}ms; }")
+        }
+        appendLine(
+            "  .js .hero .portrait .trail { animation: hero-back ${m.DRAW_BACK_MS}ms " +
+                "${linearCurve(m.DRAW_BACK_MS) { m.smooth(it / m.DRAW_BACK_MS) }} ${m.DRAW_BACK_AT_MS}ms both; }",
+        )
+    }
+
+    /** [at] over [millis] as a CSS `linear()` easing, sampled every 20 ms or so: as good as a frame can show. */
+    private fun linearCurve(millis: Int, at: (Float) -> Float): String {
+        val samples = millis / 20
+        return (0..samples).joinToString(", ", "linear(", ")") { i ->
+            val share = i.toFloat() / samples
+            "${decimal(at(share * millis), 4)} ${decimal(100f * share, 2)}%"
+        }
+    }
+
+    /** [value] with at most [places] decimals and never an exponent, as CSS wants: "0.5", "12", "-3.25". */
+    private fun decimal(value: Float, places: Int): String {
+        var scale = 1L
+        repeat(places) { scale *= 10 }
+        val scaled = (value.toDouble() * scale).roundToLong()
+        val whole = abs(scaled) / scale
+        val fraction = (abs(scaled) % scale).toString().padStart(places, '0').trimEnd('0')
+        val sign = if (scaled < 0) "-" else ""
+        return if (fraction.isEmpty()) "$sign$whole" else "$sign$whole.$fraction"
+    }
+
+    /** The intro's steps on the static page, in reading order: under the stage, and with the name and role on it. */
+    private val PLAIN_STEPS = listOf("hgroup > h1", ".headline", ".proof", ".links", ".links + p")
+    private val STAGED_STEPS = listOf("hgroup > h1", "hgroup > .role", ".headline", ".proof", ".links", ".links + p")
+
+    /** The single column's stage is never wider than this, as the app's. */
+    private const val STAGE_MAX = 480
+
+    /** The app's EaseOutCubic, and the swell's rise and fall (1 - (1 - x)²). */
+    private const val EASE_OUT_CUBIC = "cubic-bezier(.33, 1, .68, 1)"
+    private const val EASE_OUT_QUAD = "cubic-bezier(.5, 1, .89, 1)"
 
     /** Three lines, as the app's MenuGlyph; its name is the button's label. */
     private const val MENU_ICON = "<svg width=\"20\" height=\"20\" viewBox=\"0 0 20 20\" aria-hidden=\"true\" focusable=\"false\">" +
@@ -203,24 +409,51 @@ object StaticHtml {
         "<path d=\"M10 16V4.5M4.5 10L10 4.5l5.5 5.5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" " +
         "stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>"
 
+    /**
+     * [role] as its shortest form, then each word group the longer forms add in its own span, the last first to go:
+     * "Android Developer<span class="c1"> at DigiPlus</span><span class="c0"> since 2024</span>". Hiding `c0` leaves
+     * the next shorter form, hiding `c1` too the one after, and without styles it reads whole.
+     */
+    private fun roleMarkup(role: String): String {
+        val forms = shorterForms(role)
+        return buildString {
+            append(escape(forms.last()))
+            for (i in forms.size - 2 downTo 0) {
+                append("<span class=\"c$i\">${escape(forms[i].substring(forms[i + 1].length))}</span>")
+            }
+        }
+    }
+
     /** The semantic body: one `<section>` per part of the page, in the same order as the Compose UI (`Section`). */
     fun content(portfolio: Portfolio): String = buildString {
         val p = portfolio.profile
         appendLine("<header class=\"hero\">")
         // The app's still picture: the echoes are the cut-out again, as CSS masks filled with the accent, the far ones
-        // melted by the SVG filters; the sound lines sit under the figure, which covers their ends.
+        // melted by the SVG filters.
         p.photoPath?.let { photo ->
             val url = resourceUrl(photo)
             appendLine("<figure class=\"portrait\" style=\"--photo: url('$url')\">")
             appendLine(MELT_FILTERS)
+            appendLine("<span class=\"trail\">")
             repeat(PORTRAIT_ECHOES) { appendLine("<span class=\"echo\"><i></i></span>") }
-            appendLine("<span class=\"person\">$SHOUT_LINES<img src=\"$url\" alt=\"Portrait of ${escape(p.name)}\" decoding=\"async\"></span>")
+            appendLine("</span>")
+            appendLine("<span class=\"person\"><img src=\"$url\" alt=\"Portrait of ${escape(p.name)}\" decoding=\"async\"></span>")
             appendLine("</figure>")
         }
-        val eyebrow = listOfNotNull(p.location, p.availability)
-        if (eyebrow.isNotEmpty()) appendLine("<p class=\"eyebrow\">${eyebrow.joinToString(" · ") { escape(it) }}</p>")
+        // The name, then (with a portrait) the role under it, which shows only where the CSS stands both on the stage
+        // (heroStage); the headline's lead is marked so it can stand aside then, and each part is said once.
+        val separator = p.headline.indexOf('·')
+        appendLine(if (separator < 0) "<hgroup class=\"whole\">" else "<hgroup>")
         appendLine("<h1>${escape(p.name)}</h1>")
-        appendLine("<p class=\"headline\">${escape(p.headline)}</p>")
+        if (p.photoPath != null) appendLine("<p class=\"role\">${roleMarkup(HeroStage.roleOf(p.headline))}</p>")
+        appendLine("</hgroup>")
+        if (separator < 0) {
+            appendLine("<p class=\"headline\">${escape(p.headline)}</p>")
+        } else {
+            val rest = p.headline.substring(separator + 1)
+            val lead = p.headline.substring(0, separator + 1) + rest.takeWhile { it == ' ' }
+            appendLine("<p class=\"headline\"><span class=\"lead\">${escape(lead)}</span>${escape(rest.trimStart())}</p>")
+        }
         // The rating and the visit count are the bar's (its proof chip), so the hero does not repeat them.
         if (p.proof.isNotEmpty()) {
             appendLine("<ul class=\"proof\">")
@@ -275,14 +508,69 @@ object StaticHtml {
     }
 
     /**
+     * A form's place in the Contact section, as the app's: its title with who reads what is sent (the badge), one
+     * line, and a button that opens the form in a modal `<dialog>`, which follows it. The title keeps the form's old
+     * id ([id], `message` or `feedback`), so a link to `#message` or `#feedback` still lands on it, the button just
+     * under it. The dialog is labelled by its own copy of the title and holds [dialogIntro], if any, over the form
+     * that [form] writes, unchanged, and a close button ([close]) at its top right. The [primary] form's button is
+     * filled, the other's outlined, as the app's.
+     *
+     * The page's script opens it with `showModal()`: Esc closes it, as does a click on the backdrop or the close
+     * button, and the focus goes back to the button. The buttons also name the dialog with `commandfor`, so a
+     * browser that knows invoker commands opens and closes it even if the script fails. Without any script (no `js`
+     * class on the page) nothing could open it, so the template's CSS shows the form in the section instead, under
+     * the section's title, and draws neither the button nor the dialog's head; the form posts plainly to the
+     * backend, which answers with a page.
+     */
+    private fun StringBuilder.formEntry(
+        id: String,
+        title: String,
+        audience: String,
+        intro: String,
+        open: String,
+        close: String,
+        primary: Boolean,
+        dialogIntro: String? = null,
+        form: StringBuilder.() -> Unit,
+    ) {
+        val dialog = "$id-dialog"
+        val badge = "<span class=\"badge\">${escape(audience)}</span>"
+        appendLine("<div class=\"form-entry\">")
+        appendLine("<h3 id=\"$id\">${escape(title)} $badge</h3>")
+        appendLine("<p class=\"note\">${escape(intro)}</p>")
+        appendLine(
+            "<button class=\"open-form${if (primary) "" else " outlined"}\" type=\"button\" aria-haspopup=\"dialog\" aria-controls=\"$dialog\" " +
+                "commandfor=\"$dialog\" command=\"show-modal\">${escape(open)}</button>",
+        )
+        val described = dialogIntro?.let { " aria-describedby=\"$dialog-intro\"" }.orEmpty()
+        appendLine("<dialog class=\"form-dialog\" id=\"$dialog\" aria-labelledby=\"$dialog-title\"$described>")
+        appendLine(
+            "<div class=\"dialog-head\"><h4 id=\"$dialog-title\">${escape(title)} $badge</h4>" +
+                "<button class=\"close\" type=\"button\" aria-label=\"${escape(close)}\" commandfor=\"$dialog\" command=\"close\">$CLOSE_ICON</button></div>",
+        )
+        appendLine("<div class=\"dialog-body\">")
+        dialogIntro?.let { appendLine("<p class=\"dialog-intro\" id=\"$dialog-intro\">${escape(it)}</p>") }
+        form()
+        appendLine("</div>")
+        appendLine("</dialog>")
+        appendLine("</div>")
+    }
+
+    /**
      * The private message form, as the app's: name (optional), how to reach you (required), the topic as four radio
      * buttons (none picked is filed as "Something else"), the message. It posts to the backend at [api] like the note
      * form: through the page's script, or as a plain form the backend answers with a page. The `website` trap is the
-     * note form's too.
+     * note form's too. In the section, only its title, its line and its button ([formEntry]).
      */
-    private fun StringBuilder.messageForm(api: String) {
-        appendLine("<h3 id=\"message\">${escape(MessageCopy.TITLE)} <span class=\"badge\">${escape(MessageCopy.PRIVATE)}</span></h3>")
-        appendLine("<p class=\"note\">${escape(MessageCopy.INTRO)}</p>")
+    private fun StringBuilder.messageForm(api: String) = formEntry(
+        id = "message",
+        title = MessageCopy.TITLE,
+        audience = MessageCopy.PRIVATE,
+        intro = MessageCopy.INTRO,
+        open = MessageCopy.OPEN,
+        close = MessageCopy.CLOSE,
+        primary = true,
+    ) {
         appendLine("<form class=\"message\" method=\"post\" action=\"${escape("$api/messages")}\" data-api=\"${escape(api)}\">")
         appendLine("<div class=\"fields\">")
         appendLine(
@@ -385,11 +673,19 @@ object StaticHtml {
      * hidden field, for the plain form too). It posts to the backend at [api] the way the app does, through the page's
      * script, the relation included when one is picked; without the script the browser posts the plain
      * form and the backend answers with a page. The `website` field is a trap for bots that fill every field:
-     * people never see it, and a filled one is quietly dropped.
+     * people never see it, and a filled one is quietly dropped. In the section, only its title, its line and its
+     * button ([formEntry]); what happens to a note is said at the top of its dialog, before anyone writes one.
      */
-    private fun StringBuilder.feedbackForm(api: String) {
-        appendLine("<h3 id=\"feedback\">${escape(FeedbackCopy.TITLE)} <span class=\"badge\">${escape(FeedbackCopy.PUBLIC)}</span></h3>")
-        appendLine("<p class=\"note\">${escape(FeedbackCopy.INTRO)}</p>")
+    private fun StringBuilder.feedbackForm(api: String) = formEntry(
+        id = "feedback",
+        title = FeedbackCopy.TITLE,
+        audience = FeedbackCopy.PUBLIC,
+        intro = FeedbackCopy.INTRO,
+        open = FeedbackCopy.OPEN,
+        close = FeedbackCopy.CLOSE,
+        primary = false,
+        dialogIntro = FeedbackCopy.FORM_INTRO,
+    ) {
         appendLine("<form class=\"feedback\" method=\"post\" action=\"${escape("$api/feedback")}\" data-api=\"${escape(api)}\">")
         appendLine("<div class=\"fields\">")
         appendLine(
@@ -613,8 +909,9 @@ object StaticHtml {
             p.email?.let { put("email", "mailto:$it") }
             put("sameAs", JsonArray(portfolio.links.filter { it.url.startsWith("https://") }.map { JsonPrimitive(it.url) }))
         }
-        // "</" would end the <script> element early.
-        return person.toString().replace("</", "<\\/")
+        // No "<" at all inside the <script>: "</" would end it early, and "<!--<script" would keep it from ending.
+        // The JSON escape < reads back as the same character.
+        return person.toString().replace("<", "\\u003c")
     }
 
     fun escape(text: String): String = buildString(text.length) {

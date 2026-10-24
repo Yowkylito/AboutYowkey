@@ -32,7 +32,6 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusTarget
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isAltPressed
@@ -209,15 +208,7 @@ class PageReading(private val list: LazyListState, private val scope: CoroutineS
     /** The page's frame ([ReadingFrame]): focused whenever nothing in it is, since keys only go to the focus and its ancestors. */
     val focus = FocusRequester()
     private val keys = KeyGlide(list, scope)
-    private val formsWithFocus = mutableSetOf<Any>()
     internal var hasFocus = false
-
-    /** Whether the focus is in one of the page's forms ([formFocus]): the form keeps its keys then. */
-    val inForm: Boolean get() = formsWithFocus.isNotEmpty()
-
-    internal fun formFocusChanged(row: Any, focused: Boolean) {
-        if (focused) formsWithFocus += row else formsWithFocus -= row
-    }
 
     /** Glides to row [index], [intoPx] past its top (see [glideToItem]). */
     fun jumpTo(index: Int, intoPx: Int, reducedMotion: Boolean) {
@@ -232,13 +223,6 @@ class PageReading(private val list: LazyListState, private val scope: CoroutineS
 
     internal fun onKey(event: KeyEvent, linePx: Float, reducedMotion: Boolean): Boolean {
         if (event.type != KeyEventType.KeyDown) return false
-        if (inForm) {
-            // The form keeps Space, the arrows, Home and End; Escape hands the focus back so they read again.
-            if (event.key != Key.Escape) return false
-            focus.requestFocus()
-            returnKeysToPage()
-            return true
-        }
         val screen = list.layoutInfo.screenPx().toFloat()
         val move = ScrollRules.move(
             event.key, event.isShiftPressed, event.isCtrlPressed, event.isAltPressed, event.isMetaPressed, screen, linePx,
@@ -258,16 +242,12 @@ fun rememberPageReading(list: LazyListState): PageReading {
     return remember(list, scope) { PageReading(list, scope) }
 }
 
-/** Marks a row holding a form for [reading]: while the focus is anywhere in it, the page's reading keys stand aside. */
-fun Modifier.formFocus(reading: PageReading, row: Any): Modifier =
-    onFocusChanged { reading.formFocusChanged(row, it.hasFocus) }
-
 /**
  * The page's frame for [reading]. It takes the focus as the page shows, and handles the reading keys nothing inside
  * it used: Compose hands a key to the focused node first and then to its ancestors, so a focused button keeps Space
- * and a text field keeps everything. A click on the page itself, on nothing that takes clicks, leaves a form field
- * (as on any web page) or brings back a focus that went elsewhere, so the keys read again. [enabled] is false while
- * something covers the page.
+ * and a text field keeps everything. A click on the page itself, on nothing that takes clicks, brings back a focus
+ * that went elsewhere, so the keys read again. The forms are in dialogs over the page, so no field is ever in it;
+ * [enabled] is false while something covers the page.
  */
 @Composable
 fun ReadingFrame(
@@ -290,12 +270,10 @@ fun ReadingFrame(
                 awaitEachGesture {
                     // The final pass: whatever was under the pointer has had it, and consumed it if it took the click.
                     val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Final)
-                    val inForm = reading.inForm
-                    val hadFocus = reading.hasFocus
-                    if (down.isConsumed || (hadFocus && !inForm)) return@awaitEachGesture
+                    if (down.isConsumed || reading.hasFocus) return@awaitEachGesture
                     waitForUpOrCancellation(PointerEventPass.Final) ?: return@awaitEachGesture
-                    // Unless the click itself moved the focus (into a field, say), bring it back to the page.
-                    if (reading.inForm == inForm && reading.hasFocus == hadFocus) reading.focus.requestFocus()
+                    // Unless the click itself gave the page the focus back, bring it back.
+                    if (!reading.hasFocus) reading.focus.requestFocus()
                 }
             },
         content = content,
