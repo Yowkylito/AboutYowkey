@@ -17,8 +17,8 @@ browser, as a desktop window and as an app on my phone.
 
 Each section is placed by what a hiring manager wants to know next. From the top:
 
-1. **The first screen.** My name, my role and stack in one line, and three numbers that prove it, each with the
-   sentence behind it. Then **Email me** and **See projects**. Nothing that
+1. **The first screen.** My name and role on the portrait's stage, my stack under it, and three numbers that prove
+   it, each with the sentence behind it. Then **Email me** and **See projects**. Nothing that
    matters sits below the fold, and the summary comes after the buttons so it can never push them down.
 2. **Experience.** My roles, newest first, with what I did and what it changed.
 3. **Recognition.** Awards and honours, each with when and what it was for.
