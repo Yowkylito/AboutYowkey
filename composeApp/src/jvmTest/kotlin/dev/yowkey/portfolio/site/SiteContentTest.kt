@@ -168,9 +168,8 @@ class SiteContentTest {
     }
 
     /**
-     * A browser or the host's edge may keep a file for a while, so the app script's URL carries the build id: a
-     * freshly deployed index.html then never loads the previous deploy's composeApp.js, which points at wasm files
-     * that are gone.
+     * GitHub Pages caches every file for ten minutes, so the app script's URL carries the build id: a freshly deployed
+     * index.html then never loads the previous deploy's composeApp.js, which points at wasm files that are gone.
      */
     @Test
     fun appScriptIsLoadedPerBuild() {

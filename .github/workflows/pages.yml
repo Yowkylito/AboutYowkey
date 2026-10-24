@@ -48,12 +48,9 @@ jobs:
       - name: Test and build
         run: ./gradlew :composeApp:jvmTest :composeApp:wasmJsBrowserDistribution --stacktrace
 
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
-          name: site
           path: composeApp/build/dist/wasmJs/productionExecutable
-          if-no-files-found: error
-          retention-days: 7
 
   # The owner's Android app (androidApp/). Built from a clean checkout, so with no Firebase config: the APK it uploads
   # has push off and the 15-minute backup check on, which is the build CI must keep green. ubuntu-latest has the
@@ -83,45 +80,24 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  # Cloudflare Pages, project `aboutyowkey` (https://aboutyowkey.pages.dev/): the repository is private, and GitHub
-  # Pages serves a private repository only on a paid plan. Until the CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID
-  # secrets exist the deploy is skipped with a note, and the site is deployed from a Mac (docs/DEVELOPMENT.md, Deploy).
   deploy:
-    name: Deploy to Cloudflare Pages
+    name: Deploy to GitHub Pages
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-latest
-    outputs:
-      deployed: ${{ steps.deploy.outcome == 'success' }}
-    env:
-      # Whether the token is set, never the token: only the Deploy step has it.
-      HAS_CLOUDFLARE_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Explain the skip until the secrets exist
-        if: env.HAS_CLOUDFLARE_TOKEN != 'true'
-        run: |
-          echo "Not deployed: the CLOUDFLARE_API_TOKEN secret is not set. See docs/DEVELOPMENT.md, Deploy." >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        if: env.HAS_CLOUDFLARE_TOKEN == 'true'
-        with:
-          name: site
-          path: site
-      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
-        if: env.HAS_CLOUDFLARE_TOKEN == 'true'
-        with:
-          node-version: 22
-      - name: Deploy
-        id: deploy
-        if: env.HAS_CLOUDFLARE_TOKEN == 'true'
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: npx --yes wrangler@4.152.0 pages deploy site --project-name aboutyowkey --branch main --commit-dirty=true
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
 
   lighthouse:
     name: Lighthouse on the live site
     needs: deploy
-    if: needs.deploy.outputs.deployed == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -129,6 +105,6 @@ jobs:
           persist-credentials: false
       - uses: treosh/lighthouse-ci-action@3e7e23fb74242897f95c0ba9cabad3d0227b9b18 # v12
         with:
-          urls: https://aboutyowkey.pages.dev/
+          urls: https://yowkylito.github.io/AboutYowkey/
           configPath: ./.github/lighthouserc.json
           uploadArtifacts: true
