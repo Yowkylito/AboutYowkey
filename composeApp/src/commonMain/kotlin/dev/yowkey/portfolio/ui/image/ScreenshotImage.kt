@@ -68,7 +68,8 @@ val LocalScreenshotImages = staticCompositionLocalOf<ScreenshotImages?> { null }
 /**
  * Draws the image at [path] from [loader], or a placeholder of the same size until it arrives (or if it fails).
  * The caller sizes this, so the layout is final before any bytes load. The fade reads its progress in
- * `graphicsLayer`, so it costs no recomposition.
+ * `graphicsLayer`, so it costs no recomposition. An image already in [loader] (a row scrolled back into view) is
+ * drawn whole from the first frame, with neither placeholder nor fade.
  */
 @Composable
 fun ScreenshotImage(
@@ -78,8 +79,9 @@ fun ScreenshotImage(
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Crop,
 ) {
-    val bitmap by produceState<ImageBitmap?>(null, path, loader) {
-        value = try {
+    val cached = remember(path, loader) { loader?.peek(path) }
+    val bitmap by produceState(cached, path, loader) {
+        value = cached ?: try {
             loader?.get(path)
         } catch (e: CancellationException) {
             throw e
@@ -87,16 +89,20 @@ fun ScreenshotImage(
             null // a missing image keeps its placeholder; the tests guard that every listed file ships
         }
     }
-    FadingImage(bitmap, contentDescription, modifier, contentScale)
+    FadingImage(bitmap, contentDescription, modifier, contentScale, fadeIn = bitmap !== cached)
 }
 
-/** [image] fading in over a placeholder of the caller's size; the placeholder alone while [image] is null. */
+/**
+ * [image] fading in over a placeholder of the caller's size; the placeholder alone while [image] is null. Without
+ * [fadeIn] the image is there at once.
+ */
 @Composable
 internal fun FadingImage(
     image: ImageBitmap?,
     contentDescription: String,
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Crop,
+    fadeIn: Boolean = true,
 ) {
     Box(
         modifier
@@ -104,7 +110,7 @@ internal fun FadingImage(
             .semantics { this.contentDescription = contentDescription },
     ) {
         image?.let { loaded ->
-            val alpha = remember(loaded) { Animatable(0f) }
+            val alpha = remember(loaded) { Animatable(if (fadeIn) 0f else 1f) }
             LaunchedEffect(loaded) { alpha.animateTo(1f, tween(220)) }
             Image(
                 bitmap = loaded,
