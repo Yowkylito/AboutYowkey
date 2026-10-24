@@ -46,8 +46,12 @@ internal object HeroMotion {
     /** How much farther out the trail reaches at the swell's height, as a share of its reach at rest. */
     const val BURST = 0.6f
 
-    /** How much wider an echo is drawn at the dash's top speed, stretched back along its path. */
+    /**
+     * How much wider an echo is drawn at the dash's top speed, stretched back along its path, and how much fainter:
+     * smeared thinner, so the trail streams rather than piling up in a block of colour.
+     */
     const val SMEAR = 0.6f
+    const val THIN = 0.5f
 
     /** The scream's swell rises over this share of its length, then falls away. */
     const val ATTACK = 0.1f

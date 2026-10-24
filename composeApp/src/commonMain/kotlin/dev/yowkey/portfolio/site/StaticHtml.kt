@@ -194,10 +194,10 @@ object StaticHtml {
      * The hero's entrance on the static page, filling `{{heroMotion}}` in the template's styles: [HeroMotion]'s
      * timeline written as CSS, so the static page plays the app's own choreography and the app can take over from it
      * mid-flight without a jump. The figure dashes in on the same spring, sampled into a `linear()` easing; each echo
-     * follows its path a lag behind the one in front, widened with its speed; the landing shakes the figure, splits
-     * its colour (two drop shadows of its silhouette) and sends a burst out along the trail; then the intro's steps
-     * read in, in reading order. `.hero` runs one more animation, `hero-intro`, for the entrance's whole length: it
-     * changes nothing and is the clock the app reads (see `staticIntroMillis`).
+     * follows its path a lag behind the one in front, widened and thinned with its speed; the landing shakes the
+     * figure, splits its colour (two drop shadows of its silhouette) and sends a burst out along the trail; then the
+     * intro's steps read in, in reading order. `.hero` runs one more animation, `hero-intro`, for the entrance's whole
+     * length: it changes nothing and is the clock the app reads (see `staticIntroMillis`).
      *
      * Only where motion is welcome and the page is scripted (the head's `js` class): otherwise the static page shows
      * the still picture and every word at once, and every animation ends there, whatever loads or fails.
@@ -205,7 +205,7 @@ object StaticHtml {
     fun heroMotion(): String = buildString {
         val m = HeroMotion
         val dash = "${m.DASH_MS}ms ${linearCurve(m.DASH_MS) { m.dash(it) }}"
-        // The smear eases from its widest to none as the dash's speed falls, so its easing is the speed, inverted.
+        // The smear (and the thinning) eases from its most to none as the dash's speed falls: its easing is the speed, inverted.
         val smear = "${m.DASH_MS}ms ${linearCurve(m.DASH_MS) { 1f - m.speed(it) }}"
         // Each part's swell lasts this long; the trail's echoes hear it a ripple step apart, the last at the end.
         val swell = m.IMPACT_MS - m.ECHOES * m.RIPPLE_STEP_MS
@@ -216,7 +216,10 @@ object StaticHtml {
         appendLine("  .js .hero .portrait .person { animation: hero-dash $dash both; }")
         appendLine("  .js .hero .portrait .echo { animation: hero-dash $dash both, hero-smear $smear both; animation-delay: calc(var(--k) * ${m.ECHO_LAG_MS}ms); }")
         appendLine("  .js .hero .portrait .person img { animation: hero-shake ${swell}ms linear ${m.IMPACT_AT_MS}ms both, hero-split ${swell}ms linear ${m.IMPACT_AT_MS}ms both; }")
-        appendLine("  .js .hero .portrait .echo i { animation: hero-burst ${swell}ms linear both; animation-delay: calc(${m.IMPACT_AT_MS}ms + var(--k) * ${m.RIPPLE_STEP_MS}ms); }")
+        appendLine(
+            "  .js .hero .portrait .echo i { animation: hero-burst ${swell}ms linear both, hero-thin $smear both; " +
+                "animation-delay: calc(${m.IMPACT_AT_MS}ms + var(--k) * ${m.RIPPLE_STEP_MS}ms), calc(var(--k) * ${m.ECHO_LAG_MS}ms); }",
+        )
         appendLine("  ${steps.joinToString(", ") { ".js .hero > $it" }} { animation: hero-step ${m.TEXT_MS}ms $EASE_OUT_CUBIC both; }")
         steps.forEachIndexed { i, step ->
             appendLine("  .js .hero > $step { animation-delay: ${m.TEXT_AT_MS + i * m.TEXT_STAGGER_MS}ms; }")
@@ -226,6 +229,7 @@ object StaticHtml {
         // From just past the stage's start edge: the portrait's width (its container) less the figure's inset.
         appendLine("@keyframes hero-dash { from { translate: calc(20px - 100cqw) 0; } }")
         appendLine("@keyframes hero-smear { from { scale: ${decimal(1f + m.SMEAR, 2)} 1; } }")
+        appendLine("@keyframes hero-thin { from { opacity: ${decimal(1f - m.THIN, 2)}; } }")
         appendLine("@keyframes hero-step { from { opacity: 0; translate: -${decimal(m.TEXT_SHIFT_DP, 1)}px 0; } }")
         append("@keyframes hero-shake {")
         // Sampled four times a cycle of its quicker sine, until the swell has all but died away.

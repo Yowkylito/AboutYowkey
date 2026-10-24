@@ -214,9 +214,9 @@ fun HeroPortrait(path: String, name: String, entrance: HeroEntrance, modifier: M
                     clipPath(frame) {
                         // The trail, farthest first so each nearer echo paints over the one behind it. Each is wider
                         // than the last and its waves deeper and shorter, so the outline melts as it goes. In the
-                        // dash each echo is where the figure was a moment before, smeared back along its way as far
-                        // as the speed then stretched it, so the trail streams out behind the figure and closes up as
-                        // it stops. A swell reaches each echo a little after the one in front of it, so its burst
+                        // dash each echo is where the figure was a moment before, smeared back along its way (wider and
+                        // fainter) as far as the speed then stretched it, so the trail streams out behind the figure
+                        // and closes up as it stops. A swell reaches each echo a little after the one in front of it, so its burst
                         // runs out along the trail as a ripple, each echo reaching farther and melting deeper.
                         val phase = (t + HeroMotion.landingProgress(ms)) * WaveCycles * 2f * PI.toFloat()
                         for (k in TrailAlphas.size downTo 1) {
@@ -235,11 +235,11 @@ fun HeroPortrait(path: String, name: String, entrance: HeroEntrance, modifier: M
                                 width = echoWidth,
                                 height = height,
                                 amplitude = (CalmWave.toPx() + MeltWave.toPx() * k.toFloat().pow(1.3f)) * out *
-                                    (1f + 1.5f * max(heard, speed)),
+                                    (1f + 1.5f * max(heard, 0.5f * speed)),
                                 wavelength = height * (0.52f - 0.03f * k),
                                 phase = phase + k * 0.8f,
                                 slice = SliceHeight.toPx(),
-                                alpha = TrailAlphas[k - 1] * fade,
+                                alpha = TrailAlphas[k - 1] * fade * (1f - HeroMotion.THIN * speed),
                                 filter = silhouette,
                             )
                         }
