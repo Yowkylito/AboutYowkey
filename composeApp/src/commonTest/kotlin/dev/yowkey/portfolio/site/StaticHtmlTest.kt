@@ -106,16 +106,19 @@ class StaticHtmlTest {
     }
 
     /**
-     * The availability is the hero's eyebrow, not the bar's: the bar has no pill any more, with an availability or
-     * without, and with a backend or without.
+     * The location and the availability stay in the content file but show on neither the bar nor the hero: the bar
+     * has no pill and the hero no eyebrow, with a backend or without.
      */
     @Test
-    fun theAvailabilityIsTheHerosNotTheBars() {
-        val owner = everySection.copy(profile = everySection.profile.copy(availability = "Open to relocation to any Country"))
+    fun theLocationAndTheAvailabilityShowOnNeitherTheBarNorTheHero() {
+        val owner = everySection.copy(
+            profile = everySection.profile.copy(location = "Quezon City, Philippines", availability = "Open to relocation to any Country"),
+        )
         listOf(owner, owner.copy(api = "https://api.example")).forEach {
             val bar = StaticHtml.bar(it)
             assertFalse("class=\"pill\"" in bar || "class=\"dot\"" in bar || "Open to relocation" in bar, bar)
-            assertTrue("<p class=\"eyebrow\">Open to relocation to any Country</p>" in StaticHtml.content(it))
+            val hero = StaticHtml.content(it).substringBefore("</header>")
+            assertFalse("class=\"eyebrow\"" in hero || "Open to relocation" in hero || "Quezon City" in hero, hero)
         }
     }
 

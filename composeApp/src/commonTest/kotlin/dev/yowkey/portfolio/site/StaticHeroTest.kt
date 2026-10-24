@@ -9,6 +9,7 @@ import dev.yowkey.portfolio.model.SkillGroup
 import dev.yowkey.portfolio.validJson
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /** The crawlable page is also what shows first: it must put the same things above the fold, in the same order. */
@@ -27,8 +28,9 @@ class StaticHeroTest {
             ),
         )
         val hero = StaticHtml.content(hired).substringBefore("</header>")
-        listOf("London · Open to relocation", "<strong>53%</strong> of the code", "href=\"mailto:ada@example.com\"", "href=\"#projects\"")
+        listOf("<strong>53%</strong> of the code", "href=\"mailto:ada@example.com\"", "href=\"#projects\"")
             .forEach { assertTrue(it in hero, "hero lacks $it") }
+        assertFalse("London" in hero || "Open to relocation" in hero, "the hero has no eyebrow: $hero")
     }
 
     @Test

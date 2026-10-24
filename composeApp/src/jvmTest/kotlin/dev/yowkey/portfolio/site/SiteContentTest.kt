@@ -76,13 +76,12 @@ class SiteContentTest {
 
     /** The seven-second skim: every point is in the hero, ahead of the first section. */
     @Test
-    fun heroShowsProofAvailabilityAndContact() {
+    fun heroShowsProofAndContact() {
         val hero = page.substringAfter("<header class=\"hero\">").substringBefore("</header>")
         val proof = portfolio.profile.proof
         assertTrue(proof.size >= 2, "the hero needs at least two proof points")
         proof.forEach { assertTrue(StaticHtml.escape(it.label) in hero, "hero lacks proof ${it.value}") }
-        listOfNotNull(portfolio.profile.location, portfolio.profile.availability, portfolio.profile.email)
-            .forEach { assertTrue(StaticHtml.escape(it) in hero, "hero lacks $it") }
+        portfolio.profile.email?.let { assertTrue(StaticHtml.escape(it) in hero, "hero lacks $it") }
     }
 
     /** The page is light unless the visitor switched; a saved choice is applied before the styles, so it never flashes. */

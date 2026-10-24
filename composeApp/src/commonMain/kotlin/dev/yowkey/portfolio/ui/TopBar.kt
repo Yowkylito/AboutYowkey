@@ -360,7 +360,7 @@ object BarScroll {
 
     /**
      * How much of the hero row must have gone past the top before the name moves into the bar. The row carries the
-     * hero's top spacing, eyebrow, name, headline, proof, buttons and summary; the name ends a fifth of the way down
+     * hero's top spacing, portrait, name, headline, proof, buttons and summary; the name ends a fifth of the way down
      * it on a phone and two fifths down on a wide window (measured on this content). Half is past both, so the bar
      * never shows the name while any of the hero's is still in view, yet takes it up soon after.
      */

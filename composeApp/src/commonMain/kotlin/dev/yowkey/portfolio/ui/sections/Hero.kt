@@ -30,9 +30,9 @@ import dev.yowkey.portfolio.ui.components.OutlinedCard
 import dev.yowkey.portfolio.ui.theme.PortfolioTheme
 
 /**
- * The first screen, written for a seven-second skim: where and whether they can hire (eyebrow), who (name), what
- * and where now (headline), why (proof), and how to reach out, all above the fold. The summary comes after the
- * buttons so it can never push them down.
+ * The first screen, written for a seven-second skim: who (name), what and where now (headline), why (proof), and
+ * how to reach out, all above the fold. The summary comes after the buttons so it can never push them down. The
+ * profile's location and availability are not shown here.
  *
  * [wide] puts the proof in a card beside the intro, under the portrait ([Profile.photo], see [HeroPortrait]);
  * otherwise the portrait leads and the proof sits between headline and buttons. The primary button mails
@@ -80,10 +80,6 @@ fun Hero(
 @Composable
 private fun HeroIntro(profile: Profile, compact: Boolean) {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        val eyebrow = listOfNotNull(profile.location, profile.availability).joinToString(" · ")
-        if (eyebrow.isNotEmpty()) {
-            Text(eyebrow.uppercase(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-        }
         Text(
             text = profile.name,
             style = if (compact) MaterialTheme.typography.displayMedium else MaterialTheme.typography.displayLarge,

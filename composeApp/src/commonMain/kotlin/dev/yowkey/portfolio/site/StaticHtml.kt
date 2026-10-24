@@ -217,8 +217,6 @@ object StaticHtml {
             appendLine("<span class=\"person\">$SHOUT_LINES<img src=\"$url\" alt=\"Portrait of ${escape(p.name)}\" decoding=\"async\"></span>")
             appendLine("</figure>")
         }
-        val eyebrow = listOfNotNull(p.location, p.availability)
-        if (eyebrow.isNotEmpty()) appendLine("<p class=\"eyebrow\">${eyebrow.joinToString(" · ") { escape(it) }}</p>")
         appendLine("<h1>${escape(p.name)}</h1>")
         appendLine("<p class=\"headline\">${escape(p.headline)}</p>")
         // The rating and the visit count are the bar's (its proof chip), so the hero does not repeat them.
