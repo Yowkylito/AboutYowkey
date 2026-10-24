@@ -32,7 +32,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
@@ -142,13 +141,15 @@ fun ProjectHeading(
 
 /**
  * A launcher icon, rounded as a home screen rounds it, with a hairline so a white or near-black icon keeps its edge
- * on either theme. Decorative: the title beside it names the app. The tile stays empty until the icon loads.
+ * on either theme. Decorative: the title beside it names the app. The tile stays empty until the icon loads, unless
+ * the cache already holds it (a card scrolled back into view), when it is there from the first frame.
  */
 @Composable
 private fun AppIcon(path: String, modifier: Modifier = Modifier) {
     val loader = LocalScreenshotImages.current?.thumbnails
-    val icon by produceState<ImageBitmap?>(null, path, loader) {
-        value = try {
+    val cached = remember(path, loader) { loader?.peek(path) }
+    val icon by produceState(cached, path, loader) {
+        value = cached ?: try {
             loader?.get(path)
         } catch (e: CancellationException) {
             throw e

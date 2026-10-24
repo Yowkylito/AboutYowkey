@@ -78,6 +78,7 @@ import dev.yowkey.portfolio.ui.components.PlatformChip
 import dev.yowkey.portfolio.ui.components.PlayPauseButton
 import dev.yowkey.portfolio.ui.components.Tag
 import dev.yowkey.portfolio.ui.components.TechChip
+import dev.yowkey.portfolio.ui.components.markTop
 import dev.yowkey.portfolio.ui.components.ThemeToggle
 import dev.yowkey.portfolio.ui.image.CoverClip
 import dev.yowkey.portfolio.ui.image.ScreenshotViewer
@@ -362,7 +363,12 @@ private fun Checklist(items: List<String>) {
     Column(Modifier.readingMeasure(MaterialTheme.typography.bodyMedium), verticalArrangement = Arrangement.spacedBy(ParagraphGap)) {
         items.forEach { item ->
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
-                CheckGlyph(MaterialTheme.colorScheme.primary, Modifier.padding(top = 2.dp))
+                // Its middle on the first line's, at any text size (see markTop).
+                CheckGlyph(
+                    MaterialTheme.colorScheme.primary,
+                    Modifier.padding(top = markTop(middle = 11.sp, size = CheckSize)),
+                    glyphSize = CheckSize,
+                )
                 Text(item, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
             }
         }
@@ -534,6 +540,7 @@ private val SectionGapCompact = 44.dp
 /** The article column: the reading measure plus room for figures, chips and the module diagram beside it. */
 private val ArticleWidth = 720.dp
 private val PortraitHero = 520.dp
+private val CheckSize = 18.dp
 private val PortraitHeroCompact = 440.dp
 
 private val previewProject = Project(

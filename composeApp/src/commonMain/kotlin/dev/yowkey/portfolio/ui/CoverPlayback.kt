@@ -1,5 +1,13 @@
 package dev.yowkey.portfolio.ui
 
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+
 /**
  * Which card covers may play. Decoding is the expensive part of a clip (7–8 ms a frame on the web), so only covers
  * on screen play, the most visible first, and never more than [MAX_PLAYING_COVERS] at once. Pure, so the rules are
@@ -44,5 +52,40 @@ object CoverPlayback {
         if (size <= 0) return 0f
         val shown = minOf(offset + size, viewportEnd) - maxOf(offset, viewportStart)
         return (shown.coerceAtLeast(0).toFloat() / size).coerceAtMost(1f)
+    }
+}
+
+/**
+ * The ids of the covers in [listState]'s rows ([items]) that should play now: [CoverPlayback.select] over the rows on
+ * screen, none unless [active], and none in a row reaching into the bottom [keepClearPx] (see [CoverPlayback.clearOf]).
+ * Worked out on every scroll frame (a few visible rows), but readers hear of it only when the set of ids changes.
+ * [keepClearPx] is read as it is now: the page passes a new one when that corner moves or the page is covered, and the
+ * first one, kept, would go on clearing a corner that has moved.
+ */
+@Composable
+internal fun rememberPlayingCovers(
+    listState: LazyListState,
+    items: List<PageItem>,
+    active: Boolean,
+    keepClearPx: () -> Int,
+): State<Set<String>> {
+    val keepClear by rememberUpdatedState(keepClearPx)
+    return remember(listState, items, active) {
+        derivedStateOf {
+            if (!active) return@derivedStateOf emptySet()
+            val info = listState.layoutInfo
+            CoverPlayback.select(
+                info.visibleItemsInfo.mapNotNull { visible ->
+                    val row = items.getOrNull(visible.index) as? PageItem.Projects ?: return@mapNotNull null
+                    val clear = CoverPlayback.clearOf(visible.offset, visible.size, info.viewportEndOffset, keepClear())
+                    CoverPlayback.VisibleRow(
+                        coverClipIds = row.projects.filter { it.coverClip != null }.map { it.id },
+                        visibleFraction = if (!clear) 0f else CoverPlayback.visibleFraction(
+                            visible.offset, visible.size, info.viewportStartOffset, info.viewportEndOffset,
+                        ),
+                    )
+                },
+            )
+        }
     }
 }

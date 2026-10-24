@@ -81,6 +81,7 @@ private fun MessageDraftForm(state: MessageUiState, onSend: (MessageDraft) -> Un
                 placeholder = { Text("Optional") },
                 singleLine = true,
                 enabled = !sending,
+                colors = formFieldColors(),
             )
         }
         val contactField: @Composable (Modifier) -> Unit = { fieldModifier ->
@@ -97,6 +98,7 @@ private fun MessageDraftForm(state: MessageUiState, onSend: (MessageDraft) -> Un
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                 isError = problem != null && contact.isBlank(),
                 enabled = !sending,
+                colors = formFieldColors(),
             )
         }
         if (wide) {
@@ -120,6 +122,7 @@ private fun MessageDraftForm(state: MessageUiState, onSend: (MessageDraft) -> Un
             supportingText = { Text("${message.length} / ${MessageDraft.MAX_MESSAGE}") },
             isError = problem != null && message.isBlank(),
             enabled = !sending,
+            colors = formFieldColors(),
         )
         val shown = problem ?: (state as? MessageUiState.Failed)?.message
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
