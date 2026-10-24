@@ -26,7 +26,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -35,6 +37,7 @@ import dev.yowkey.portfolio.admin.NoteAction
 import dev.yowkey.portfolio.admin.pinnedFirst
 import dev.yowkey.portfolio.app.owner.OwnerViewModel
 import dev.yowkey.portfolio.app.owner.Tab
+import kotlinx.coroutines.flow.first
 import java.time.ZoneId
 
 /**
@@ -58,9 +61,14 @@ fun NotesScreen(owner: OwnerViewModel) {
         val notes = remember(loaded) { pinnedFirst(loaded) }
         val list = rememberLazyListState()
         val focus = nav.noteId
-        LaunchedEffect(focus, notes) {
-            val index = notes.indexOfFirst { it.id == focus }
-            if (focus != null && index >= 0) list.animateScrollToItem(index)
+        // Scrolls to the named note once, as soon as the list has it (a refresh may bring it). Keyed on the note
+        // alone: keyed on the list too, every action on any note and every pull to refresh scrolled the list back to
+        // the named one, away from the note just hidden or pinned.
+        val latest by rememberUpdatedState(notes)
+        LaunchedEffect(focus) {
+            if (focus == null) return@LaunchedEffect
+            val index = snapshotFlow { latest.indexOfFirst { it.id == focus } }.first { it >= 0 }
+            list.animateScrollToItem(index)
         }
         LazyColumn(
             state = list,
