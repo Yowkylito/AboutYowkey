@@ -20,6 +20,7 @@ import dev.yowkey.portfolio.admin.NoteAction
 import dev.yowkey.portfolio.admin.after
 import dev.yowkey.portfolio.app.OwnerLink
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
@@ -132,7 +133,7 @@ class OwnerViewModel(
      * The loads and actions underway. Signing out cancels them, so nothing read with the old token lands on a screen
      * after [clear] has emptied it.
      */
-    private val work = SupervisorJob(viewModelScope.coroutineContext[Job])
+    private val work = viewModelScope.coroutineContext.let { CoroutineScope(it + SupervisorJob(it[Job])) }
 
     /** Per list, a load asked for while one was underway, to run when that one ends (see [load]). Main thread only. */
     private val again = HashMap<MutableStateFlow<*>, () -> Unit>()
@@ -355,7 +356,7 @@ class OwnerViewModel(
             return
         }
         target.update { it.copy(loading = true) }
-        viewModelScope.launch(work) {
+        work.launch {
             target.value = try {
                 Loadable(fetch(session.api()))
             } catch (e: CancellationException) {
@@ -373,7 +374,7 @@ class OwnerViewModel(
     private fun perform(id: Long, call: suspend (AdminApi) -> Unit, done: () -> String?) {
         if (id in _working.value) return
         _working.update { it + id }
-        viewModelScope.launch(work) {
+        work.launch {
             try {
                 call(session.api())
                 done()?.let(::notice)
@@ -399,7 +400,7 @@ class OwnerViewModel(
     }
 
     private fun clear() {
-        work.cancelChildren()
+        work.coroutineContext.cancelChildren()
         again.clear()
         _dashboard.value = Loadable()
         _messages.value = Loadable()
