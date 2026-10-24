@@ -25,6 +25,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /** Runs against the real content and template, so what ships is what is tested. */
@@ -407,6 +408,49 @@ class SiteContentTest {
         assertTrue("navigator.sendBeacon(link.dataset.api + \"/clicks\", JSON.stringify({ link: name }))" in page)
         assertTrue("addEventListener(\"auxclick\"" in page, "a middle click counts too")
         assertTrue(MessageCopy.THANKS in page, "the static form thanks the visitor as the app does")
+    }
+
+    /**
+     * Each form opens in a modal dialog, which only the page's script can open: without it (no `js` class, which
+     * the head's script sets before the first paint) the template shows each form in its section and hides the
+     * buttons. With it, the dialogs open modal, close on the backdrop, give the focus back, and close when the app
+     * takes over, as the star sheet does. Their script is a plain inline one, so the policy's hashes cover it.
+     */
+    @Test
+    fun theFormsOpenInDialogsAndShowInlineWithoutTheScript() {
+        if (portfolio.api == null) return
+        val css = page.substringAfter("<style>").substringBefore("</style>")
+        assertTrue("document.documentElement.classList.add(\"js\");" in page.substringBefore("<style>"), "set before the first paint")
+        assertTrue(":root:not(.js) .open-form, :root:not(.js) .dialog-head { display: none; }" in css, "no button without the script")
+        val inline = css.substringAfter(":root:not(.js) .form-dialog {", missingDelimiterValue = "").substringBefore("}")
+        listOf("position: static;", "display: block;", "max-height: none;", "overflow: visible;")
+            .forEach { assertTrue(it in inline, "without the script the form shows in its section: $it") }
+        assertTrue(".form-dialog:not([open]) { display: none; }" in css, "with it, a dialog shows only while open")
+        assertTrue("width: min(560px, calc(100% - 32px));" in css && "max-height: calc(100dvh - 32px);" in css && "border-radius: 28px;" in css)
+        assertTrue(
+            Regex("@media \\(prefers-reduced-motion: no-preference\\) \\{\\s*\\.form-dialog\\[open] \\{ animation: dialog-in ").containsMatchIn(css),
+            "the dialog's entrance plays only where motion is welcome",
+        )
+        assertEquals(1, Regex("animation: dialog-in").findAll(css).count(), "and nowhere else")
+
+        val script = Regex("<script>([\\s\\S]*?)</script>").findAll(page).map { it.groupValues[1] }
+            .single { "button.open-form[aria-controls]" in it }
+        listOf(
+            "if (modal) { if (!dialog.open) dialog.showModal(); }",
+            "dialog.addEventListener(\"close\", closed);",
+            "if (!document.body.classList.contains(\"app-ready\")) opener.focus();",
+            "if (pressedOutside && onBackdrop(event)) close();",
+            "(event.shiftKey ? last : first).focus();",
+            "if (document.body.classList.contains(\"app-ready\")) closers.forEach(function (close) { close(); });",
+        ).forEach { assertTrue(it in script, "the dialogs' script lacks $it") }
+    }
+
+    /** The policy blocks inline event handlers, so the shipped page, template and content, has none. */
+    @Test
+    fun theShippedPageHasNoInlineHandlers() {
+        val markup = page.replace(Regex("<script[\\s\\S]*?</script>|<style>[\\s\\S]*?</style>|<!--[\\s\\S]*?-->"), "")
+        assertNull(Regex("<[a-zA-Z][^>]*\\son[a-z]+\\s*=", RegexOption.IGNORE_CASE).find(markup)?.value)
+        assertFalse("javascript:" in markup)
     }
 
     /**

@@ -25,6 +25,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class StaticHtmlTest {
@@ -386,7 +387,8 @@ class StaticHtmlTest {
                 "the bar for $it stars",
             )
         }
-        assertEquals(5, Regex("aria-haspopup=\"dialog\"").findAll(html).count(), "only the five bars open the sheet")
+        assertEquals(5, Regex("aria-haspopup=\"dialog\"").findAll(bars).count(), "the five bars open the sheet")
+        assertEquals(7, Regex("aria-haspopup=\"dialog\"").findAll(html).count(), "and only they and the two forms' buttons open a dialog")
         assertFalse("aria-pressed" in bars, "a bar is no longer a filter")
         assertFalse("filtering" in html)
     }
@@ -399,7 +401,7 @@ class StaticHtmlTest {
     @Test
     fun theStarSheetIsOnThePageReadyToFill() {
         val html = StaticHtml.content(portfolio.copy(api = "https://api.example"))
-        val notes = html.substringAfter("<div class=\"visitor-notes\"").substringBefore("<h3 id=\"feedback\">")
+        val notes = html.substringAfter("<div class=\"visitor-notes\"").substringBefore("<div class=\"form-entry\">\n<h3 id=\"feedback\">")
         val sheet = notes.substringAfter("<dialog ", missingDelimiterValue = "").substringBefore("</dialog>")
         assertTrue(sheet.startsWith("class=\"star-sheet\" aria-labelledby=\"star-sheet-title\">"), "a labelled dialog: ${sheet.take(80)}")
         assertTrue("<h4 id=\"star-sheet-title\"></h4>" in sheet, "the title it is labelled by")
@@ -499,6 +501,111 @@ class StaticHtmlTest {
             contact.indexOf("<form class=\"message\"") in 0 until contact.indexOf("class=\"visitor-notes\""),
             "the private form comes before the published notes and the note form",
         )
+    }
+
+    /** A form's place in the Contact section, its dialog and its form, as [StaticHtml.content] writes them. */
+    private class FormEntry(val entry: String) {
+        /** What the section shows: everything in the entry outside its dialog. */
+        val section = entry.substringBefore("<dialog")
+        val dialog = "<dialog" + entry.substringAfter("<dialog", missingDelimiterValue = "").substringBefore("</dialog>") + "</dialog>"
+    }
+
+    private fun formEntries(html: String): Map<String, FormEntry> =
+        Regex("<div class=\"form-entry\">\\n<h3 id=\"(\\w+)\">([\\s\\S]*?)</dialog>\\n</div>").findAll(html)
+            .associate { it.groupValues[1] to FormEntry(it.value) }
+
+    /**
+     * In the Contact section each form is its title (with the old id, so `#message` and `#feedback` still land
+     * there), its badge, one line and a button: no field at all. The button says it opens a dialog, and which.
+     */
+    @Test
+    fun eachFormIsATitleALineAndAButtonThatOpensItsDialog() {
+        val html = StaticHtml.content(portfolio.copy(api = "https://api.example"))
+        val entries = formEntries(html)
+        assertEquals(listOf("message", "feedback"), entries.keys.toList(), "the private form first, then the public one")
+        val copies = mapOf(
+            "message" to listOf(MessageCopy.TITLE, MessageCopy.PRIVATE, MessageCopy.INTRO, MessageCopy.OPEN),
+            "feedback" to listOf(FeedbackCopy.TITLE, FeedbackCopy.PUBLIC, FeedbackCopy.INTRO, FeedbackCopy.OPEN),
+        )
+        entries.forEach { (id, entry) ->
+            val (title, audience, intro, open) = copies.getValue(id).map { StaticHtml.escape(it) }
+            assertEquals(
+                "<div class=\"form-entry\">\n" +
+                    "<h3 id=\"$id\">$title <span class=\"badge\">$audience</span></h3>\n" +
+                    "<p class=\"note\">$intro</p>\n" +
+                    // Filled for the private form, outlined for the public one, as the app's.
+                    "<button class=\"open-form${if (id == "message") "" else " outlined"}\" type=\"button\" aria-haspopup=\"dialog\" aria-controls=\"$id-dialog\" " +
+                    "commandfor=\"$id-dialog\" command=\"show-modal\">$open</button>\n",
+                entry.section,
+            )
+        }
+        assertEquals("Feedback", FeedbackCopy.TITLE, "the owner's word for the public form")
+        // Outside the dialogs (and the star sheet, which holds no field either), the section asks nothing.
+        val contact = html.substringAfter("<section id=\"contact\">").substringBefore("</section>")
+        val outside = Regex("<dialog[\\s\\S]*?</dialog>").replace(contact, "")
+        listOf("<form", "<input", "<textarea", "<select", "<fieldset", "<label").forEach {
+            assertFalse(it in outside, "the section shows $it outside a dialog")
+        }
+    }
+
+    /**
+     * One modal dialog per form, labelled by its own copy of the title and badge, with a close button and the form
+     * itself, unchanged: the note form's dialog says first what happens to a note (and is described by it).
+     */
+    @Test
+    fun eachFormHasItsOwnDialog() {
+        val api = "https://api.example"
+        val html = StaticHtml.content(portfolio.copy(api = api))
+        assertEquals(3, Regex("<dialog ").findAll(html).count(), "the star sheet and one per form")
+        val entries = formEntries(html)
+        val forms = mapOf("message" to "<form class=\"message\"", "feedback" to "<form class=\"feedback\"")
+        entries.forEach { (id, entry) ->
+            val dialog = entry.dialog
+            val (title, audience) = when (id) {
+                "message" -> MessageCopy.TITLE to MessageCopy.PRIVATE
+                else -> FeedbackCopy.TITLE to FeedbackCopy.PUBLIC
+            }
+            val described = if (id == "feedback") " aria-describedby=\"feedback-dialog-intro\"" else ""
+            assertTrue(
+                dialog.startsWith("<dialog class=\"form-dialog\" id=\"$id-dialog\" aria-labelledby=\"$id-dialog-title\"$described>\n"),
+                dialog.take(160),
+            )
+            val order = listOf(
+                "<div class=\"dialog-head\"><h4 id=\"$id-dialog-title\">${StaticHtml.escape(title)} <span class=\"badge\">$audience</span></h4>",
+                "<button class=\"close\" type=\"button\" aria-label=\"Close\" commandfor=\"$id-dialog\" command=\"close\"><svg",
+                "<div class=\"dialog-body\">",
+                forms.getValue(id) + " method=\"post\" action=\"$api/$id" + (if (id == "message") "s" else "") + "\" data-api=\"$api\">",
+                "<button type=\"submit\">",
+                "<p class=\"status\" role=\"status\" aria-live=\"polite\"></p>\n</form>\n</div>\n</dialog>",
+            )
+            val positions = order.map { dialog.indexOf(it) }
+            assertTrue(positions.none { it < 0 } && positions == positions.sorted(), "$id: order ${order.zip(positions)}")
+            assertEquals(1, Regex("<form ").findAll(dialog).count(), "$id: one form in its dialog")
+            forms.filterKeys { it != id }.values.forEach { assertFalse(it in dialog, "$id's dialog holds the other form") }
+        }
+        assertEquals(MessageCopy.CLOSE, FeedbackCopy.CLOSE)
+        val feedback = entries.getValue("feedback").dialog
+        val intro = "<p class=\"dialog-intro\" id=\"feedback-dialog-intro\">${StaticHtml.escape(FeedbackCopy.FORM_INTRO)}</p>"
+        assertTrue(feedback.indexOf(intro) in 0 until feedback.indexOf("<form "), "what happens to a note, before the form")
+        assertFalse("dialog-intro" in entries.getValue("message").dialog, "the message's line is the section's")
+        // Every button that opens a dialog names one that is on the page.
+        Regex("aria-controls=\"([\\w-]+)\"").findAll(html).map { it.groupValues[1] }.filter { it.endsWith("-dialog") }.toList().let { ids ->
+            assertEquals(listOf("message-dialog", "feedback-dialog"), ids)
+            ids.forEach { assertEquals(1, Regex("<dialog [^>]*id=\"$it\"").findAll(html).count(), "#$it") }
+        }
+    }
+
+    /**
+     * The page's policy blocks inline event handlers (`onclick=`), so the markup has none: the template's scripts
+     * wire everything. Nor does it need any to work: the forms post plainly.
+     */
+    @Test
+    fun theMarkupHasNoInlineHandlers() {
+        val withApi = portfolio.copy(api = "https://api.example")
+        val markup = StaticHtml.bar(withApi) + StaticHtml.content(withApi) + StaticHtml.backToTop()
+        val handler = Regex("<[a-zA-Z][^>]*\\son[a-z]+\\s*=", RegexOption.IGNORE_CASE)
+        assertNull(handler.find(markup)?.value, "an inline handler")
+        assertFalse("javascript:" in markup)
     }
 
     /** With a backend, the profile's LinkedIn and GitHub links name themselves for the page's click beacon. */
