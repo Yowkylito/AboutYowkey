@@ -959,6 +959,17 @@ test("the daily report: today's numbers kept once per day, and one alert however
   assert.equal((await appJson("/admin/reports?limit=1")).items.length, 1);
 });
 
+test("two runs of the cron at once still send one alert", async () => {
+  await call("/visits", { method: "POST" });
+  const runs = await Promise.all([
+    dailyReport(env, ctx, { now: new Date(REPORT_TIME), fetch: fetchStub }),
+    dailyReport(env, ctx, { now: new Date("2026-10-24T15:59:01.000Z"), fetch: fetchStub }),
+  ]);
+  assert.deepEqual(runs[0], runs[1]);
+  assert.deepEqual(query("SELECT day, visits, created_at FROM daily_reports"), [{ day: "2026-10-24", visits: 1, created_at: REPORT_TIME }]);
+  assert.equal(query("SELECT id FROM notifications WHERE kind = 'daily'").length, 1);
+});
+
 test("the Worker's entry point hands the cron its scheduled time, and requests their context", async () => {
   await worker.scheduled({ scheduledTime: Date.parse(REPORT_TIME), cron: "59 15 * * *" }, env, ctx);
   assert.deepEqual(query("SELECT day FROM daily_reports"), [{ day: "2026-10-24" }]);

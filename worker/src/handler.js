@@ -967,21 +967,24 @@ async function removeDevice(request, env) {
 
 /**
  * The cron's job at 23:59 local time: the day's numbers, kept in `daily_reports` and sent to the owner. Cloudflare
- * may run a cron twice; a second run the same day rewrites the row with the newer numbers and sends nothing more.
+ * may run a cron twice, even at once; the run whose insert makes the day's row sends the alert, and any other
+ * rewrites the row with the newer numbers and sends nothing more.
  */
 export async function dailyReport(env, ctx, { now = new Date(), fetch } = {}) {
   const today = localDay(env, now);
   const [{ visits, clicks, notes, messages }] = await numbersFor(env, [today]);
-  const seen = await env.DB.prepare("SELECT 1 AS seen FROM daily_reports WHERE day = ?1").bind(today).first();
-  await env.DB
-    .prepare(
-      "INSERT INTO daily_reports (day, visits, clicks, notes, messages, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6) " +
-        "ON CONFLICT (day) DO UPDATE SET visits = excluded.visits, clicks = excluded.clicks, notes = excluded.notes, messages = excluded.messages",
-    )
-    .bind(today, visits, JSON.stringify(clicks), notes, messages, now.toISOString())
+  const values = [today, visits, JSON.stringify(clicks), notes, messages];
+  // Claiming the day is one statement, so two runs cannot both see it unclaimed and both send.
+  const { meta } = await env.DB
+    .prepare("INSERT INTO daily_reports (day, visits, clicks, notes, messages, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6) ON CONFLICT (day) DO NOTHING")
+    .bind(...values, now.toISOString())
     .run();
+  const first = meta.changes === 1;
+  if (!first) {
+    await env.DB.prepare("UPDATE daily_reports SET visits = ?2, clicks = ?3, notes = ?4, messages = ?5 WHERE day = ?1").bind(...values).run();
+  }
   const report = { day: today, visits, clicks, notes, messages };
-  if (!seen) await notify(env, ctx, { kind: "daily", ...dailyText(report), refId: null }, { now, fetch });
+  if (first) await notify(env, ctx, { kind: "daily", ...dailyText(report), refId: null }, { now, fetch });
   return report;
 }
 
