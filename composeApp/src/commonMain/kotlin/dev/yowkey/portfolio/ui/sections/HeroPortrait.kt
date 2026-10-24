@@ -76,7 +76,9 @@ import kotlin.math.sin
 @Composable
 fun HeroPortrait(path: String, name: String, entrance: HeroEntrance, modifier: Modifier = Modifier) {
     val loader = LocalScreenshotImages.current?.thumbnails
-    val image by produceState<ImageBitmap?>(null, path, loader) {
+    // Started from the cache, as ScreenshotImage is: back at the top, the figure is there in the first frame.
+    val cached = remember(path, loader) { loader?.peek(path) }
+    val image by produceState(cached, path, loader) {
         value = try {
             loader?.get(path)
         } catch (e: CancellationException) {

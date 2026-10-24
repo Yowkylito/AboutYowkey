@@ -54,6 +54,8 @@
       --accent-deep: #1D4ED8;
       /* The hero portrait's stage and its colour split's far fringe: the app's primaryContainer and onPrimaryContainer. */
       --stage: #DBEAFE; --fringe: #1E3A8A;
+      /* The edge of a form field and an unlit star, the app's ControlOutline: 3:1 on either theme's surface. */
+      --control: #71717A;
     }
     :root[data-theme="dark"] {
       color-scheme: dark;
@@ -307,7 +309,7 @@
     form.feedback label .muted, form.message label .muted { font-weight: 400; }
     form.feedback input, form.feedback select, form.feedback textarea, form.message input, form.message textarea {
       font: inherit; font-weight: 400; color: var(--ink); background: var(--surface);
-      border: 1px solid var(--line-strong); border-radius: 10px; padding: 10px 12px;
+      border: 1px solid var(--control); border-radius: 10px; padding: 10px 12px;
     }
     form.feedback textarea, form.message textarea { resize: vertical; min-height: 120px; }
     form.feedback button, form.message button {
@@ -381,7 +383,7 @@
     .notes .top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
     .notes .name { min-width: 0; font-weight: 700; overflow-wrap: anywhere; }
     .notes .stars { flex: none; color: var(--accent); font-size: 15px; letter-spacing: .08em; }
-    .notes .stars .off, .sheet-stars .off { color: var(--line-strong); }
+    .notes .stars .off, .sheet-stars .off { color: var(--control); }
     .notes .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-top: 2px; color: var(--muted); font-size: 14px; }
     .notes .meta .badge { font-size: 12px; padding: 0 7px; }
     .notes .meta .pinned { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
