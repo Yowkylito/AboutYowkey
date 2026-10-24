@@ -7,6 +7,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalInspectionMode
@@ -33,7 +34,7 @@ import kotlin.math.roundToInt
  * web the static page plays the same entrance before the app arrives, and this starts where that one has got to.
  */
 @Stable
-class HeroEntrance internal constructor(startMillis: Float) {
+class HeroEntrance internal constructor(startMillis: Float, private var joinsStatic: Boolean = false) {
 
     /** Where the entrance is on [HeroMotion]'s timeline: 0 before it starts, [HeroMotion.END_MS] once it is over. */
     internal val clock = Animatable(startMillis)
@@ -66,12 +67,20 @@ class HeroEntrance internal constructor(startMillis: Float) {
     /**
      * Runs the clock to the end from wherever it is, so a hero composed again mid-entrance carries on. From the start
      * it first waits for the portrait, at most [PORTRAIT_WAIT_MS]; without one in time the intro goes ahead alone.
+     * Joining the static page's entrance, it keeps to the static page's clock frame by frame to the end instead: the
+     * app's first frames come slowly while it starts, and a clock of its own would fall behind the page it fades in
+     * over, showing the same words twice.
      */
     internal suspend fun play(reducedMotion: Boolean, hasPhoto: Boolean) {
         val end = HeroMotion.END_MS.toFloat()
         if (reducedMotion) {
             clock.snapTo(end)
             return
+        }
+        while (joinsStatic && clock.value < end) {
+            val static = staticIntroMillis()
+            if (static == null) joinsStatic = false else clock.snapTo(static.coerceIn(0, HeroMotion.END_MS).toFloat())
+            if (joinsStatic && clock.value < end) withFrameNanos { }
         }
         if (clock.value >= end) return
         if (clock.value == 0f) {
@@ -99,8 +108,8 @@ class HeroEntrance internal constructor(startMillis: Float) {
 fun rememberHeroEntrance(): HeroEntrance {
     val settled = LocalReducedMotion.current || LocalInspectionMode.current
     return remember {
-        val end = HeroMotion.END_MS
-        HeroEntrance(if (settled) end.toFloat() else staticIntroMillis()?.coerceIn(0, end)?.toFloat() ?: 0f)
+        val joined = if (settled) null else staticIntroMillis()?.coerceIn(0, HeroMotion.END_MS)
+        HeroEntrance(if (settled) HeroMotion.END_MS.toFloat() else joined?.toFloat() ?: 0f, joinsStatic = joined != null)
     }
 }
 
