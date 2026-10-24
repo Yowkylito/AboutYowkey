@@ -137,6 +137,9 @@ class OwnerViewModel(
     /** Per list, a load asked for while one was underway, to run when that one ends (see [load]). Main thread only. */
     private val again = HashMap<MutableStateFlow<*>, () -> Unit>()
 
+    /** Whether the next dashboard load is to fetch the thirty days too (see [refreshDashboard]). Main thread only. */
+    private var wholeDashboardDue = false
+
     private val _notices = Channel<String>(Channel.BUFFERED)
 
     /** One-off sentences for the snackbar: what an action did, or why it did not. */
@@ -235,13 +238,7 @@ class OwnerViewModel(
     fun refresh(tab: Tab) {
         if (!signedIn.value) return
         when (tab) {
-            Tab.Dashboard, Tab.Settings -> load(_dashboard, { api ->
-                coroutineScope {
-                    val summary = async { api.summary() }
-                    val days = async { api.days(30) }
-                    Dashboard(summary.await(), days.await())
-                }
-            })
+            Tab.Dashboard, Tab.Settings -> refreshDashboard(whole = true)
             Tab.Messages -> load(_messages, { it.messages() }) { markOpenMessageRead() }
             Tab.Notes -> load(_notes, { it.notes() })
             Tab.Records -> {
@@ -266,7 +263,7 @@ class OwnerViewModel(
         perform(message.id, { it.act(message.id, action) }) {
             _messages.update { loaded -> loaded.copy(value = loaded.value?.mapNotNull { if (it.id == message.id) it.after(action, now()) else it }) }
             if (action == MessageAction.Delete) closeMessage()
-            refresh(Tab.Dashboard) // the unread badge and the hiring count
+            refreshDashboard(whole = false) // the unread badge and the hiring count
             when (action) {
                 MessageAction.Archive -> "Archived."
                 MessageAction.Unarchive -> "Back in the inbox."
@@ -280,7 +277,7 @@ class OwnerViewModel(
     fun act(note: AdminNote, action: NoteAction) {
         perform(note.id, { it.act(note.id, action) }) {
             _notes.update { loaded -> loaded.copy(value = loaded.value?.mapNotNull { if (it.id == note.id) it.after(action, now()) else it }) }
-            refresh(Tab.Dashboard)
+            refreshDashboard(whole = false) // the note counts
             when (action) {
                 NoteAction.Publish -> "Back on the site."
                 NoteAction.Unpublish -> "Taken off the site."
@@ -320,6 +317,30 @@ class OwnerViewModel(
         val id = _nav.value.messageId ?: return
         val message = _messages.value.value?.firstOrNull { it.id == id } ?: return
         if (!message.isRead && id !in _working.value) act(message, MessageAction.Read)
+    }
+
+    /**
+     * Reloads the dashboard. [whole]: the summary and the thirty days of visits, as the Dashboard and Settings tabs
+     * show them. Otherwise the summary alone (the unread badge, the hiring and note counts), which is all that a
+     * message or a note action changes, so each action, opening an unread message included, costs one request after
+     * it rather than two. A dashboard never loaded loads whole either way.
+     */
+    private fun refreshDashboard(whole: Boolean) {
+        wholeDashboardDue = wholeDashboardDue || whole
+        load(_dashboard, { api ->
+            // Read when the load starts, so a whole reload asked for during a summary reload is not lost.
+            val days = _dashboard.value.value?.days?.takeUnless { wholeDashboardDue }
+            wholeDashboardDue = false
+            if (days != null) {
+                Dashboard(api.summary(), days)
+            } else {
+                coroutineScope {
+                    val summary = async { api.summary() }
+                    val thirty = async { api.days(30) }
+                    Dashboard(summary.await(), thirty.await())
+                }
+            }
+        })
     }
 
     /**

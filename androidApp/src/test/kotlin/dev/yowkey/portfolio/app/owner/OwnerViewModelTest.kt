@@ -71,6 +71,40 @@ class OwnerViewModelTest {
     }
 
     @Test
+    fun anActionReloadsTheSummaryAloneNotTheThirtyDays() = runTest(main) {
+        val owner = owner()
+        owner.start(link = null)
+        owner.select(Tab.Messages)
+        worker.requests.clear()
+        owner.openMessage(1)
+        assertEquals(listOf("POST /admin/messages/1", "GET /admin/summary"), worker.requests)
+        assertEquals(0, owner.dashboard.value.value?.summary?.messages?.unread)
+    }
+
+    @Test
+    fun anActionBeforeTheDashboardEverLoadedLoadsItWhole() = runTest(main) {
+        val owner = owner()
+        owner.start(OwnerLink.Messages(1)) // a notification's message: the dashboard has not loaded yet
+        assertEquals(
+            listOf("GET /admin/messages?limit=100", "POST /admin/messages/1", "GET /admin/summary", "GET /admin/days?limit=30"),
+            worker.requests,
+        )
+    }
+
+    @Test
+    fun theDashboardTabAskedForDuringASummaryReloadStillGetsTheThirtyDays() = runTest(main) {
+        val owner = owner()
+        owner.start(link = null)
+        owner.select(Tab.Messages)
+        val gate = CompletableDeferred<Unit>().also { worker.summaryGate = it }
+        owner.openMessage(1) // the summary alone, held back
+        owner.select(Tab.Dashboard) // asks for the whole dashboard meanwhile
+        worker.requests.clear()
+        gate.complete(Unit)
+        assertEquals(listOf("GET /admin/summary", "GET /admin/days?limit=30"), worker.requests)
+    }
+
+    @Test
     fun aNotificationsLinkLoadsItsTabOnce() = runTest(main) {
         val owner = owner()
         owner.start(OwnerLink.Notes(5))
