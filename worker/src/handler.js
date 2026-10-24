@@ -172,36 +172,47 @@ function localDay(env, now) {
  */
 const NOT_TODAY = "day < ?1 OR day > ?1";
 
-async function visitCounts(db, today) {
-  const row = await db
+function visitCountsQuery(db, today) {
+  return db
     .prepare(
       "SELECT COALESCE(SUM(count), 0) AS total, MIN(day) AS since, " +
         "COALESCE((SELECT count FROM visits WHERE day = ?1), 0) AS today FROM visits",
     )
-    .bind(today)
-    .first();
+    .bind(today);
+}
+
+function visitTotals(row) {
   return { total: row.total, today: row.today, since: row.since };
 }
 
+async function visitCounts(db, today) {
+  return visitTotals(await visitCountsQuery(db, today).first());
+}
+
+/**
+ * Counts the visit unless this visitor is already counted today, then reads the counts: one batch, so one round
+ * trip to D1 rather than up to five, and one transaction, so the count, the country and the visitor's id are kept
+ * together or not at all (a failure never leaves an id that would keep its visitor from ever being counted today).
+ * The counts go up only while the id is not there yet, which the batch's third statement then puts there.
+ */
 async function recordVisit(request, env, now) {
   const today = localDay(env, now);
   const agent = request.headers.get("User-Agent") || "";
   if (isBot(agent)) return visitCounts(env.DB, today);
   const visitor = await visitorId(request, env, today, agent);
-  const inserted = await env.DB.prepare("INSERT OR IGNORE INTO visitors (day, visitor) VALUES (?1, ?2)").bind(today, visitor).run();
-  if (inserted.meta.changes === 1) {
-    await env.DB
-      .prepare("INSERT INTO visits (day, count) VALUES (?1, 1) ON CONFLICT (day) DO UPDATE SET count = count + 1")
-      .bind(today)
-      .run();
-    await env.DB
-      .prepare("INSERT INTO visit_countries (day, country, count) VALUES (?1, ?2, 1) ON CONFLICT (day, country) DO UPDATE SET count = count + 1")
-      .bind(today, countryOf(request))
-      .run();
+  const db = env.DB;
+  const isNew = "WHERE NOT EXISTS (SELECT 1 FROM visitors WHERE day = ?1 AND visitor = ?2)";
+  const results = await db.batch([
+    db.prepare(`INSERT INTO visits (day, count) SELECT ?1, 1 ${isNew} ON CONFLICT (day) DO UPDATE SET count = count + 1`).bind(today, visitor),
+    db
+      .prepare(`INSERT INTO visit_countries (day, country, count) SELECT ?1, ?3, 1 ${isNew} ON CONFLICT (day, country) DO UPDATE SET count = count + 1`)
+      .bind(today, visitor, countryOf(request)),
+    db.prepare("INSERT OR IGNORE INTO visitors (day, visitor) VALUES (?1, ?2)").bind(today, visitor),
     // An id carries its day, so an earlier day's rows can never match again: nothing about a visitor outlives the day.
-    await env.DB.prepare(`DELETE FROM visitors WHERE ${NOT_TODAY}`).bind(today).run();
-  }
-  return visitCounts(env.DB, today);
+    db.prepare(`DELETE FROM visitors WHERE ${NOT_TODAY}`).bind(today),
+    visitCountsQuery(db, today),
+  ]);
+  return visitTotals(results.at(-1).results[0]);
 }
 
 function isBot(agent) {
@@ -237,8 +248,8 @@ export function trackedLinks(env) {
 }
 
 /**
- * A click on one of the page's tracked links, counted like a visit: once per visitor per day per link, never for a
- * bot, and the day's ids deleted once a new day's click is counted. The page sends it with `navigator.sendBeacon`,
+ * A click on one of the page's tracked links, counted like a visit (in one batch, the same way): once per visitor per
+ * day per link, never for a bot, and the earlier days' ids deleted. The page sends it with `navigator.sendBeacon`,
  * which posts text/plain (any other type would need a preflight it cannot make), so that is read as JSON too.
  */
 async function recordClick(request, env, now, cors) {
@@ -250,19 +261,19 @@ async function recordClick(request, env, now, cors) {
   if (isBot(agent)) return json({ ok: true, counted: false }, 200, cors);
   const today = localDay(env, now);
   const visitor = await visitorId(request, env, today, agent);
-  const inserted = await env.DB
-    .prepare("INSERT OR IGNORE INTO clickers (day, link, visitor) VALUES (?1, ?2, ?3)")
-    .bind(today, link, visitor)
-    .run();
-  const counted = inserted.meta.changes === 1;
-  if (counted) {
-    await env.DB
-      .prepare("INSERT INTO clicks (day, link, count) VALUES (?1, ?2, 1) ON CONFLICT (day, link) DO UPDATE SET count = count + 1")
-      .bind(today, link)
-      .run();
-    await env.DB.prepare(`DELETE FROM clickers WHERE ${NOT_TODAY}`).bind(today).run();
-  }
-  return json({ ok: true, counted }, 200, cors);
+  const db = env.DB;
+  const [, claimed] = await db.batch([
+    db
+      .prepare(
+        "INSERT INTO clicks (day, link, count) SELECT ?1, ?2, 1 " +
+          "WHERE NOT EXISTS (SELECT 1 FROM clickers WHERE day = ?1 AND link = ?2 AND visitor = ?3) " +
+          "ON CONFLICT (day, link) DO UPDATE SET count = count + 1",
+      )
+      .bind(today, link, visitor),
+    db.prepare("INSERT OR IGNORE INTO clickers (day, link, visitor) VALUES (?1, ?2, ?3)").bind(today, link, visitor),
+    db.prepare(`DELETE FROM clickers WHERE ${NOT_TODAY}`).bind(today),
+  ]);
+  return json({ ok: true, counted: claimed.meta.changes === 1 }, 200, cors);
 }
 
 /** A day's clicks as `{ linkedin: 2, github: 1 }`: every tracked link, 0 when nobody clicked it, then any others. */

@@ -125,6 +125,46 @@ test("yesterday's visitor ids are dropped when a new day is counted, and the add
   ]);
 });
 
+test("a visit waits on D1 once, counted or not, and its writes stand or fall together", async () => {
+  // Each first / all / run / batch is a round trip from the Worker to the database, which may be a continent away.
+  let trips = 0;
+  const { prepare, batch } = env.DB;
+  const counted = (bound) => ({
+    ...bound,
+    first: (...args) => (trips++, bound.first(...args)),
+    all: () => (trips++, bound.all()),
+    run: () => (trips++, bound.run()),
+  });
+  env.DB.prepare = (sql) => {
+    const statement = prepare(sql);
+    return { ...counted(statement), bind: (...params) => counted(statement.bind(...params)) };
+  };
+  env.DB.batch = (statements) => (trips++, batch(statements));
+  const visit = async (options) => {
+    trips = 0;
+    const answer = await (await call("/visits", { method: "POST", ...options })).json();
+    return { answer, trips };
+  };
+
+  assert.deepEqual(await visit(), { answer: { total: 1, today: 1, since: "2026-10-24" }, trips: 1 }, "new today");
+  assert.deepEqual(await visit(), { answer: { total: 1, today: 1, since: "2026-10-24" }, trips: 1 }, "already counted");
+  assert.deepEqual(await visit({ now: DAY_TWO }), { answer: { total: 2, today: 1, since: "2026-10-24" }, trips: 1 }, "new the next day");
+  for (const counted of [true, false]) {
+    trips = 0;
+    assert.deepEqual(await (await click("github", { now: DAY_TWO })).json(), { ok: true, counted });
+    assert.equal(trips, 1, "a click too");
+  }
+
+  // A write that fails takes the others of its visit with it: no count without its country, no lost id.
+  env.DB.raw.exec("CREATE TRIGGER broken BEFORE INSERT ON visit_countries BEGIN SELECT RAISE(ABORT, 'disk full'); END");
+  assert.equal((await call("/visits", { method: "POST", address: "198.51.100.2", now: DAY_TWO })).status, 500);
+  assert.deepEqual(query("SELECT day, count FROM visits ORDER BY day"), [
+    { day: "2026-10-24", count: 1 },
+    { day: "2026-10-25", count: 1 },
+  ]);
+  assert.deepEqual(query("SELECT day, COUNT(*) AS n FROM visitors GROUP BY day"), [{ day: "2026-10-25", n: 1 }]);
+});
+
 test("a new visitor or click seeks the day's ids in the key, never reading all of today's", async () => {
   const statements = [];
   const prepare = env.DB.prepare;
@@ -138,7 +178,7 @@ test("a new visitor or click seeks the day's ids in the key, never reading all o
   const plans = statements.filter((sql) => /\b(visitors|clickers)\b/.test(sql)).map((sql) => [sql, plan(sql)]);
   assert.ok(plans.some(([sql]) => sql.startsWith("DELETE FROM visitors")) && plans.some(([sql]) => sql.startsWith("DELETE FROM clickers")));
   for (const [sql, plan] of plans) {
-    for (const { detail } of plan) assert.doesNotMatch(detail, /^SCAN/, `${sql}: ${detail}`);
+    for (const { detail } of plan) assert.doesNotMatch(detail, /^SCAN (visitors|clickers)\b/, `${sql}: ${detail}`);
   }
 });
 
