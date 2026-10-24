@@ -287,11 +287,14 @@ class SiteContentTest {
 
     /**
      * The portrait ships small and cut out (its top corners clear, so the stage shows through) and leads the static
-     * hero, ahead of the name, as in the app's narrow layout. Nothing else sits in its folder unlisted.
+     * hero, ahead of the name, as in the app's narrow layout. Nothing else sits in its folder unlisted, so with no
+     * photo (the hero is then text alone) nothing ships there at all.
      */
     @Test
     fun portraitShipsCutOutWithinBudgetAndLeadsTheHero() {
-        val path = assertNotNull(portfolio.profile.photoPath, "the profile has no photo")
+        val shipped = File(resources, Profile.PHOTO_DIR).listFiles().orEmpty().map { it.name }.toSet()
+        assertEquals(setOfNotNull(portfolio.profile.photo), shipped, "shipped but unused, remove them")
+        val path = portfolio.profile.photoPath ?: return
         val file = File(resources, path)
         assertTrue(file.isFile, "missing ${file.path}")
         assertTrue(file.length() <= 48 * 1024, "${file.name} is ${file.length() / 1024} KB, budget 48 KB")
@@ -304,8 +307,6 @@ class SiteContentTest {
         assertTrue(aspect <= HeroStage.FIGURE_ASPECT, "${file.name} is ${aspect}x as wide as tall; the stage allows ${HeroStage.FIGURE_ASPECT}")
         val hero = page.substringAfter("<header class=\"hero\">").substringBefore("</header>")
         assertTrue(hero.indexOf(StaticHtml.resourceUrl(path)) in 0 until hero.indexOf("<h1>"), "the portrait does not lead the hero")
-        val shipped = File(resources, Profile.PHOTO_DIR).listFiles().orEmpty().map { it.name }.toSet()
-        assertEquals(setOf(portfolio.profile.photo), shipped, "shipped but unused, remove them")
     }
 
     /** The shipped page's styles carry the hero's entrance, and the colour its split needs in either theme. */
