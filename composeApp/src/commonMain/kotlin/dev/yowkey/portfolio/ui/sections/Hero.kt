@@ -260,8 +260,8 @@ private val previewProfile = Profile(
     photo = "portrait.webp",
     proof = listOf(
         ProofPoint("53%", "of the app's code written by me, from day one"),
-        ProofPoint("#1 of ~40", "engineers by story points, at 2.4x the team average"),
-        ProofPoint("Rank #2", "Top 9 Awardee, picked by leadership"),
+        ProofPoint("30 days", "from first commit to launch, built alone"),
+        ProofPoint("Top 9", "awardees picked by leadership for engineering"),
     ),
 )
 
