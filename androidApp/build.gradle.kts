@@ -78,4 +78,6 @@ dependencies {
 
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.messaging)
+
+    testImplementation(kotlin("test-junit", libs.versions.kotlin.get()))
 }
