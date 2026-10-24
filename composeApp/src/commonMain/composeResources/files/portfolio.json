@@ -8,7 +8,6 @@
     "location": "Quezon City, Philippines",
     "email": "yukstangonan@gmail.com",
     "availability": "Open to relocation to any Country",
-    "photo": "portrait.webp",
     "proof": [
       { "value": "53%", "label": "of ArenaPlus V2's code written by me: 270K+ lines across 413 commits" },
       { "value": "30 days", "label": "to ship the Arena Social app solo, rebuilt from web to native with ~100% of the code" },
