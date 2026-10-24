@@ -207,13 +207,16 @@
         "video": true
       },
       "title": "Pawffice",
-      "tagline": "Multiplayer 3D cat office: one three.js engine in a Tauri Mac app and an Expo Android app",
-      "summary": "A local-first, multi-agent AI workspace for the desktop, presented as a 3D town where a crew of cats takes your prompts.",
+      "tagline": "Multiplayer 3D town on Mac and Android from one engine, with an AI crew that edits code",
+      "summary": "A shared 3D town where, on the Mac, a crew of AI cats takes your prompts and reads or edits the folders you connect. The hard parts were one three.js engine in both a Tauri desktop app and an Android app, NPCs synced without a game server, and an agent working on real code with no shell while your API token never reaches the page.",
       "period": "Aug 2026 – Present",
       "highlights": [
-        "Classifies each prompt into ordered AI stages and feeds every stage the previous one's output",
-        "Pricing gates before anything runs, repository-path isolation and rate-limit handling",
-        "13 P0 build-blocking tests guard the cost and security rules"
+        "Shipped one three.js engine to a Tauri Mac app and an Expo Android app by swapping a single IPC module; the phone build fails if desktop-only code slips in",
+        "Let the AI crew touch only the folders you connect: the page sends a project id, Rust resolves the path, no shell is ever offered, and a cloned repo's hooks and MCP config are never loaded",
+        "Kept the Claude token out of the web page: Rust seals it with AES-256-GCM under an Argon2id key (64 MiB, 3 passes) and zeroizes it on sign-out",
+        "Synced shared NPCs between players with no game server: clients elect a host from Supabase Realtime presence, and it sends 4 delta frames a second to stay inside the free-plan message quota",
+        "Cut phone frame time from about 44 to 36 ms and triangles per frame from 1.57M to 0.77M with a measured quality tier (8 fur shells instead of 16, a 1024² shadow map), leaving desktop unchanged",
+        "Backed it with 730 automated tests (666 JavaScript, 64 Rust), 6 CI jobs with clippy warnings as errors, and 30 architecture decision records"
       ],
       "engineering": {
         "builtWith": ["three.js (WebGL)", "Tauri 2 + Rust", "React Native (Expo) + WebView", "Supabase"],
@@ -233,8 +236,8 @@
             "detail": "Clients elect one NPC host from Realtime presence (oldest join wins), so every device agrees without a server. The host sends 4 delta frames a second to stay under Supabase's free-plan message quota; lockstep was rejected."
           },
           {
-            "title": "A measured phone quality tier",
-            "detail": "Phones get 8 fur shells instead of 16, a 1024² shadow map and a 30 fps idle cap. Measured: about 44 to 36 ms per frame and 1.57M to 0.77M triangles; desktop unchanged."
+            "title": "An AI crew with no shell",
+            "detail": "The crew gets read tools, or read and edit tools in Edit mode, and never a shell, so it cannot run commands, install packages or push. Paths are looked up in Rust, never taken from the page."
           }
         ],
         "modules": [
@@ -276,7 +279,7 @@
           "30 architecture decision records"
         ]
       },
-      "stack": ["Rust", "Tauri 2", "SQLite", "TypeScript", "JavaScript", "SVG"],
+      "stack": ["three.js", "JavaScript", "Rust", "Tauri 2", "React Native (Expo)", "TypeScript", "Supabase"],
       "clips": [
         {
           "file": "pawffice-ride.webp",
@@ -304,13 +307,16 @@
       "visibility": "public",
       "cover": { "file": "bubuprotect-cover.webp", "caption": "BubuProtect's launch screen with the Bubu mascot", "width": 740, "height": 1600 },
       "title": "BubuProtect",
-      "tagline": "On-device Android password vault with layered encryption and a device threat shield",
-      "summary": "An Android password vault that keeps logins, cards, notes, ID documents and Wi-Fi keys encrypted on the device, behind a master passphrase.",
+      "tagline": "On-device Android password vault: two encryption layers, keys wiped the moment it locks",
+      "summary": "A password vault is only as safe as its weakest path: a copied database file, a memory dump, a look-alike app asking for autofill. I built an Android vault for logins, cards, notes, IDs and Wi-Fi keys with a defence for each, everything kept on the device, and one network call: a breach check that never sends the password.",
       "period": "Jan 2026 – Aug 2026",
       "highlights": [
-        "Encrypted on-device vault (Room over SQLCipher) for five kinds of secret, with FLAG_SECURE and tap-jacking defences",
-        "Live TOTP codes with a countdown ring, and a breach check that sends only a 5-character hash prefix",
-        "Device check: 10 local probes, from debugging switches to network interception, each linked to its setting"
+        "Encrypted every secret twice: SQLCipher over the database file, then AES-GCM per field, bound to its entry and column so copied or swapped ciphertext fails as tampering",
+        "Wrapped one 256-bit root key three independent ways (a biometric Keystore key, the passphrase through PBKDF2 at 210,000 iterations, a paper recovery code), so losing one never loses the vault",
+        "Closed the database and wiped the keys from memory on every lock, so a locked vault can't be read from a heap dump",
+        "Made autofill trust an app's signing certificate, not its package name, so a sideloaded look-alike never receives a bank's password",
+        "Built a device check of 10 local probes (root, debugging, screen readers, network interception and more), a recorder that names apps drawing over others, and a DNS-only VPN that blocks ad trackers",
+        "Covered the crypto, autofill, CSV import, OTP and breach-check code with 208 JVM unit tests in 22 test classes"
       ],
       "engineering": {
         "builtWith": ["Jetpack Compose", "Room + SQLCipher", "Android Keystore + Biometric", "Koin"],
@@ -392,7 +398,7 @@
           }
         ],
         "quality": [
-          "209 JVM unit tests: crypto, autofill, OTP, breach scan",
+          "208 JVM unit tests: crypto, autofill, import, OTP, breach scan",
           "R8 with resource shrinking; v2/v3 signing only",
           "Room schema v4 with 3 additive migrations",
           "Versions pinned in a Gradle version catalog"
@@ -445,13 +451,16 @@
       "cover": { "file": "vistago-cover.webp", "caption": "Vistago's splash: \"Travel, beautifully planned\"", "width": 740, "height": 1600 },
       "coverClip": { "file": "vistago-splash.webp", "caption": "Vistago's launch: the compass, wordmark and tagline animate in", "width": 332, "height": 720, "video": true },
       "title": "Vistago",
-      "tagline": "Offline-first AI travel companion for Android with a self-healing free-LLM model router",
-      "summary": "An offline-first AI travel companion for Android: plan trips, translate through the camera, and keep travel memories, with or without a connection.",
+      "tagline": "AI travel app for Android that keeps working when free models fail or the signal drops",
+      "summary": "A travel app is needed most where it works worst: abroad, offline, in front of a sign you can't read. Vistago plans trips, translates signs live through the camera and keeps trip memories, with Room as the source of truth and on-device fallbacks for planning and translation. Its AI runs on free models picked at call time, so a retired or rate-limited model reroutes instead of failing.",
       "period": "Aug – Sep 2026",
       "highlights": [
-        "12 feature areas, 16 screens, about 450 composables in 366 Kotlin files",
-        "OpenRouter model routing with live discovery, role-based pinning, cooldowns and availability tracking",
-        "Falls back to on-device processing when LLM services fail"
+        "Built a model router that discovers free OpenRouter models at call time, benches a model after a 429 for as long as Retry-After asks, and reroutes around retired ones, so no model name is hard-coded",
+        "Made live camera translation hold still: lines are matched frame to frame by their words, eased into place and painted only after repeated reads, and Latin misread off a Chinese sign is filtered out",
+        "Ran live camera translation on device with ML Kit, reading five script families: Latin, Chinese, Japanese, Korean and Devanagari",
+        "Kept Room as the source of truth through 12 schema versions and 11 hand-written migrations with no destructive fallback, so an update never wipes a traveller's trips",
+        "Kept the domain layer pure Kotlin (82 files, zero Android imports) and covered the app with 800 JVM unit tests and 15 instrumented tests",
+        "Shipped about 450 composables over 13 feature areas and 16 ViewModels, roughly 54,000 lines of Kotlin, with R8 on and release builds that refuse to fall back to a debug key"
       ],
       "engineering": {
         "builtWith": ["Jetpack Compose", "Room", "Koin", "CameraX + ML Kit"],
@@ -471,8 +480,8 @@
             "detail": "Room owns the experience offline, at schema v12 with 11 explicit migrations and no destructive fallback. Supabase sync and an Edge Function proxy sit behind repository interfaces so AI secrets never ship in the APK."
           },
           {
-            "title": "Release safety in the build",
-            "detail": "R8 is on for release with minimal keep rules. Release tasks fail without a usable signing key instead of silently using the debug key, and secrets reach only debug builds by default."
+            "title": "Live OCR that holds still",
+            "detail": "Raw recognition jitters, drops out and misreads glyphs, so a naive overlay blinks. A tested tracker matches lines across frames, eases them into place and paints a label only after repeated reads."
           }
         ],
         "modules": [
@@ -555,12 +564,15 @@
         "video": true
       },
       "title": "The Eagle's Watch",
-      "tagline": "Public-works transparency app: one Compose UI for Android and Web, every figure sourced",
-      "summary": "A civic transparency app that lists Philippine public infrastructure projects with their contracts, schedules, reported progress and source documents, so citizens can check what public money is building.",
+      "tagline": "Civic app that labels where every public-works figure came from, on Android and the web",
+      "summary": "A progress figure with no source can't be checked. The Eagle's Watch lists Philippine public works with their contracts, schedules, progress and documents, and labels every figure with how it was established. It is a design preview on ten fictional records, built so a live government source plugs in behind one interface without changing a screen.",
       "highlights": [
-        "Search and filter by status, place, agency, contractor and contract size, with live counts",
-        "Every figure labelled with how it was established; every record has a report path",
-        "One Compose Multiplatform codebase for Android, iOS and the web"
+        "Made provenance part of the data model: every figure carries one of four labels (Verified, Agency-reported, Community-reported, Not available), and a missing value reads \"Not on file\" instead of a guess",
+        "Kept reported progress, independently checked progress, funds disbursed and contract time as separate meters, so one is never passed off as another",
+        "Built search and a filter sheet over six facets (status, type, level of government, province, agency, contract size) with live counts and four sort orders",
+        "Designed a report flow reachable from every screen: nearly all taps, anonymous unless the citizen adds contact details, with a reference number for each report",
+        "Made status readable without colour (five shapes plus labels), with text at 4.5:1 contrast or better and tap targets of at least 48dp",
+        "Shipped Android and the web from one Compose Multiplatform codebase, with icons and a Philippines locator map drawn in code instead of libraries"
       ],
       "engineering": {
         "builtWith": ["Kotlin Multiplatform", "Compose Multiplatform", "Kotlin/Wasm", "Haze (backdrop blur)"],
@@ -617,7 +629,7 @@
           }
         ],
         "quality": [
-          "CI on every push: Android APK and Kotlin/Wasm bundle",
+          "CI on every push to main: Android APK and Kotlin/Wasm bundle",
           "Playwright screenshots of every screen, phone and laptop",
           "Versions pinned in a catalog; minSdk 24, targetSdk 36"
         ]
@@ -651,14 +663,17 @@
         "video": true
       },
       "title": "Calm Escape Premier",
-      "tagline": "Multi-tenant spa booking: KMP apps and Next.js sites on one database-enforced schedule",
-      "summary": "A multi-tenant booking platform for spas: each spa gets its own booking site and staff back office, customers book from iOS and Android apps, and all of them share one schedule.",
+      "tagline": "Multi-tenant spa booking where the database itself makes double bookings impossible",
+      "summary": "Each spa gets its own booking site and staff back office, customers book from iOS and Android apps, and all of them share one schedule. With Kotlin apps, a TypeScript web and customers booking at the same moment, I put the rules in one place: Postgres enforces tenant isolation, availability and double-booking prevention, covered by 184 database tests.",
       "disclaimer": "A concept build: I used a real spa business to show what I can develop. It isn't their official app as of now, and their name and brand belong to them.",
       "period": "Oct 2026",
       "highlights": [
-        "No double booking, even under races: Postgres exclusion constraints, covered by 184 pgTAP tests (plus 346 Vitest tests on the web)",
-        "One codebase serves every spa: its own subdomain or domain, server-rendered, in one of three designs",
-        "Staff back office with monthly sales, a menu and membership editor, and promo bundles with a live phone and web preview"
+        "Made double booking impossible at the database: exclusion constraints stop a therapist or room being booked twice, even when two requests race",
+        "Isolated every spa's data with Row Level Security on all 19 tables (58 policies) and composite tenant keys, so a booking can't point at another spa's therapist or room",
+        "Wrote the booking, availability, cancellation and voucher rules once, as Postgres functions that both the Kotlin apps and the TypeScript web call, so they can't disagree",
+        "Served every spa from one Next.js codebase on its own subdomain or custom domain, server-rendered and cached, in one of three designs",
+        "Gave staff a back office with monthly sales, a menu and membership editor, and promo bundles with a live phone and web preview",
+        "Tested it at three layers: 184 pgTAP database tests, 346 Vitest tests and 42 Kotlin tests, with CI checking migrations, SQL lint and that the generated types match the schema"
       ],
       "engineering": {
         "builtWith": ["Kotlin Multiplatform", "Compose Multiplatform", "Next.js 16", "Supabase (Postgres)"],
@@ -712,8 +727,8 @@
         "quality": [
           "184 pgTAP database tests and 346 Vitest tests passing",
           "42 Kotlin tests on the shared module",
-          "CI on every pull request: migrations, SQL lint, web and Android",
-          "Staged database deploys; production needs a reviewer"
+          "CI on pull requests: migrations, SQL lint, type drift, web, Android",
+          "Database deploys reach staging first; production only by hand"
         ]
       },
       "stack": [
@@ -776,14 +791,17 @@
         "video": true
       },
       "title": "Seventh J",
-      "tagline": "Gallery-inventory app on one Compose Multiplatform UI codebase for Android, iOS and Web",
-      "summary": "An inventory and dealer-floor app for a Makati art gallery, built once in Compose Multiplatform for Android, iOS and the web. Runs on sample data while the data layer is built.",
+      "tagline": "Gallery app for Android, iOS and web, with a 3D sculpture renderer in shared Kotlin",
+      "summary": "An inventory and dealer-floor app for a Makati art gallery, built once in Compose Multiplatform for Android, iOS and the web. Instead of a 3D engine per platform for one turntable, I wrote a small software renderer in common Kotlin, and every screen shares one codebase with no Android imports. It runs on sample data while the data layer is built.",
       "disclaimer": "A concept build: I used a real Makati art gallery to show what I can develop. It isn't their official app as of now, and their name and brand belong to them.",
       "period": "Aug 2026",
       "highlights": [
-        "Starry Night splash: 960 strokes share one flow field, and the mark's own strokes spiral into its pixels",
-        "Sculptures turn in a software 3D renderer in shared code: about a thousand faces a piece, no allocation per frame",
-        "One Compose UI on three targets, with a Navigation 3 back stack that iOS and Wasm can restore"
+        "Wrote a software 3D renderer in common Kotlin (rotate, project, cull, depth-sort, shade, fill) that turns about a thousand faces per sculpture with zero allocation per frame",
+        "Painted a Starry Night splash from 960 strokes in one flow field: 420 short sky dashes, and 540 long threads that spiral into the pixels of the gallery's mark",
+        "Shared every screen across Android, iOS and the web: 78 common files, zero android.* imports, platform needs behind expect/actual",
+        "Kept the back stack restorable on iOS and Wasm, where reflection is unavailable, with serializable Navigation 3 destinations and explicit polymorphic serializers",
+        "Budgeted the animation per platform: the splash plays once on Android and iOS, and is skipped on the web, on warm start and under reduced motion",
+        "Covered UI state, inventory, sales and the sculpture meshes with 35 shared tests; CI builds the release APK and compiles for Wasm on every push"
       ],
       "engineering": {
         "builtWith": ["Kotlin Multiplatform", "Compose Multiplatform", "Kotlin/Wasm", "Navigation 3"],
@@ -803,8 +821,8 @@
             "detail": "The 960-stroke Starry Night splash plays once per process on Android and iOS only. It is skipped on the web, on warm start and under reduced motion, because that many canvas strokes would stall a browser tab."
           },
           {
-            "title": "State modelled before the data source",
-            "detail": "ViewModels emit sealed UiState from sample data, with optimistic updates, so a future injected use case can replace the sample without touching the UI layer."
+            "title": "One software renderer, not three engines",
+            "detail": "Filament on Android, SceneKit on iOS and three.js on the web would be three engines and three sets of bugs for one turntable, so one painter's-algorithm pass over about 1,000 quads runs in common Kotlin."
           }
         ],
         "modules": [
@@ -829,7 +847,12 @@
             "dependsOn": [":shared"]
           }
         ],
-        "quality": ["Shared UI with no Android imports in commonMain", "Versions pinned in a Gradle version catalog"]
+        "quality": [
+          "35 shared unit tests: UI state, inventory, sales, meshes",
+          "CI on every push: release APK and a Wasm compile",
+          "Shared UI with no Android imports in commonMain",
+          "Versions pinned in a Gradle version catalog"
+        ]
       },
       "stack": ["Kotlin", "Compose Multiplatform", "Kotlin/Wasm", "Navigation 3", "Coroutines", "kotlinx.serialization"],
       "clips": [
@@ -873,18 +896,21 @@
       "icon": "about-yowkey.webp",
       "visibility": "public",
       "title": "This portfolio",
-      "tagline": "One Compose UI compiled to WebAssembly, with crawlable HTML built from the same JSON",
-      "summary": "A Compose Multiplatform app running in your browser through Kotlin/WebAssembly, with a crawlable HTML version generated from the same content at build time.",
+      "tagline": "One Compose codebase for web and Android, a crawlable HTML twin, and a tested backend",
+      "summary": "The page you're reading. One Compose Multiplatform UI runs in your browser through Kotlin/WebAssembly and in an Android app that doubles as my inbox, while the build renders the same JSON to crawlable HTML that paints first, so search engines, screen readers and browsers without WebAssembly GC get everything too. A Cloudflare Worker on D1 handles visits, ratings and messages.",
       "period": "Oct 2026",
       "highlights": [
-        "Adaptive layout from phone to wide desktop using window size classes",
-        "Content lives in one JSON file shared by the app and the generated HTML",
-        "Built, tested and deployed to GitHub Pages by GitHub Actions"
+        "Rendered the same JSON to crawlable HTML at build time: it paints first, the Wasm app takes over once Compose has drawn, and the HTML stays the page where WebAssembly GC is missing",
+        "Wrote the hero's entrance as one pure, unit-tested timeline that drives both the Compose animation and the static page's CSS, so the app takes over mid-animation without a jump",
+        "Built a Cloudflare Worker and D1 backend for visits, ratings and messages, with daily limits keyed by a salted hash of the sender's network, an owner sign-in lockout and 62 tests run against the real migrations",
+        "Shipped an Android app on the same UI that doubles as my inbox, its sign-in token sealed with AES-256-GCM under an Android Keystore key",
+        "Played project clips as browser-decoded video placed by Compose over its own canvas, so playback costs the UI thread nothing per frame",
+        "Gated every deploy on 311 JVM tests, image and clip size budgets and a checksum-verified gitleaks scan of the full history, with every CI action pinned to a commit"
       ],
       "engineering": {
-        "builtWith": ["Compose Multiplatform", "Kotlin/Wasm", "Koin", "kotlinx.serialization"],
-        "platforms": ["Web"],
-        "architecture": "One Gradle module in one-way layers: UI, ViewModel, repository, parser, model. All content is one JSON file, validated by the same parser in the app and in the build task that renders the crawlable HTML. The browser paints that HTML first, loads the Wasm app behind it and swaps to the canvas once Compose has drawn; a small hash router gives every project its own link.",
+        "builtWith": ["Compose Multiplatform", "Kotlin/Wasm", "Cloudflare Workers + D1", "Koin"],
+        "platforms": ["Web", "Android"],
+        "architecture": "composeApp runs in one-way layers: UI, ViewModel, repository, parser, model. All content is one JSON file, validated by the same parser in the app and in the build task that renders the crawlable HTML. The browser paints that HTML first and swaps to the Wasm canvas once Compose has drawn. androidApp wraps the same UI; a Cloudflare Worker over D1 serves visits, notes and messages.",
         "decisions": [
           {
             "title": "Crawlable HTML first, canvas second",
@@ -899,8 +925,8 @@
             "detail": "The app's parser also runs in Gradle, and tests check every listed image against its budget, so a broken link, missing alt text, an oversized image or a module cycle stops the deploy."
           },
           {
-            "title": "A hand-rolled router, no library",
-            "detail": "Two screens do not need a navigation library: an expect/actual navigator keeps #/projects/<id> links and browser Back on the web, and a plain back stack on the desktop."
+            "title": "Inline scripts allowed by hash",
+            "detail": "Each inline script on the static page is allowed by its SHA-256 hash in the Content-Security-Policy, which the build computes, so no 'unsafe-inline' is needed and an injected script cannot run."
           }
         ],
         "modules": [
@@ -941,13 +967,13 @@
           }
         ],
         "quality": [
-          "83 unit tests on the JVM, run on every push and pull request",
+          "311 JVM tests and 62 Worker tests, all run in CI",
           "Image, clip and content budgets checked by tests before each deploy",
-          "gitleaks secret scan over the full git history",
-          "Lighthouse CI against the live site after every deploy"
+          "Checksum-verified gitleaks scan of the full git history",
+          "Lighthouse CI against the live site; every CI action pinned to a commit"
         ]
       },
-      "stack": ["Compose Multiplatform", "Kotlin/Wasm", "Koin", "GitHub Pages"],
+      "stack": ["Compose Multiplatform", "Kotlin/Wasm", "Koin", "Cloudflare Workers", "D1 (SQLite)", "GitHub Pages"],
       "links": [
         { "label": "Source on GitHub", "url": "https://github.com/Yowkylito/AboutYowkey" }
       ],
