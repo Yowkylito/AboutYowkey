@@ -20,9 +20,9 @@ migrations_dir = "migrations"
 
 [vars]
 # The pages that may call the API from a browser, comma-separated. The second is the local dist server (docs/DEVELOPMENT.md, "Run it").
-ALLOWED_ORIGINS = "https://aboutyowkey.pages.dev,http://localhost:8080"
+ALLOWED_ORIGINS = "https://yowkylito.github.io,http://localhost:8080"
 # Where a plain form post (a browser without the page's script) is sent back to.
-SITE_URL = "https://aboutyowkey.pages.dev/"
+SITE_URL = "https://yowkylito.github.io/AboutYowkey/"
 # The owner's time zone: visits, clicks, notes and messages are counted by its date, and the daily report is about it.
 TIME_ZONE = "Asia/Manila"
 # The links on the page whose clicks are counted (POST /clicks), comma-separated, lowercase.

@@ -1336,8 +1336,8 @@
         if (started) return;
         started = true;
         var script = document.createElement("script");
-        // The build id in the query gives each deploy's script its own URL. A browser or the host's edge may keep
-        // a file for a while, so an unversioned composeApp.js could be the previous deploy's, pointing at wasm files that are
+        // The build id in the query gives each deploy's script its own URL. GitHub Pages caches every file for ten
+        // minutes, so an unversioned composeApp.js could be the previous deploy's, pointing at wasm files that are
         // gone (those are content-hashed already); this one is always the script this index.html was built with.
         script.src = "composeApp.js?v={{build}}";
         script.onerror = staticOnly;

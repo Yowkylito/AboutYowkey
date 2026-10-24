@@ -19,8 +19,8 @@ plugins {
 /**
  * The id of a build for the generated page: the short git commit, or the build time (UTC) where there is no git.
  * The page loads the app as `composeApp.js?v=<id>`, so a new deploy's index.html never gets the previous deploy's
- * script out of a cache (the browser's or the host's). A ValueSource read only at execution time, as the task's
- * input, keeps the configuration cache valid across commits while the task still re-runs for each one.
+ * script out of the GitHub Pages cache. A ValueSource read only at execution time, as the task's input, keeps the
+ * configuration cache valid across commits while the task still re-runs for each one.
  */
 abstract class BuildId : ValueSource<String, ValueSourceParameters.None> {
     @get:Inject

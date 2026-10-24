@@ -9,7 +9,7 @@ import worker from "../src/index.js";
 import { openDatabase } from "./d1.js";
 
 const MIGRATIONS = fileURLToPath(new URL("../migrations", import.meta.url));
-const SITE = "https://aboutyowkey.pages.dev";
+const SITE = "https://yowkylito.github.io";
 const CHROME = "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36";
 const DAY_ONE = "2026-10-24T10:00:00.000Z";
 const DAY_TWO = "2026-10-25T09:00:00.000Z";
@@ -27,7 +27,7 @@ beforeEach(() => {
   env = {
     DB: openDatabase(MIGRATIONS),
     ALLOWED_ORIGINS: `${SITE}, http://localhost:8080`,
-    SITE_URL: `${SITE}/`,
+    SITE_URL: `${SITE}/AboutYowkey/`,
     ADMIN_TOKEN: "owner-secret",
     VISITOR_SALT: "salt",
     TIME_ZONE: "Asia/Manila",
