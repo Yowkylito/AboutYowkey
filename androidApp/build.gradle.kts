@@ -78,4 +78,8 @@ dependencies {
 
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.messaging)
+
+    // The admin view's rules run on the JVM against a fake worker (src/test); nothing here needs a device.
+    testImplementation(kotlin("test-junit"))
+    testImplementation(libs.kotlinx.coroutines.test)
 }

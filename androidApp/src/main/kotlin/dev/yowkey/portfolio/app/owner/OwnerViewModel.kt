@@ -1,6 +1,5 @@
 package dev.yowkey.portfolio.app.owner
 
-import android.app.Application
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -19,9 +18,6 @@ import dev.yowkey.portfolio.admin.MessageFilter
 import dev.yowkey.portfolio.admin.NoteAction
 import dev.yowkey.portfolio.admin.after
 import dev.yowkey.portfolio.app.OwnerLink
-import dev.yowkey.portfolio.app.push.AlertNotifier
-import dev.yowkey.portfolio.app.push.PollWorker
-import dev.yowkey.portfolio.app.push.PushRegistration
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
@@ -80,12 +76,13 @@ data class PushInfo(val firebase: Boolean, val registered: Boolean, val notifica
 /**
  * The admin view's state and actions. Every call to the worker is caught: offline or failing, a screen shows what it
  * had with a sentence, never a crash; a 401 anywhere signs out to the sign-in screen with the reason.
+ *
+ * @param session the owner's session ([OwnerSession.asAccess] on the phone)
+ * @param device the phone's side of the alerts, for Settings and the first sign-in
  */
 class OwnerViewModel(
-    private val app: Application,
-    private val session: OwnerSession,
-    private val store: OwnerStore,
-    private val notifier: AlertNotifier,
+    private val session: OwnerAccess,
+    private val device: OwnerDevice,
 ) : ViewModel() {
 
     val signedIn: StateFlow<Boolean> = session.signedIn
@@ -275,22 +272,16 @@ class OwnerViewModel(
 
     /** Runs the backup check once now (it also runs every 15 minutes on its own). */
     fun checkNow() {
-        PollWorker.runOnce(app)
+        device.checkNow()
         notice("Checking for new alerts. Anything new shows as a notification.")
     }
 
-    fun pushInfo(): PushInfo = PushInfo(
-        firebase = PushRegistration.isAvailable(app),
-        registered = store.pushToken != null,
-        notificationsAllowed = notifier.canNotify(),
-    )
+    fun pushInfo(): PushInfo = device.pushInfo()
 
     /** Asked once, on the first sign-in, for the notification permission (Android 13+). */
-    fun shouldAskForNotifications(): Boolean = !store.askedForNotifications && !notifier.canNotify()
+    fun shouldAskForNotifications(): Boolean = device.shouldAskForNotifications()
 
-    fun askedForNotifications() {
-        store.askedForNotifications = true
-    }
+    fun askedForNotifications() = device.askedForNotifications()
 
     fun notice(text: String) {
         _notices.trySend(text)
