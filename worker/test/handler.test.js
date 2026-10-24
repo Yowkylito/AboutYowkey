@@ -498,6 +498,47 @@ test("the inbox asks for the password, then shows the notes and the visits, esca
   assert.match(page, /<meta name="robots" content="noindex, nofollow">/);
 });
 
+test(`an address gets ${LIMITS.ownerTries} wrong owner passwords per ${LIMITS.ownerWindowMinutes} minutes, on any owner route`, async () => {
+  const at = (minutes) => new Date(Date.parse(DAY_ONE) + minutes * 60000).toISOString();
+  const guess = (token, options = {}) => call("/admin/summary", { ...options, headers: { Authorization: `Bearer ${token}` } });
+  for (let i = 0; i < LIMITS.ownerTries - 2; i++) assert.equal((await guess(`wrong-${i}`)).status, 401);
+  assert.equal((await call("/inbox", { headers: basic("wrong-inbox") })).status, 401);
+  assert.equal((await call("/feedback", { headers: { Authorization: "Bearer wrong-feedback" } })).status, 401, "the last try");
+
+  const locked = await guess("wrong-again", { now: at(1) });
+  assert.equal(locked.status, 429);
+  assert.equal(locked.headers.get("Retry-After"), String((LIMITS.ownerWindowMinutes - 1) * 60), "until the window ends");
+  assert.equal((await guess(env.ADMIN_TOKEN, { now: at(1) })).status, 429, "the right password is not tried either");
+  const lockedInbox = await call("/inbox", { headers: basic(env.ADMIN_TOKEN), now: at(1) });
+  assert.equal(lockedInbox.status, 429);
+  assert.match(await lockedInbox.text(), /Too many wrong passwords/);
+  assert.equal((await guess(env.ADMIN_TOKEN, { now: at(1), address: "198.51.100.2" })).status, 200, "another address is not held up");
+
+  // Asking without a password (a browser's first visit) and the right password cost nothing.
+  for (let i = 0; i < LIMITS.ownerTries + 5; i++) {
+    assert.equal((await call("/inbox", { address: "198.51.100.3", now: at(2) })).status, 401);
+    assert.equal((await guess(env.ADMIN_TOKEN, { address: "198.51.100.3", now: at(2) })).status, 200);
+  }
+  assert.deepEqual(query("SELECT since, count FROM owner_tries"), [{ since: DAY_ONE, count: LIMITS.ownerTries + 3 }], "only the wrong tries are kept");
+  assert.equal((await guess(env.ADMIN_TOKEN, { now: at(LIMITS.ownerWindowMinutes) })).status, 200, "the next window");
+  assert.deepEqual(query("SELECT count FROM owner_tries"), [], "an earlier window's tries go");
+
+  // Guesses sent at once are counted before any is checked.
+  env.DB = roundTrips(env.DB);
+  const burst = await Promise.all(Array.from({ length: 30 }, (_, i) => guess(`burst-${i}`, { address: "198.51.100.4", now: at(16) })));
+  assert.equal(burst.filter((response) => response.status === 401).length, LIMITS.ownerTries);
+  assert.equal(burst.filter((response) => response.status === 429).length, 30 - LIMITS.ownerTries);
+});
+
+test("without the owner_tries table (its migration not applied yet), the owner still gets in", async () => {
+  env.DB.raw.exec("DROP TABLE owner_tries");
+  const errors = mock.method(console, "error", () => {});
+  assert.equal((await call("/admin/summary", { headers: { Authorization: "Bearer wrong" } })).status, 401);
+  assert.equal((await owner("/admin/summary")).status, 200);
+  assert.ok(errors.mock.callCount() >= 1, "and the missing table is logged");
+  errors.mock.restore();
+});
+
 test("the owner's pages may not be framed, run only their own confirm() handlers, and send no referrer", async () => {
   await post("/feedback", { message: "private, so it has Show on the site" });
   await post("/messages", { contact: "ada@example.com", message: "hello" });
@@ -786,18 +827,20 @@ const ADMIN_ROUTES = [
 test("every /admin route needs the token, and nothing it answers is cached", async () => {
   await post("/feedback", { message: "x" });
   await post("/messages", { contact: "x", message: "x" });
-  for (const [method, path, payload] of ADMIN_ROUTES) {
+  for (const [i, [method, path, payload]] of ADMIN_ROUTES.entries()) {
+    // Each route's wrong tries from an address of its own, so they stay under the sign-in limit (tested on its own).
+    const address = `198.51.100.${100 + i}`;
     const headers = payload ? { "Content-Type": "application/json" } : {};
     const body = payload ? JSON.stringify(payload) : undefined;
-    const none = await call(path, { method, headers, body, origin: null });
+    const none = await call(path, { method, headers, body, origin: null, address });
     assert.equal(none.status, 401, `${method} ${path} without a token`);
     assert.deepEqual(await none.json(), { error: "Unauthorized." });
     assert.equal(none.headers.get("Cache-Control"), "no-store");
-    assert.equal((await app(path, { method, payload, token: "wrong" })).status, 401, `${method} ${path} with a wrong token`);
-    assert.equal((await app(path, { method, payload, token: `${env.ADMIN_TOKEN}x` })).status, 401, `${method} ${path}, a longer token`);
-    const basicInstead = await call(path, { method, headers: { ...headers, ...basic(env.ADMIN_TOKEN) }, body, origin: null });
+    assert.equal((await app(path, { method, payload, token: "wrong", address })).status, 401, `${method} ${path} with a wrong token`);
+    assert.equal((await app(path, { method, payload, token: `${env.ADMIN_TOKEN}x`, address })).status, 401, `${method} ${path}, a longer token`);
+    const basicInstead = await call(path, { method, headers: { ...headers, ...basic(env.ADMIN_TOKEN) }, body, origin: null, address });
     assert.equal(basicInstead.status, 401, `${method} ${path}: the inbox's Basic password is not the app's Bearer token`);
-    const allowed = await app(path, { method, payload });
+    const allowed = await app(path, { method, payload, address });
     assert.equal(allowed.status, path.endsWith("no-such-route") ? 404 : 200, `${method} ${path} with the token`);
     assert.equal(allowed.headers.get("Cache-Control"), "no-store", `${method} ${path}`);
     assert.equal(allowed.headers.get("Access-Control-Allow-Origin"), null, "a native app needs no CORS");

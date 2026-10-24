@@ -58,6 +58,9 @@ export const LIMITS = Object.freeze({
   token: 4096,
   /** Characters of a message or note an alert quotes. */
   preview: 120,
+  /** Wrong owner passwords one address may try in a window of `ownerWindowMinutes`; the next gets a 429. */
+  ownerTries: 10,
+  ownerWindowMinutes: 15,
 });
 
 export const DEFAULT_TIME_ZONE = "Asia/Manila";
@@ -616,14 +619,14 @@ async function alertOwner(env, { ctx, now, fetch }, alert) {
 // ---- The owner ----
 
 async function listFeedback(request, env, url, now) {
-  const entry = await authorize(bearerToken(request), env);
+  const entry = await authorize(bearerToken(request), env, { request, now });
   if (entry !== true) return entry;
   const [visits, items] = await Promise.all([visitCounts(env.DB, localDay(env, now)), feedbackItems(env.DB, limitOf(url, 100, 500))]);
   return json({ visits, items }, 200, { "Cache-Control": "no-store" });
 }
 
 async function inbox(request, env, now) {
-  const entry = await authorize(basicPassword(request), env, { basic: true });
+  const entry = await authorize(basicPassword(request), env, { basic: true, request, now });
   if (entry !== true) return entry;
   const today = localDay(env, now);
   const [visits, items, days, messages, clicks] = await Promise.all([
@@ -644,7 +647,7 @@ async function inbox(request, env, now) {
  * origin, a form on another site included, so only a post from this origin itself is acted on.
  */
 async function inboxAction(request, env, kind, id, now, url) {
-  const entry = await authorize(basicPassword(request), env, { basic: true });
+  const entry = await authorize(basicPassword(request), env, { basic: true, request, now });
   if (entry !== true) return entry;
   if (!fromThisOrigin(request, url)) {
     const things = kind === "notes" ? "Notes" : "Messages";
@@ -764,19 +767,65 @@ function limitOf(url, fallback, max) {
 
 /**
  * True for the owner, else the response that turns the caller away. With no ADMIN_TOKEN set nobody gets in, the
- * owner included: an inbox is never open by default.
+ * owner included: an inbox is never open by default. An address that has given LIMITS.ownerTries wrong passwords
+ * is turned away, the right one included, until the window ends (ownerTry).
  */
-async function authorize(secret, env, { basic = false } = {}) {
+async function authorize(secret, env, { basic = false, request, now }) {
   if (!env.ADMIN_TOKEN) {
     return json({ error: "ADMIN_TOKEN is not set on the worker: run `npx wrangler secret put ADMIN_TOKEN`." }, 503);
   }
-  if (await sameSecret(secret, env.ADMIN_TOKEN)) return true;
+  const attempt = typeof secret === "string" && secret ? await ownerTry(request, env, now) : null;
+  if (attempt?.wait) {
+    const minutes = Math.ceil(attempt.wait / 60);
+    const sentence = `Too many wrong passwords from here. Try again in ${minutes} ${minutes === 1 ? "minute" : "minutes"}.`;
+    const headers = { "Retry-After": String(attempt.wait), "Cache-Control": "no-store" };
+    return basic ? html(renderNotice("Not now", sentence, null), 429, headers) : json({ error: sentence }, 429, headers);
+  }
+  if (attempt && (await sameSecret(secret, env.ADMIN_TOKEN))) {
+    await attempt.right();
+    return true;
+  }
   if (!basic) return json({ error: "Unauthorized." }, 401);
   return html(
     renderNotice("Sign in", "The inbox is the site owner's. Any user name; the password is ADMIN_TOKEN.", null),
     401,
     { "WWW-Authenticate": 'Basic realm="Portfolio inbox", charset="UTF-8"', "Cache-Control": "no-store" },
   );
+}
+
+/**
+ * One password try from [request]'s address, counted in `owner_tries` before it is checked, so tries sent at once
+ * cannot all pass under the limit; `right()` gives it back. `wait` is the seconds left in the window once the
+ * address is over the limit. Without the table (migration 0005 not applied yet) nothing is counted.
+ */
+async function ownerTry(request, env, now) {
+  const window = LIMITS.ownerWindowMinutes * 60000;
+  const start = Math.floor(now.getTime() / window) * window;
+  const since = new Date(start).toISOString();
+  const address = request.headers.get("CF-Connecting-IP") || "unknown";
+  const client = await sha256Hex(`owner|${networkOf(address)}|${env.VISITOR_SALT || ""}`);
+  const tidy = () => env.DB.prepare("DELETE FROM owner_tries WHERE count <= 0 OR since <> ?1").bind(since).run();
+  try {
+    const count = await env.DB
+      .prepare(
+        "INSERT INTO owner_tries (client, since, count) VALUES (?1, ?2, 1) " +
+          "ON CONFLICT (client, since) DO UPDATE SET count = count + 1 RETURNING count",
+      )
+      .bind(client, since)
+      .first("count");
+    if (count > LIMITS.ownerTries) return { wait: Math.ceil((start + window - now.getTime()) / 1000) };
+    await tidy();
+  } catch (error) {
+    console.error("Owner tries not counted:", error);
+    return { wait: 0, right: async () => {} };
+  }
+  return {
+    wait: 0,
+    right: async () => {
+      await env.DB.prepare("UPDATE owner_tries SET count = count - 1 WHERE client = ?1 AND since = ?2").bind(client, since).run();
+      await tidy();
+    },
+  };
 }
 
 function bearerToken(request) {
@@ -830,7 +879,7 @@ async function sha256Hex(input) {
 
 /** The token is checked before the route, so a wrong one learns nothing about which routes exist. */
 async function admin(request, env, url, route, now, alerts) {
-  const entry = await authorize(bearerToken(request), env);
+  const entry = await authorize(bearerToken(request), env, { request, now });
   if (entry !== true) {
     entry.headers.set("Cache-Control", "no-store");
     return entry;
