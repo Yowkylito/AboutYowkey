@@ -46,7 +46,8 @@ The hero already shows the name in large type, so the bar does not repeat it whi
 carries the monogram (`ui/components/Brand.kt`, the Home button) and the proof chip (`ui/components/ProofChip.kt`:
 the rating drawn to the fraction and the visit total, from `LiveStats`, counting up once on first appearance, a tap
 away from the notes dashboard; the profile's location and availability are not shown on the page), and swaps the
-chip for the name over the role once half the hero has scrolled under it (`rememberHeroPassed`, a `derivedStateOf`, so the bar
+chip for the name over the role once the hero's name has scrolled under it (where it ends is noted by the hero in
+`HeroEntrance.nameEnd`; `rememberHeroPassed`, a `derivedStateOf`, so the bar
 recomposes only when that flips). The 2dp reading-progress line and the hairline are drawn in the draw phase from
 `listState.layoutInfo`, so scrolling never recomposes the bar, and the count-up is drawn too. On a narrow bar the chip drops its words (`ProofFit`) and the role shortens at
 whole words (`shorterForms`), and the static page uses the same helpers for its phone bar.
@@ -112,6 +113,9 @@ composeApp/  com.android.kotlin.multiplatform.library (namespace dev.yowkey.port
 - Scroll-driven visuals read state in the draw/layer phase: the top bar's divider (`drawBehind { scrolled() }`) and
   the reveal (`graphicsLayer { alpha = progress.value }`). Scrolling recomposes nothing; only a change of active
   section does, through `derivedStateOf`.
+- On a single column the hero's name and role stand on the portrait's stage when `HeroStage` measures that they
+  fit (decided once per width and font scale, before the first frame, so nothing moves); `StaticHtml.heroStage`
+  writes the same rule as container queries, from an estimate the app never undercuts, so both pages agree.
 - The hero's entrance (`ui/sections/HeroEntrance`: the portrait's dash, then the intro reading in) runs on one clock
   kept above the list, read in the portrait's draw phase and the intro's layers, so it plays once per page load and
   recomposes nothing (`HeroEntranceTest` counts). Its timeline (`HeroMotion`) is pure, and `StaticHtml.heroMotion`
