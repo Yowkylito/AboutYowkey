@@ -53,8 +53,8 @@
       /* Added for the bar: the monogram's deeper end. */
       --accent-deep: #1D4ED8;
       /*
-        The hero portrait's stage, and what stands on it (the name and role, the colour split's far fringe): the app's
-        primaryContainer and onPrimaryContainer, 8.5:1 apart here and 7.3:1 in dark.
+        The hero portrait's stage, and what stands on it (the name and role): the app's primaryContainer and
+        onPrimaryContainer, 8.5:1 apart here and 7.3:1 in dark.
       */
       --stage: #DBEAFE; --on-stage: #1E3A8A;
       /* The edge of a form field and an unlit star, the app's ControlOutline: 3:1 on either theme's surface. */
@@ -246,46 +246,33 @@
     article > ul:not([class]) > li + li { margin-top: .4em; }
     /*
       The hero's portrait, as the app's still picture: the cut-out stands at the end of a tinted stage, head clear of
-      its top, shouting toward the start. Seven echoes of the silhouette (the image as a mask, filled with the accent)
-      trail away, each wider and fainter than the last, the far ones melted by the SVG filters. Clipped at the bottom
-      corners only, so the head rises above the stage. Beside the intro from 840px, as the app's wide layout. --step
-      is 0.095 of the figure's width. The entrance (the dash, the landing and the intro reading in) follows the hero's
-      rules, written from the app's timeline; the scream on hover and on coming back into view is the app's alone.
+      its top, a soft light behind the head (where it rests, as the app's HeroPortrait draws it). The figure is drawn in
+      a box as tall as the stage and 0.95 of that wide, held to its bottom right corner: a narrower cut-out stands full
+      height, a wider one (a head-and-shoulders crop) smaller on the same floor, so the name's place beside it never
+      depends on the photo (HeroStage). Clipped at the bottom corners only, so the head rises above the stage. Beside
+      the intro from 840px, as the app's wide layout; --h is the stage's height. The three echoes, the cut-out again
+      as accent masks, show only while the figure slides in (the hero's rules, written from the app's timeline).
     */
-    .portrait { position: relative; height: 168px; max-width: 480px; margin: 0 0 20px; overflow: hidden; border-radius: 0 0 24px 24px; --step: 13px; }
-    .portrait::before { content: ""; position: absolute; inset: 26% 0 0; border-radius: 24px; background: linear-gradient(var(--stage), color-mix(in srgb, var(--stage) 40%, var(--bg))); }
-    .portrait .melt { position: absolute; }
-    /*
-      The trail's reach (1 out, less drawn back) and how much of it is kept off the name's place, left of --clear
-      (0 none, 1 all of it, fading back in over 16px): numbers the hero's rules animate, hence registered.
-    */
-    @property --reach { syntax: "<number>"; inherits: true; initial-value: 1; }
-    @property --mask { syntax: "<number>"; inherits: true; initial-value: 0; }
-    .portrait .trail {
-      position: absolute; inset: 0; --clear: 0px;
-      -webkit-mask: linear-gradient(to right, rgb(0 0 0 / calc(1 - var(--mask))) var(--clear), #000 calc(var(--clear) + 16px));
-      mask: linear-gradient(to right, rgb(0 0 0 / calc(1 - var(--mask))) var(--clear), #000 calc(var(--clear) + 16px));
+    .portrait { position: relative; height: 168px; max-width: 480px; margin: 0 0 20px; overflow: hidden; border-radius: 0 0 24px 24px; --h: 168px; }
+    .portrait::before {
+      content: ""; position: absolute; inset: 26% 0 0; border-radius: 24px;
+      background:
+        radial-gradient(circle calc(var(--h) * 1.045) at calc(100% - 20px - var(--h) * .513) calc(var(--h) * .04), color-mix(in srgb, var(--accent) 16%, transparent), transparent),
+        linear-gradient(var(--stage), color-mix(in srgb, var(--stage) 40%, var(--bg)));
     }
-    .portrait .echo {
-      position: absolute; inset: 0 calc(20px + var(--k) * var(--step) * var(--reach)) 0 0;
-      transform: scaleX(calc(1 + var(--k) * .05 * var(--reach))); transform-origin: right;
-    }
+    .portrait .echo, .portrait .person { position: absolute; right: 20px; bottom: 0; height: 100%; aspect-ratio: .95; }
+    .portrait .echo { opacity: 0; }
     .portrait .echo i {
       position: absolute; inset: 0; background: var(--accent);
-      -webkit-mask: var(--photo) right bottom / auto 100% no-repeat; mask: var(--photo) right bottom / auto 100% no-repeat;
+      -webkit-mask: var(--photo) right bottom / contain no-repeat; mask: var(--photo) right bottom / contain no-repeat;
     }
-    .portrait .echo:nth-of-type(1) { --k: 7; opacity: .05; filter: url(#melt-3); }
-    .portrait .echo:nth-of-type(2) { --k: 6; opacity: .1; filter: url(#melt-3); }
-    .portrait .echo:nth-of-type(3) { --k: 5; opacity: .17; filter: url(#melt-2); }
-    .portrait .echo:nth-of-type(4) { --k: 4; opacity: .25; filter: url(#melt-2); }
-    .portrait .echo:nth-of-type(5) { --k: 3; opacity: .34; filter: url(#melt-1); }
-    .portrait .echo:nth-of-type(6) { --k: 2; opacity: .44; }
-    .portrait .echo:nth-of-type(7) { --k: 1; opacity: .55; }
-    .portrait .person { position: absolute; right: 20px; bottom: 0; height: 100%; }
-    .portrait .person img { display: block; height: 100%; width: auto; position: relative; }
-    @media (min-width: 600px) { .portrait { height: 208px; --step: 17px; } }
+    .portrait .echo:nth-of-type(1) { --k: 3; --a: .06; }
+    .portrait .echo:nth-of-type(2) { --k: 2; --a: .12; }
+    .portrait .echo:nth-of-type(3) { --k: 1; --a: .2; }
+    .portrait .person img { display: block; width: 100%; height: 100%; object-fit: contain; object-position: right bottom; }
+    @media (min-width: 600px) { .portrait { height: 208px; --h: 208px; } }
     @media (min-width: 840px) {
-      .hero .portrait { float: right; width: 380px; height: 224px; margin: 0 0 24px 48px; --step: 18px; }
+      .hero .portrait { float: right; width: 380px; height: 224px; margin: 0 0 24px 48px; --h: 224px; }
       .hero .proof { clear: both; }
     }
     /*
@@ -301,7 +288,7 @@
     .hero .proof strong { display: block; color: var(--accent); font-size: 28px; line-height: 1.2; }
     .hero .proof li { color: var(--muted); font-size: 15px; line-height: 1.5; }
     /*
-      The hero's entrance, played once as the page first shows: the figure dashes in and lands, then the intro reads
+      The hero's entrance, played once as the page first shows: the figure slides in and settles, then the intro reads
       in. Written by StaticHtml.heroMotion from the app's own timeline (HeroMotion), so the app, fading in over this
       page, carries on from the same frame; only with scripts and where motion is welcome, ending on the still picture.
     */

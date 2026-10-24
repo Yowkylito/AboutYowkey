@@ -57,7 +57,7 @@ class HeroEntranceTest {
                 assertEquals(0f, hero.entrance.shown(IntroStep.NAME, hero.staged), "the words wait for the landing")
 
                 val recompositions = Recompositions(hero.recomposersBefore)
-                val nameAt = HeroMotion.textAt(0, hero.staged)
+                val nameAt = HeroMotion.textAt(0)
                 var nameReading = 0f
                 repeat(100) {
                     clock.frame()

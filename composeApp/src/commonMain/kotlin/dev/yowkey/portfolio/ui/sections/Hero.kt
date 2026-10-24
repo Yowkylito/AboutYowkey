@@ -64,11 +64,10 @@ import dev.yowkey.portfolio.ui.theme.PortfolioTheme
  * under the stage says only the rest of the headline; when they do not fit, the name and the whole headline are under
  * the stage. The wide layout keeps the name in the column beside the portrait.
  *
- * It comes in through [entrance], once per page load: the portrait dashes in and lands, then the intro reads in, in
+ * It comes in through [entrance], once per page load: the portrait slides in and settles, then the intro reads in, in
  * reading order whichever the layout (name, role when staged, headline, proof, buttons, summary), each step fading in
- * as it slides toward the end; staged, the trail first draws back to clear the stage for the name. Every step keeps
- * its space while it waits, so the hero's size never changes and nothing below it (nor the bar, which measures it)
- * moves.
+ * as it slides toward the end. Every step keeps its space while it waits, so the hero's size never changes and
+ * nothing below it (nor the bar, which measures it) moves.
  */
 @Composable
 fun Hero(
@@ -108,7 +107,7 @@ fun Hero(
             Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
                 photo?.let {
                     Box(Modifier.widthIn(max = StageMaxWidth).fillMaxWidth().height(stageHeight)) {
-                        HeroPortrait(it, profile.name, entrance, Modifier.matchParentSize(), staged = staged)
+                        HeroPortrait(it, profile.name, entrance, Modifier.matchParentSize())
                         plan?.let { StagedTitle(profile.name, it, entrance, ruler, stageWidth, stageHeight) }
                     }
                 }
@@ -145,9 +144,8 @@ private fun rememberStagePlan(name: String, role: String, stageWidth: Dp, stageH
 
 /**
  * The name, the page's heading, and the role under it, standing on the stage's start side in the box [HeroStage]
- * keeps for them, centred in the tinted area. Drawn over the portrait, so the trail (which draws back clear of them)
- * never covers them; in onPrimaryContainer, at least 6:1 on the stage in either theme even where the face's glow
- * reaches.
+ * keeps for them, centred in the tinted area. Drawn over the portrait (whose trail is gone before they read in), in
+ * onPrimaryContainer: at least 6:1 on the stage in either theme, even where the light behind the head reaches.
  */
 @Composable
 private fun StagedTitle(
