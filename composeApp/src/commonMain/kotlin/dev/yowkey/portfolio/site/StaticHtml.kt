@@ -47,9 +47,11 @@ object StaticHtml {
             "toTop" to backToTop(),
             "build" to build,
         )
-        val unknown = Regex("\\{\\{(\\w+)}}").findAll(template).map { it.groupValues[1] }.toSet() - values.keys
+        val placeholder = Regex("\\{\\{(\\w+)}}")
+        val unknown = placeholder.findAll(template).map { it.groupValues[1] }.toSet() - values.keys
         require(unknown.isEmpty()) { "index.template.html uses unknown placeholders: $unknown" }
-        return values.entries.fold(template) { html, (key, value) -> html.replace("{{$key}}", value) }
+        // One pass over the template: a value that contains "{{content}}" stays text instead of being filled in turn.
+        return placeholder.replace(template) { values.getValue(it.groupValues[1]) }
     }
 
     fun sitemap(portfolio: Portfolio): String = """
@@ -613,8 +615,9 @@ object StaticHtml {
             p.email?.let { put("email", "mailto:$it") }
             put("sameAs", JsonArray(portfolio.links.filter { it.url.startsWith("https://") }.map { JsonPrimitive(it.url) }))
         }
-        // "</" would end the <script> element early.
-        return person.toString().replace("</", "<\\/")
+        // No "<" at all inside the <script>: "</" would end it early, and "<!--<script" would keep it from ending.
+        // The JSON escape < reads back as the same character.
+        return person.toString().replace("<", "\\u003c")
     }
 
     fun escape(text: String): String = buildString(text.length) {

@@ -221,6 +221,28 @@ class StaticHtmlTest {
         assertFalse("</script><b>" in page)
     }
 
+    /**
+     * `<!--<script>` would send the parser into the script's "double escaped" state, where the element's own
+     * `</script>` no longer ends it and the rest of the page is swallowed. No `<` at all reaches the JSON-LD.
+     */
+    @Test
+    fun jsonLdHasNoAngleBracketToOpenAnythingWith() {
+        val hostile = portfolio.copy(profile = portfolio.profile.copy(summary = "<!--<script> a < b"))
+        val page = StaticHtml.page(hostile, "<script>{{jsonLd}}</script><main></main>", "949ee26")
+        val script = page.substringAfter("<script>").substringBefore("</script>")
+        assertFalse('<' in script, script)
+        assertTrue("\\u003c!--\\u003cscript> a \\u003c b" in script, "still the same JSON: $script")
+        assertTrue(page.endsWith("</script><main></main>"))
+    }
+
+    /** A value that happens to contain `{{content}}` is text, not a second place for the content to land. */
+    @Test
+    fun placeholdersAreFilledOnceAndNeverInsideAValue() {
+        val tricky = portfolio.copy(profile = portfolio.profile.copy(summary = "Ask me about {{content}} or {{build}}"))
+        val page = StaticHtml.page(tricky, "<meta content=\"{{description}}\"><main>{{content}}</main>", "949ee26")
+        assertTrue("<meta content=\"Ask me about {{content}} or {{build}}\">" in page, page.substringBefore("<main>"))
+    }
+
     private val media = Screenshot("ride.webp", "A \"ride\" <clip>", 480, 270)
 
     @Test
