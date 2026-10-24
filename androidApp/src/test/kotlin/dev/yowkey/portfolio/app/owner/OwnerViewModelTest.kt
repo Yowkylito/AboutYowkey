@@ -31,8 +31,9 @@ class OwnerViewModelTest {
     @AfterTest
     fun tearDown() = Dispatchers.resetMain()
 
+    /** The view model over the fake worker; [main] stands in for the IO pool too, so every step runs at once. */
     private fun owner(signedIn: Boolean = true, saved: SavedStateHandle = SavedStateHandle()) =
-        OwnerViewModel(FakeAccess(worker, signedIn), FakeDevice(), saved)
+        OwnerViewModel(FakeAccess(worker, signedIn), FakeDevice(), saved, io = main)
 
     /**
      * The process is killed in the background: the activity's saved state outlives it (as a Bundle, so only what was
@@ -105,6 +106,21 @@ class OwnerViewModelTest {
     }
 
     @Test
+    fun theKeystoreAndTheJsonStayOffTheMainThread() = runTest(main) {
+        val io = UnconfinedTestDispatcher(testScheduler, name = "io")
+        val access = FakeAccess(worker, signedIn = false)
+        val owner = OwnerViewModel(access, FakeDevice(), SavedStateHandle(), io)
+        owner.start(OwnerLink.Dashboard)
+        owner.signIn("test-password") // seals the token, then loads the dashboard
+        owner.select(Tab.Messages)
+        owner.openMessage(1) // an action
+        owner.signOut()
+        assertEquals(6, access.tokenDispatchers.size, "sign-in, the dashboard, the messages, the action, its reload, sign-out")
+        assertEquals(listOf<Any?>(io), access.tokenDispatchers.distinct(), "every call that opens the token")
+        assertEquals(listOf<Any?>(io), worker.dispatchers.distinct(), "every request, and so the decoding of its answer")
+    }
+
+    @Test
     fun aNotificationsLinkLoadsItsTabOnce() = runTest(main) {
         val owner = owner()
         owner.start(OwnerLink.Notes(5))
@@ -113,8 +129,7 @@ class OwnerViewModelTest {
 
     @Test
     fun aLoadUnderwayWhenTheOwnerSignsOutLeavesNothingBehind() = runTest(main) {
-        val access = FakeAccess(worker)
-        val owner = OwnerViewModel(access, FakeDevice())
+        val owner = owner()
         val gate = CompletableDeferred<Unit>().also { worker.summaryGate = it }
         owner.start(link = null)
         owner.signOut()

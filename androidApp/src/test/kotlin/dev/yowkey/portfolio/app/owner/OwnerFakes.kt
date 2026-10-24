@@ -6,7 +6,9 @@ import dev.yowkey.portfolio.admin.AdminSummary
 import dev.yowkey.portfolio.admin.AdminTransport
 import dev.yowkey.portfolio.data.HttpReply
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlin.coroutines.ContinuationInterceptor
 
 private const val BASE = "https://worker.test"
 
@@ -23,9 +25,13 @@ class FakeWorker : AdminTransport {
     /** While set, a summary is read at once but answered only when this completes. */
     var summaryGate: CompletableDeferred<Unit>? = null
 
+    /** The dispatcher each request was sent from; the answer is decoded there too. */
+    val dispatchers = mutableListOf<ContinuationInterceptor?>()
+
     override suspend fun send(method: String, url: String, body: String?, headers: Map<String, String>): HttpReply {
         val path = url.removePrefix(BASE)
         requests += "$method $path"
+        dispatchers += currentCoroutineContext()[ContinuationInterceptor]
         return when {
             path == "/admin/summary" -> {
                 val answer = """{"day":"2026-10-24","messages":{"total":1,"unread":$unread}}"""
@@ -53,18 +59,24 @@ class FakeWorker : AdminTransport {
 class FakeAccess(private val worker: FakeWorker, signedIn: Boolean = true) : OwnerAccess {
     override val signedIn = MutableStateFlow(signedIn)
 
+    /** The dispatcher each call that opens or writes the kept token ran on (the Keystore, on the phone). */
+    val tokenDispatchers = mutableListOf<ContinuationInterceptor?>()
+
     override suspend fun api(): AdminApi {
+        tokenDispatchers += currentCoroutineContext()[ContinuationInterceptor]
         if (!signedIn.value) throw AdminSignedOutException()
         return AdminApi(worker, BASE, "test-token")
     }
 
     override suspend fun signIn(password: String): AdminSummary {
+        tokenDispatchers += currentCoroutineContext()[ContinuationInterceptor]
         val summary = AdminApi(worker, BASE, password).summary()
         signedIn.value = true
         return summary
     }
 
     override suspend fun signOut() {
+        tokenDispatchers += currentCoroutineContext()[ContinuationInterceptor]
         signedIn.value = false
     }
 

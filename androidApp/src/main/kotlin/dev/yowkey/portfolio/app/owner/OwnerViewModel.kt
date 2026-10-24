@@ -20,7 +20,9 @@ import dev.yowkey.portfolio.admin.NoteAction
 import dev.yowkey.portfolio.admin.after
 import dev.yowkey.portfolio.app.OwnerLink
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
@@ -40,8 +42,10 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.ZoneId
+import java.util.concurrent.atomic.AtomicBoolean
 
 /** The admin view's sections, in the navigation bar's order. */
 enum class Tab(val label: String, val icon: Int) {
@@ -87,11 +91,14 @@ data class PushInfo(val firebase: Boolean, val registered: Boolean, val notifica
  * @param session the owner's session ([OwnerSession.asAccess] on the phone)
  * @param device the phone's side of the alerts, for Settings and the first sign-in
  * @param saved the activity's saved state, which keeps the admin view's place through the process being killed
+ * @param io where every session and worker call runs: opening the sealed token is a Keystore call, and decoding a
+ *   list of messages or notes is JSON work, neither of which belongs on the main thread with the frames
  */
 class OwnerViewModel(
     private val session: OwnerAccess,
     private val device: OwnerDevice,
     private val saved: SavedStateHandle = SavedStateHandle(),
+    private val io: CoroutineDispatcher = Dispatchers.IO,
 ) : ViewModel() {
 
     val signedIn: StateFlow<Boolean> = session.signedIn
@@ -138,8 +145,8 @@ class OwnerViewModel(
     /** Per list, a load asked for while one was underway, to run when that one ends (see [load]). Main thread only. */
     private val again = HashMap<MutableStateFlow<*>, () -> Unit>()
 
-    /** Whether the next dashboard load is to fetch the thirty days too (see [refreshDashboard]). Main thread only. */
-    private var wholeDashboardDue = false
+    /** Whether the next dashboard load is to fetch the thirty days too (see [refreshDashboard]); read on [io]. */
+    private val wholeDashboardDue = AtomicBoolean(false)
 
     private val _notices = Channel<String>(Channel.BUFFERED)
 
@@ -212,7 +219,7 @@ class OwnerViewModel(
         _signIn.value = SignInState(busy = true)
         viewModelScope.launch {
             _signIn.value = try {
-                val summary = session.signIn(password)
+                val summary = withContext(io) { session.signIn(password) } // seals the token: the Keystore, then a disk write
                 _dashboard.update { it.copy(value = it.value?.copy(summary = summary)) }
                 refresh(_nav.value.tab)
                 SignInState()
@@ -230,7 +237,7 @@ class OwnerViewModel(
 
     fun signOut() {
         viewModelScope.launch {
-            session.signOut()
+            withContext(io) { session.signOut() }
             _nav.value = OwnerNav(portfolio = true)
         }
     }
@@ -327,11 +334,11 @@ class OwnerViewModel(
      * it rather than two. A dashboard never loaded loads whole either way.
      */
     private fun refreshDashboard(whole: Boolean) {
-        wholeDashboardDue = wholeDashboardDue || whole
+        if (whole) wholeDashboardDue.set(true)
         load(_dashboard, { api ->
             // Read when the load starts, so a whole reload asked for during a summary reload is not lost.
-            val days = _dashboard.value.value?.days?.takeUnless { wholeDashboardDue }
-            wholeDashboardDue = false
+            val wholeNow = wholeDashboardDue.getAndSet(false)
+            val days = _dashboard.value.value?.days?.takeUnless { wholeNow }
             if (days != null) {
                 Dashboard(api.summary(), days)
             } else {
@@ -358,7 +365,7 @@ class OwnerViewModel(
         target.update { it.copy(loading = true) }
         work.launch {
             target.value = try {
-                Loadable(fetch(session.api()))
+                Loadable(withContext(io) { fetch(session.api()) })
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -376,7 +383,7 @@ class OwnerViewModel(
         _working.update { it + id }
         work.launch {
             try {
-                call(session.api())
+                withContext(io) { call(session.api()) }
                 done()?.let(::notice)
             } catch (e: CancellationException) {
                 throw e
