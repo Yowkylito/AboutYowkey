@@ -37,7 +37,7 @@ class HeroStageTest {
     fun theRoleIsWholeIfItCanBeAndElseItsLongestFormThatFits() {
         // A 130dp box: at 15dp (7.5dp a letter) "Android Developer", "at DigiPlus since", "2024" is 3 lines, one too
         // many, and at 14dp too; "Android Developer" then "at DigiPlus" is 2. The name then has room at 30sp only.
-        val stage = 130f + HeroStage.FIGURE_INSET_DP + 168f * HeroStage.FIGURE_ASPECT + HeroStage.LANE_DP + HeroStage.PAD_DP
+        val stage = 130f + HeroStage.FIGURE_INSET_DP + 168f * HeroStage.FIGURE_MAX_WIDTH + HeroStage.GAP_TO_FIGURE_DP + HeroStage.PAD_DP
         val plan = assertNotNull(HeroStage.plan("Ada Lovelace", role, stage, 168f, 1f, halfEm))
         assertEquals(HeroStage.Plan(30f, 15f, "Android Developer at DigiPlus", wholeRole = false), plan)
         assertEquals(3, HeroStage.lines(role, 15f, false, 130f, halfEm))
@@ -47,17 +47,28 @@ class HeroStageTest {
         assertEquals(1, HeroStage.lines("Ada", 30f, true, 130f, halfEm))
     }
 
-    /** The box is the stage less the figure (at its widest), the lane for the trail and the inset: it never meets it. */
+    /**
+     * The box is the stage less the figure's box (as wide as any figure is drawn), a gap and the inset: whatever the
+     * photo, the name never meets it.
+     */
     @Test
-    fun theBoxStopsALaneShortOfTheFigure() {
+    fun theBoxStopsAGapShortOfAnyFigure() {
         listOf(320f, 372f, 480f).forEach { width ->
             listOf(168f, 208f).forEach { height ->
-                val figureStart = width - HeroStage.FIGURE_INSET_DP - height * HeroStage.FIGURE_ASPECT
                 val boxEnd = HeroStage.PAD_DP + HeroStage.boxWidth(width, height)
-                assertEquals(HeroStage.LANE_DP, figureStart - boxEnd, 0.01f)
-                assertEquals(boxEnd, HeroStage.clearOf(width, height), 0.01f)
+                // The selfie's 0.845, a square crop, a head-and-shoulders 1.05 and 1.1, and wider still.
+                listOf(0.6f, 0.845f, 1f, 1.05f, 1.1f, 1.4f).forEach { aspect ->
+                    val (figureWidth, figureHeight) = HeroStage.figureSize(height, aspect)
+                    val figureStart = width - HeroStage.FIGURE_INSET_DP - figureWidth
+                    assertTrue(figureStart - boxEnd >= HeroStage.GAP_TO_FIGURE_DP - 0.01f, "$aspect on $width x $height")
+                    assertTrue(figureHeight <= height + 0.01f && figureWidth <= height * HeroStage.FIGURE_MAX_WIDTH + 0.01f)
+                    assertEquals(aspect, figureWidth / figureHeight, 0.001f, "never stretched")
+                }
             }
         }
+        assertEquals(168f, HeroStage.figureSize(168f, 0.845f).second, "a narrow cut-out stands the stage's full height")
+        val headshot = HeroStage.figureSize(168f, 1.1f).second
+        assertTrue(headshot < 168f && 168f - headshot < 168f * HeroStage.STAGE_TOP, "a wide one smaller, its head still over the stage's top")
         assertTrue(HeroStage.boxHeight(168f) + 2 * HeroStage.V_PAD_DP <= 168f * (1 - HeroStage.STAGE_TOP) + 0.01f, "inside the tint")
     }
 

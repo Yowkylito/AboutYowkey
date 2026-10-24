@@ -53,8 +53,8 @@
       /* Added for the bar: the monogram's deeper end. */
       --accent-deep: #1D4ED8;
       /*
-        The hero portrait's stage, and what stands on it (the name and role, the colour split's far fringe): the app's
-        primaryContainer and onPrimaryContainer, 8.5:1 apart here and 7.3:1 in dark.
+        The hero portrait's stage, and what stands on it (the name and role): the app's primaryContainer and
+        onPrimaryContainer, 8.5:1 apart here and 7.3:1 in dark.
       */
       --stage: #DBEAFE; --on-stage: #1E3A8A;
       /* The edge of a form field and an unlit star, the app's ControlOutline: 3:1 on either theme's surface. */
@@ -82,6 +82,9 @@
     #static-content { max-width: 1120px; margin: 0 auto; padding: 96px 20px 120px; }
     /* Under the bar the hero starts where the app's does (its topSpacing): 40px down on a phone, 96px from 600px up. */
     @media (max-width: 599px) { #static-content { padding-top: 40px; } }
+    /* The page's gutter, as the app's (PageLayout.gutter): 20px on a phone, 32px from 600px, 48px from 840px. */
+    @media (min-width: 600px) { #static-content { padding-inline: 32px; } }
+    @media (min-width: 840px) { #static-content { padding-inline: 48px; } }
     /*
       The bar over the page (StaticHtml.bar), as the app's TopBar: sticky inside #static-scroll, which is what
       scrolls. Flat at the very top; once the page moves, the hairline under it and the reading progress along it.
@@ -101,7 +104,10 @@
       }
     }
     .js .bar:not(.scrolled) { box-shadow: none; }
-    .bar-row { display: flex; align-items: center; gap: 12px; max-width: 1120px; height: 64px; margin: 0 auto; padding: 0 20px; }
+    /* The bar's row keeps to the page's gutter, as the app's: the mark over the page's start edge. */
+    .bar-row { --gutter: 20px; display: flex; align-items: center; gap: 12px; max-width: 1120px; height: 64px; margin: 0 auto; padding: 0 var(--gutter); }
+    @media (min-width: 600px) { .bar-row { --gutter: 32px; } }
+    @media (min-width: 840px) { .bar-row { --gutter: 48px; } }
     /* The monogram, the way home: the initials on the accent, deepening towards the bottom right. */
     .mark {
       flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px;
@@ -210,7 +216,7 @@
       :root:not(.js) { --bar-offset: 112px; }
       :root:not(.js) .bar-row { flex-wrap: wrap; height: auto; row-gap: 0; }
       :root:not(.js) .brand { height: 64px; }
-      :root:not(.js) .sections { flex: 1 0 calc(100% + 40px); margin: 0 -20px; overflow-x: auto; scrollbar-width: none; }
+      :root:not(.js) .sections { flex: 1 0 calc(100% + 2 * var(--gutter)); margin: 0 calc(-1 * var(--gutter)); overflow-x: auto; scrollbar-width: none; }
       :root:not(.js) .sections::-webkit-scrollbar { display: none; }
       :root:not(.js) .sections ul { width: max-content; padding: 0 10px 8px; }
       /* With it, as the app's compact bar: the switch, then a menu that drops the links down under the bar. */
@@ -246,62 +252,81 @@
     article > ul:not([class]) > li + li { margin-top: .4em; }
     /*
       The hero's portrait, as the app's still picture: the cut-out stands at the end of a tinted stage, head clear of
-      its top, shouting toward the start. Seven echoes of the silhouette (the image as a mask, filled with the accent)
-      trail away, each wider and fainter than the last, the far ones melted by the SVG filters. Clipped at the bottom
-      corners only, so the head rises above the stage. Beside the intro from 840px, as the app's wide layout. --step
-      is 0.095 of the figure's width. The entrance (the dash, the landing and the intro reading in) follows the hero's
-      rules, written from the app's timeline; the scream on hover and on coming back into view is the app's alone.
+      its top, a soft light behind the head (where it rests, as the app's HeroPortrait draws it). The figure is drawn in
+      a box as tall as the stage and 0.95 of that wide, held to its bottom right corner: a narrower cut-out stands full
+      height, a wider one (a head-and-shoulders crop) smaller on the same floor, so the name's place beside it never
+      depends on the photo (HeroStage). Clipped at the bottom corners only, so the head rises above the stage. Over
+      the proof beside the intro from 840px, as the app's wide layout (below); --h is the stage's height. The three
+      echoes, the cut-out again as accent masks, show only while the figure slides in (the hero's rules, written from
+      the app's timeline).
     */
-    .portrait { position: relative; height: 168px; max-width: 480px; margin: 0 0 20px; overflow: hidden; border-radius: 0 0 24px 24px; --step: 13px; }
-    .portrait::before { content: ""; position: absolute; inset: 26% 0 0; border-radius: 24px; background: linear-gradient(var(--stage), color-mix(in srgb, var(--stage) 40%, var(--bg))); }
-    .portrait .melt { position: absolute; }
-    /*
-      The trail's reach (1 out, less drawn back) and how much of it is kept off the name's place, left of --clear
-      (0 none, 1 all of it, fading back in over 16px): numbers the hero's rules animate, hence registered.
-    */
-    @property --reach { syntax: "<number>"; inherits: true; initial-value: 1; }
-    @property --mask { syntax: "<number>"; inherits: true; initial-value: 0; }
-    .portrait .trail {
-      position: absolute; inset: 0; --clear: 0px;
-      -webkit-mask: linear-gradient(to right, rgb(0 0 0 / calc(1 - var(--mask))) var(--clear), #000 calc(var(--clear) + 16px));
-      mask: linear-gradient(to right, rgb(0 0 0 / calc(1 - var(--mask))) var(--clear), #000 calc(var(--clear) + 16px));
+    .portrait { position: relative; height: 168px; max-width: 480px; margin: 0 0 20px; overflow: hidden; border-radius: 0 0 24px 24px; --h: 168px; }
+    .portrait::before {
+      content: ""; position: absolute; inset: 26% 0 0; border-radius: 24px;
+      background:
+        radial-gradient(circle calc(var(--h) * 1.045) at calc(100% - 20px - var(--h) * .513) calc(var(--h) * .04), color-mix(in srgb, var(--accent) 16%, transparent), transparent),
+        linear-gradient(var(--stage), color-mix(in srgb, var(--stage) 40%, var(--bg)));
     }
-    .portrait .echo {
-      position: absolute; inset: 0 calc(20px + var(--k) * var(--step) * var(--reach)) 0 0;
-      transform: scaleX(calc(1 + var(--k) * .05 * var(--reach))); transform-origin: right;
-    }
+    .portrait .echo, .portrait .person { position: absolute; right: 20px; bottom: 0; height: 100%; aspect-ratio: .95; }
+    .portrait .echo { opacity: 0; }
     .portrait .echo i {
       position: absolute; inset: 0; background: var(--accent);
-      -webkit-mask: var(--photo) right bottom / auto 100% no-repeat; mask: var(--photo) right bottom / auto 100% no-repeat;
+      -webkit-mask: var(--photo) right bottom / contain no-repeat; mask: var(--photo) right bottom / contain no-repeat;
     }
-    .portrait .echo:nth-of-type(1) { --k: 7; opacity: .05; filter: url(#melt-3); }
-    .portrait .echo:nth-of-type(2) { --k: 6; opacity: .1; filter: url(#melt-3); }
-    .portrait .echo:nth-of-type(3) { --k: 5; opacity: .17; filter: url(#melt-2); }
-    .portrait .echo:nth-of-type(4) { --k: 4; opacity: .25; filter: url(#melt-2); }
-    .portrait .echo:nth-of-type(5) { --k: 3; opacity: .34; filter: url(#melt-1); }
-    .portrait .echo:nth-of-type(6) { --k: 2; opacity: .44; }
-    .portrait .echo:nth-of-type(7) { --k: 1; opacity: .55; }
-    .portrait .person { position: absolute; right: 20px; bottom: 0; height: 100%; }
-    .portrait .person img { display: block; height: 100%; width: auto; position: relative; }
-    @media (min-width: 600px) { .portrait { height: 208px; --step: 17px; } }
-    @media (min-width: 840px) {
-      .hero .portrait { float: right; width: 380px; height: 224px; margin: 0 0 24px 48px; --step: 18px; }
-      .hero .proof { clear: both; }
-    }
+    .portrait .echo:nth-of-type(1) { --k: 3; --a: .06; }
+    .portrait .echo:nth-of-type(2) { --k: 2; --a: .12; }
+    .portrait .echo:nth-of-type(3) { --k: 1; --a: .2; }
+    .portrait .person img { display: block; width: 100%; height: 100%; object-fit: contain; object-position: right bottom; }
+    @media (min-width: 600px) { .portrait { height: 208px; --h: 208px; } }
     /*
       The hero is a container, so the rules that stand the name and role on the stage (heroStage, below) can follow
       its width as the app's layout does. Until one does, the role stays out of sight and the name under the stage.
+
+      Set as the app's Hero, so the app fades in over it line for line: each text at its style's size, line height,
+      letter spacing and weight (Theme.kt: the name displayMedium on a phone and displayLarge from 600px, the headline
+      headlineSmall, the proof headlineMedium over bodyMedium, the buttons labelLarge, the summary bodyLarge), as wide
+      as the app lets it run (the headline and summary to their reading measure, 680px), wrapped word by word as the
+      app wraps, and spaced as its columns are (a grid, so no margins collapse): 16px from the name to the headline,
+      20px between the rest, 4px more around the proof. The links are the app's buttons, 40px tall in a 48px row.
     */
-    .hero { position: relative; container: hero / inline-size; }
+    .hero { position: relative; container: hero / inline-size; display: grid; grid-template-columns: minmax(0, 1fr); }
     .hero hgroup { margin: 0; }
     .hero .role { display: none; }
-    .hero h1 { font-size: clamp(44px, 9vw, 72px); line-height: 1.05; letter-spacing: -0.03em; margin: 0 0 16px; }
-    .headline { font-size: clamp(20px, 3vw, 24px); margin: 0 0 12px; max-width: 720px; }
-    .hero .proof { list-style: none; padding: 0; margin: 24px 0 8px; display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); max-width: 960px; }
-    .hero .proof strong { display: block; color: var(--accent); font-size: 28px; line-height: 1.2; }
-    .hero .proof li { color: var(--muted); font-size: 15px; line-height: 1.5; }
+    .hero h1 { font-size: 48px; line-height: 52px; letter-spacing: -1.2px; font-weight: 700; margin: 0 0 16px; text-wrap: wrap; }
+    @media (min-width: 600px) { .hero h1 { font-size: 72px; line-height: 76px; letter-spacing: -2px; } }
+    .hero .headline { font-size: 24px; line-height: 34px; margin: 0 0 20px; max-width: 680px; text-wrap: wrap; }
+    .hero .proof { list-style: none; padding: 0; margin: 4px 0 24px; display: grid; gap: 18px; }
+    .hero .proof strong { display: block; margin-bottom: 2px; color: var(--accent); font-size: 28px; line-height: 36px; font-weight: 600; letter-spacing: -.5px; }
+    .hero .proof li { max-width: none; color: var(--muted); font-size: 15px; line-height: 24px; letter-spacing: .2px; text-wrap: wrap; }
+    .hero .links { display: flex; flex-wrap: wrap; gap: 12px; max-width: none; margin: 0 0 20px; }
+    .hero .links a {
+      display: inline-flex; align-items: center; justify-content: center; min-width: 58px; height: 40px; margin: 4px 0; padding: 0 24px;
+      border: 1px solid var(--line); border-radius: 20px; color: var(--accent);
+      font-size: 14px; line-height: 20px; letter-spacing: .1px; font-weight: 600; text-decoration: none;
+    }
+    .hero .links a[href^="mailto:"] { border-color: transparent; background: var(--accent); color: var(--on-accent); }
+    .hero > .links + p { max-width: 680px; margin: 0; color: var(--muted); font-size: 18px; line-height: 29px; letter-spacing: .5px; text-wrap: wrap; }
     /*
-      The hero's entrance, played once as the page first shows: the figure dashes in and lands, then the intro reads
+      From 840px, with proof, the app's wide layout: the intro in a column three fifths as wide, the proof in a card
+      beside it, 48px apart, the two centred on each other. The empty rows above and below the intro's take what the
+      card is taller by, half each; a shorter card is centred on the intro. The portrait stands over the card, 16px
+      above it, the two filling their column (the card is the taller side whenever there is a portrait).
+    */
+    @media (min-width: 840px) {
+      .hero:has(> .proof) { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); grid-template-rows: 1fr repeat(4, auto) 1fr; column-gap: 48px; }
+      .hero:has(> .proof) > hgroup { grid-area: 2 / 1; }
+      .hero:has(> .proof) > .headline { grid-area: 3 / 1; }
+      .hero:has(> .proof) > .links { grid-area: 4 / 1; }
+      .hero:has(> .proof) > .links + p { grid-area: 5 / 1; }
+      .hero:has(> .proof) > .proof {
+        grid-area: 1 / 2 / -1; align-self: center; margin: 0; padding: 27px;
+        border: 1px solid var(--line); border-radius: 16px; background: var(--surface);
+      }
+      .hero:has(> .proof) > .portrait { grid-area: 1 / 2 / -1; align-self: start; max-width: none; height: 224px; margin: 0; --h: 224px; }
+      .hero:has(> .portrait) > .proof { align-self: end; margin-top: 240px; }
+    }
+    /*
+      The hero's entrance, played once as the page first shows: the figure slides in and settles, then the intro reads
       in. Written by StaticHtml.heroMotion from the app's own timeline (HeroMotion), so the app, fading in over this
       page, carries on from the same frame; only with scripts and where motion is welcome, ending on the still picture.
     */

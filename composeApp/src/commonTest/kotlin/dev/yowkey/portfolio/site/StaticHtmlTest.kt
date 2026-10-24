@@ -143,12 +143,15 @@ class StaticHtmlTest {
             val delay = HeroMotion.TEXT_AT_MS + i * HeroMotion.TEXT_STAGGER_MS
             assertTrue("  .js .hero > $step { animation-delay: ${delay}ms; }" in guarded, "step $i, $step, at $delay ms")
         }
-        val dash = Regex("hero-dash ${HeroMotion.DASH_MS}ms (linear\\([^)]*\\))").find(guarded)?.groupValues?.get(1)
-        assertTrue(dash != null && dash.startsWith("linear(0 0%, ") && dash.endsWith(", 1 100%)"), "the dash's spring, from 0 to 1: $dash")
+        // The slide is the app's own curve, exactly; the trail fades on its smoothstep, sampled from 0 to all.
+        assertTrue("  .js .hero .portrait .person { animation: hero-dash ${HeroMotion.SLIDE_MS}ms cubic-bezier(.22, 1, .36, 1) both; }" in guarded)
+        val fade = Regex("hero-trail ${HeroMotion.TRAIL_FADE_MS}ms (linear\\([^)]*\\))").find(guarded)?.groupValues?.get(1)
+        assertTrue(fade != null && fade.startsWith("linear(0 0%, ") && fade.endsWith(", 1 100%)"), "the trail's fade, from none to all: $fade")
+        assertFalse(Regex("hero-(shake|split|burst|smear|thin|back)|filter|drop-shadow").containsMatchIn(css), "nothing shakes, splits or bursts")
         assertFalse(Regex("\\d[eE][-+]?\\d").containsMatchIn(css), "a number CSS cannot read")
         val page = StaticHtml.page(portfolio, "<style>{{heroMotion}}</style>{{content}}", "b")
         assertTrue("<style>$css</style>" in page, "the template's styles carry it")
-        assertFalse("class=\"shout\"" in page, "the portrait has no sound lines")
+        assertFalse("class=\"shout\"" in page || "class=\"melt\"" in page, "no sound lines, no melting filters")
     }
 
     private val owner = portfolio.copy(
@@ -167,7 +170,8 @@ class StaticHtmlTest {
     fun theHeroCarriesTheNameTheRoleAndTheHeadlineEachOnce() {
         val hero = StaticHtml.content(owner).substringBefore("</header>")
         val markup = listOf(
-            "<span class=\"trail\">\n<span class=\"echo\">",
+            "style=\"--photo: url('composeResources/dev.yowkey.portfolio.resources/files/profile/portrait.webp')\">\n" +
+                "<span class=\"echo\"><i></i></span>\n".repeat(HeroMotion.ECHOES) + "<span class=\"person\"><img",
             "<hgroup>\n<h1>Rodelito Tangonan</h1>\n<p class=\"role\">Android Developer<span class=\"c1\"> at DigiPlus</span>" +
                 "<span class=\"c0\"> since 2024</span></p>\n</hgroup>",
             "<p class=\"headline\"><span class=\"lead\">Android Developer at DigiPlus since 2024 · </span>" +
@@ -183,8 +187,8 @@ class StaticHtmlTest {
     /**
      * The stage's rules follow [HeroStage]'s rule with the static page's estimate, width by width: on a 412px phone
      * (a 372px hero) the name and the whole role stand on the stage and the headline keeps only its rest; at 360px
-     * they do not, and nothing is said about it; the tablet's taller stage takes the name at 36px. Each range rests
-     * the trail drawn back and, where motion is welcome, follows the staged timeline.
+     * they do not, and nothing is said about it; the tablet's taller stage takes the name at 36px. Where motion is
+     * welcome, each range reads the role in as a step of its own, after the name.
      */
     @Test
     fun theStageRulesFollowTheRuleWidthByWidth() {
@@ -204,14 +208,13 @@ class StaticHtmlTest {
             "  .hero .portrait ~ hgroup h1 { margin: 0; font-size: 30px;",
             "color: var(--on-stage); text-wrap: wrap; }",
             "  .hero .portrait ~ .headline .lead, .hero .portrait ~ hgroup.whole + .headline { display: none; }",
-            "  .hero .portrait .trail { --reach: 0.35; --mask: 1;",
         ).forEach { assertTrue(it in at372, "a 372px hero lacks $it\n$at372") }
         assertFalse(".c0" in at372, "the whole role")
+        assertFalse("trail" in css, "no trail rests on the stage")
         assertTrue("@media (min-width: 600px) and (max-width: 839px) { @container hero (width >= " in css)
         assertTrue("font-size: 36px;" in css, "the tablet's name")
         val motion = "@media (max-width: 599px) and (prefers-reduced-motion: no-preference) { @container hero"
-        assertTrue(motion in css && "  .js .hero > hgroup > .role { animation-delay: ${HeroMotion.NAME_AT_MS + HeroMotion.NAME_STAGGER_MS}ms; }" in css)
-        assertTrue("  .js .hero .portrait .trail { animation: hero-back ${HeroMotion.DRAW_BACK_MS}ms linear(" in css)
+        assertTrue(motion in css && "  .js .hero > hgroup > .role { animation-delay: ${HeroMotion.textAt(1)}ms; }" in css)
         assertEquals("", StaticHtml.heroStage(owner.profile.copy(photo = null)), "no portrait, no stage")
     }
 

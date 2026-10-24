@@ -21,9 +21,9 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.roundToInt
 
 /**
- * The hero's entrance, played once per page load: the portrait dashes in from the stage's start edge to its place at
- * the end, its echo trail streaming out behind it, and lands with its scream as the impact; from the landing on, the
- * intro reads in, one step at a time in reading order ([IntroStep]), each fading in as it slides toward the end. One
+ * The hero's entrance, played once per page load: the portrait slides in from the stage's start edge to its place at
+ * the end, a short soft trail behind it; as it settles, the intro reads in, one step at a time in reading order
+ * ([IntroStep]), each fading in as it slides toward the end. One
  * clock in milliseconds drives all of it ([HeroMotion] is the timeline), read only in the draw and layer phases, so
  * the entrance never recomposes; the steps waiting their turn keep their space and their place in the semantics.
  *
@@ -56,16 +56,16 @@ class HeroEntrance internal constructor(startMillis: Float, private var joinsSta
     var nameEnd by mutableIntStateOf(0)
         internal set
 
-    /** True while the clock moves the portrait: it ignores gestures and returns to view, and goes where it is put. */
-    internal val movesPortrait: Boolean get() = portraitOnClock && clock.value < HeroMotion.END_MS
+    /** True once the portrait has been in this page load: composed again, it is there from the first frame. */
+    internal val portraitShown: Boolean get() = portraitEntered
 
     /** How far intro step [step] has come in, 0..1, eased. Read it in the layer phase. */
     internal fun shown(step: IntroStep, staged: Boolean = false): Float =
-        EaseOutCubic.transform(HeroMotion.textProgress(clock.value, step.order(staged), staged))
+        EaseOutCubic.transform(HeroMotion.textProgress(clock.value, step.order(staged)))
 
     /**
      * The portrait is in: its image has loaded and half of it is on screen. True the first time while the clock
-     * carries it (it dashes in on it, or has already come in on the static page), so it takes its pose from the
+     * carries it (it slides in on it, or has already come in on the static page), so it takes its pose from the
      * clock; false after that, and when the intro went ahead without it, so it makes its own arrival.
      */
     internal fun portraitArrives(): Boolean {
@@ -139,7 +139,7 @@ internal enum class IntroStep {
 /**
  * Intro step [step] of [entrance]: faded out and shifted toward the start until its turn, then in. Only the layer
  * changes, so the step keeps its space (nothing below it moves) and stays in the semantics, and its links work once
- * it shows. [staged]: the name and role stand on the stage, and the steps follow that timeline.
+ * it shows. [staged]: the name and role stand on the stage, and the role reads in as a step of its own.
  */
 internal fun Modifier.introStep(entrance: HeroEntrance, step: IntroStep, staged: Boolean = false): Modifier = graphicsLayer {
     val shown = entrance.shown(step, staged)

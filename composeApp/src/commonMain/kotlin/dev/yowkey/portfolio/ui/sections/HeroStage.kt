@@ -5,16 +5,20 @@ import dev.yowkey.portfolio.ui.components.roleOf as leadRoleOf
 
 /**
  * Whether the hero's name and role can stand on the portrait's stage, on a single column: in the tinted area at the
- * start side, left of the figure, with a lane kept between them for the resting trail. Pure, so it is unit-tested
- * and the static page's CSS is written from the same rule (`StaticHtml.heroStage`).
+ * start side, left of the figure, a small gap ([GAP_TO_FIGURE_DP]) short of it. Pure, so it is unit-tested and the
+ * static page's CSS is written from the same rule (`StaticHtml.heroStage`).
  *
- * The block's box is fixed by the stage's size alone (the figure is at most [FIGURE_ASPECT] as wide as it is tall),
- * so it is known before the photo loads and nothing moves when it does. The name takes the largest of [NAME_SIZES_SP]
- * that keeps every word whole on a line; under it the role, the headline's lead ("Android Developer at DigiPlus
- * since 2024"), in at most [ROLE_LINES] lines at 15sp or else 14sp, whole if it fits and else the longest of its
- * shorter forms that does (`shorterForms`). A whole role wins over a bigger name or role. When even the shortest form
- * does not fit with the name, there is no plan, and the hero keeps its usual layout, the name under the stage. Lines
- * are counted word by word, so the text is set that way too (no balanced or "pretty" wrapping).
+ * The figure is drawn at the stage's full height, but never wider than [FIGURE_MAX_WIDTH] of that height: a cut-out
+ * wider than that (a head-and-shoulders crop, up to about [FIGURE_ASPECT]) is drawn smaller, standing on the same
+ * floor. So the block's box is fixed by the stage's size alone, whatever the photo: it is known before the photo
+ * loads (on the static page, which cannot measure it, too), and nothing moves when it does.
+ *
+ * The name takes the largest of [NAME_SIZES_SP] that keeps every word whole on a line; under it the role, the
+ * headline's lead ("Android Developer at DigiPlus since 2024"), in at most [ROLE_LINES] lines at 15sp or else 14sp,
+ * whole if it fits and else the longest of its shorter forms that does (`shorterForms`). A whole role wins over a
+ * bigger name or role. When even the shortest form does not fit with the name, there is no plan, and the hero keeps
+ * its usual layout, the name under the stage. Lines are counted word by word, so the text is set that way too (no
+ * balanced or "pretty" wrapping).
  *
  * The widths come from [TextWidth]: the app measures its own font, and so that the static page, which cannot measure,
  * reaches the same answer at every width, both take at least [SystemFontWidth]'s generous estimate.
@@ -24,16 +28,22 @@ internal object HeroStage {
     /** The stage's tinted area starts this far down, so the head stands clear of it. */
     const val STAGE_TOP = 0.26f
 
-    /** The figure's width over its height, at most: the shipped cut-out's is checked against it (SiteContentTest). */
-    const val FIGURE_ASPECT = 0.85f
+    /**
+     * The widest cut-out the stage is made for, its width over its height: a head-and-shoulders crop. A wider one
+     * still fits (it is drawn smaller); the shipped photo is checked against this (SiteContentTest).
+     */
+    const val FIGURE_ASPECT = 1.1f
+
+    /** The figure is never drawn wider than this share of the stage's height, nor closer to its end edge. */
+    const val FIGURE_MAX_WIDTH = 0.95f
     const val FIGURE_INSET_DP = 20f
 
     /** The block's inset from the stage's start edge, and from the tinted area's top and bottom. */
     const val PAD_DP = 14f
     const val V_PAD_DP = 6f
 
-    /** Kept clear between the block and the figure, where the trail rests. */
-    const val LANE_DP = 28f
+    /** Kept clear between the block and the figure's box. */
+    const val GAP_TO_FIGURE_DP = 10f
 
     val NAME_SIZES_SP = listOf(36f, 34f, 32f, 30f)
     const val NAME_LINE = 1.1f
@@ -41,9 +51,6 @@ internal object HeroStage {
     const val ROLE_LINE = 1.34f
     const val ROLE_LINES = 2
     const val GAP_DP = 4f
-
-    /** Where the trail starts to show again, past the block: it fades in over [TRAIL_FADE_DP]. */
-    const val TRAIL_FADE_DP = 16f
 
     /**
      * The headline's lead role, as the bar shows it (`roleOf`), its spacing evened out so that each shorter form is
@@ -57,12 +64,18 @@ internal object HeroStage {
 
     /** The block's box on a stage [stageWidth] x [stageHeight] dp. */
     fun boxWidth(stageWidth: Float, stageHeight: Float): Float =
-        stageWidth - FIGURE_INSET_DP - stageHeight * FIGURE_ASPECT - LANE_DP - PAD_DP
+        stageWidth - FIGURE_INSET_DP - stageHeight * FIGURE_MAX_WIDTH - GAP_TO_FIGURE_DP - PAD_DP
 
     fun boxHeight(stageHeight: Float): Float = stageHeight * (1f - STAGE_TOP) - 2 * V_PAD_DP
 
-    /** From the stage's start edge to the box's end edge: the trail is kept off everything before it. */
-    fun clearOf(stageWidth: Float, stageHeight: Float): Float = PAD_DP + boxWidth(stageWidth, stageHeight)
+    /**
+     * The size the figure is drawn at on a stage [stageHeight] tall, for a cut-out [aspect] as wide as it is tall: the
+     * full height, or less when that would be wider than [FIGURE_MAX_WIDTH] of it.
+     */
+    fun figureSize(stageHeight: Float, aspect: Float): Pair<Float, Float> {
+        val width = minOf(stageHeight * aspect, stageHeight * FIGURE_MAX_WIDTH)
+        return width to width / aspect
+    }
 
     /** The plan for [name] and [role] on this stage at [fontScale], or null when they cannot stand on it. */
     fun plan(name: String, role: String, stageWidth: Float, stageHeight: Float, fontScale: Float, widths: TextWidth): Plan? {

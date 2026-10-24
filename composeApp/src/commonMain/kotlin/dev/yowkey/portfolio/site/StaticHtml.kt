@@ -209,87 +209,44 @@ object StaticHtml {
     private const val MOON_ICON = "<svg class=\"moon\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" aria-hidden=\"true\" focusable=\"false\">" +
         "<path d=\"M13.6 10.1A5.9 5.9 0 0 1 5.9 2.4a5.9 5.9 0 1 0 7.7 7.7z\" fill=\"currentColor\"/></svg>"
 
-    /** The hero portrait's trail, as the app's: seven echoes, farthest first. */
+    /** The hero portrait's trail during its slide, as the app's: three echoes, farthest first. */
     private const val PORTRAIT_ECHOES = HeroMotion.ECHOES
-
-    /**
-     * Noise that varies only down the page, pushing each row of an echo sideways (its vertical push is zeroed), so the
-     * outline ripples as the app's waves do; three strengths for the trail's middle, far and farthest echoes. A single
-     * octave of noise stays near its middle, hence scales several times the app's wave depths. In sRGB, so the zeroed
-     * channel's 0.5 stays the no-push middle.
-     */
-    private val MELT_FILTERS = "<svg class=\"melt\" width=\"0\" height=\"0\" aria-hidden=\"true\" focusable=\"false\">" +
-        listOf(1 to 80, 2 to 150, 3 to 220).joinToString("") { (n, scale) ->
-            "<filter id=\"melt-$n\" color-interpolation-filters=\"sRGB\" x=\"-20%\" y=\"0\" width=\"140%\" height=\"100%\">" +
-                "<feTurbulence type=\"fractalNoise\" baseFrequency=\"0 0.012\" numOctaves=\"1\" seed=\"$n\" result=\"noise\"/>" +
-                "<feColorMatrix in=\"noise\" result=\"rows\" type=\"matrix\" values=\"1 0 0 0 0 0 0 0 0 0.5 0 0 0 0 0 0 0 0 0 1\"/>" +
-                "<feDisplacementMap in=\"SourceGraphic\" in2=\"rows\" scale=\"$scale\" xChannelSelector=\"R\" yChannelSelector=\"G\"/></filter>"
-        } + "</svg>"
 
     /**
      * The hero's entrance on the static page, filling `{{heroMotion}}` in the template's styles: [HeroMotion]'s
      * timeline written as CSS, so the static page plays the app's own choreography and the app can take over from it
-     * mid-flight without a jump. The figure dashes in on the same spring, sampled into a `linear()` easing; each echo
-     * follows its path a lag behind the one in front, widened and thinned with its speed; the landing shakes the
-     * figure, splits its colour (two drop shadows of its silhouette) and sends a burst out along the trail; then the
-     * intro's steps read in, in reading order. `.hero` runs one more animation, `hero-intro`, for the entrance's whole
-     * length: it changes nothing and is the clock the app reads (see `staticIntroMillis`).
+     * mid-flight without a jump. The figure slides in on the same ease-out (`cubic-bezier`, exactly the app's
+     * [HeroMotion.SLIDE_EASE]); each echo follows its path a lag behind the one in front, and the three fade out
+     * together on the app's smoothstep, sampled into a `linear()` easing, before the figure settles; then the intro's
+     * steps read in, in reading order. `.hero` runs one more animation, `hero-intro`, for the entrance's whole length:
+     * it changes nothing and is the clock the app reads (see `staticIntroMillis`).
      *
      * Only where motion is welcome and the page is scripted (the head's `js` class): otherwise the static page shows
      * the still picture and every word at once, and every animation ends there, whatever loads or fails.
      */
     fun heroMotion(): String = buildString {
         val m = HeroMotion
-        val dash = "${m.DASH_MS}ms ${linearCurve(m.DASH_MS) { m.dash(it) }}"
-        // The smear (and the thinning) eases from its most to none as the dash's speed falls: its easing is the speed, inverted.
-        val smear = "${m.DASH_MS}ms ${linearCurve(m.DASH_MS) { 1f - m.speed(it) }}"
-        // Each part's swell lasts this long; the trail's echoes hear it a ripple step apart, the last at the end.
-        val swell = m.IMPACT_MS - m.ECHOES * m.RIPPLE_STEP_MS
+        val slide = "${m.SLIDE_MS}ms $SLIDE_EASE"
+        val fade = "${m.TRAIL_FADE_MS}ms ${linearCurve(m.TRAIL_FADE_MS) { 1f - m.trail(m.TRAIL_FADE_AT_MS + it) }}"
         appendLine("@media (prefers-reduced-motion: no-preference) {")
         appendLine("  .js .hero { animation: hero-intro ${m.END_MS}ms linear both; }")
         appendLine("  .js .hero .portrait { container-type: inline-size; }")
-        appendLine("  .js .hero .portrait .person { animation: hero-dash $dash both; }")
-        appendLine("  .js .hero .portrait .echo { animation: hero-dash $dash both, hero-smear $smear both; animation-delay: calc(var(--k) * ${m.ECHO_LAG_MS}ms); }")
-        appendLine("  .js .hero .portrait .person img { animation: hero-shake ${swell}ms linear ${m.IMPACT_AT_MS}ms both, hero-split ${swell}ms linear ${m.IMPACT_AT_MS}ms both; }")
+        appendLine("  .js .hero .portrait .person { animation: hero-dash $slide both; }")
         appendLine(
-            "  .js .hero .portrait .echo i { animation: hero-burst ${swell}ms linear both, hero-thin $smear both; " +
-                "animation-delay: calc(${m.IMPACT_AT_MS}ms + var(--k) * ${m.RIPPLE_STEP_MS}ms), calc(var(--k) * ${m.ECHO_LAG_MS}ms); }",
+            "  .js .hero .portrait .echo { animation: hero-dash $slide both, hero-trail $fade both; " +
+                "animation-delay: calc(var(--k) * ${m.ECHO_LAG_MS}ms), ${m.TRAIL_FADE_AT_MS}ms; }",
         )
         appendLine("  ${STAGED_STEPS.joinToString(", ") { ".js .hero > $it" }} { animation: hero-step ${m.TEXT_MS}ms $EASE_OUT_CUBIC both; }")
         PLAIN_STEPS.forEachIndexed { i, step ->
-            appendLine("  .js .hero > $step { animation-delay: ${m.textAt(i, staged = false)}ms; }")
+            appendLine("  .js .hero > $step { animation-delay: ${m.textAt(i)}ms; }")
         }
         appendLine("}")
         appendLine("@keyframes hero-intro { from { --hero-intro: 0; } to { --hero-intro: 1; } }")
-        // The staged trail draws back from its full reach and strength, and from showing over the name's place.
-        appendLine("@keyframes hero-back { from { --reach: 1; --mask: 0; opacity: 1; } }")
         // From just past the stage's start edge: the portrait's width (its container) less the figure's inset.
-        appendLine("@keyframes hero-dash { from { translate: calc(20px - 100cqw) 0; } }")
-        appendLine("@keyframes hero-smear { from { scale: ${decimal(1f + m.SMEAR, 2)} 1; } }")
-        appendLine("@keyframes hero-thin { from { opacity: ${decimal(1f - m.THIN, 2)}; } }")
+        appendLine("@keyframes hero-dash { from { translate: calc(${decimal(HeroStage.FIGURE_INSET_DP, 1)}px - 100cqw) 0; } }")
+        // An echo shows at its own strength (--a) until the trail fades; at rest it is gone (the template's opacity 0).
+        appendLine("@keyframes hero-trail { from { opacity: var(--a); } to { opacity: 0; } }")
         appendLine("@keyframes hero-step { from { opacity: 0; translate: -${decimal(m.TEXT_SHIFT_DP, 1)}px 0; } }")
-        append("@keyframes hero-shake {")
-        // Sampled four times a cycle of its quicker sine, until the swell has all but died away.
-        val every = 12
-        (0..swell step every).forEach { at ->
-            val loud = m.swellAt(at.toFloat(), swell + m.ECHOES * m.RIPPLE_STEP_MS, echo = 0)
-            if (at > 0 && loud < 0.03f) return@forEach
-            val (x, y) = m.shake(at / 1000f)
-            append(" ${decimal(100f * at / swell, 2)}% { translate: ${decimal(m.SHAKE_DP * loud * x, 2)}px ${decimal(m.SHAKE_DP * loud * y, 2)}px; }")
-        }
-        appendLine(" to { translate: 0 0; } }")
-        val peak = "${decimal(100f * m.ATTACK, 1)}%"
-        val split = decimal(m.SPLIT_DP, 1)
-        appendLine(
-            "@keyframes hero-split { from, to { filter: drop-shadow(0 0 0 transparent) drop-shadow(0 0 0 transparent); } " +
-                "from, $peak { animation-timing-function: $EASE_OUT_QUAD; } " +
-                "$peak { filter: drop-shadow(-${split}px 0 0 color-mix(in srgb, var(--accent) 85%, transparent)) " +
-                "drop-shadow(${split}px 0 0 color-mix(in srgb, var(--on-stage) 85%, transparent)); } }",
-        )
-        appendLine(
-            "@keyframes hero-burst { from, to { translate: 0 0; } from, $peak { animation-timing-function: $EASE_OUT_QUAD; } " +
-                "$peak { translate: calc(var(--k) * var(--step) * -${decimal(m.BURST, 2)}) 0; } }",
-        )
     }
 
     /**
@@ -299,8 +256,8 @@ object StaticHtml {
      * container), with [SystemFontWidth]'s generous widths; the app takes at least those widths too, so the two
      * decide alike at every width and the hand-off moves nothing. Each width range that stands them on the stage
      * places the name (at the plan's size) and the role (cut to the plan's form), hides what of the headline the stage
-     * already says, rests the trail drawn back and clear of them, and, where motion is welcome, follows the staged
-     * timeline: the trail draws back, then the name, the role and the rest read in. Nothing without a portrait.
+     * already says, and, where motion is welcome, reads the role in as a step of its own after the name. Nothing
+     * without a portrait.
      */
     fun heroStage(profile: Profile): String = buildString {
         if (profile.photoPath == null) return@buildString
@@ -333,12 +290,12 @@ object StaticHtml {
 
     private fun StringBuilder.stagedLayout(plan: HeroStage.Plan, forms: List<String>, height: Float) {
         val s = HeroStage
-        val figure = s.FIGURE_INSET_DP + height * s.FIGURE_ASPECT
+        val figure = s.FIGURE_INSET_DP + height * s.FIGURE_MAX_WIDTH
         val hidden = (0 until forms.indexOf(plan.role).coerceAtLeast(0)).joinToString(", ") { ".hero .portrait ~ hgroup .role .c$it" }
         appendLine(
             "  .hero .portrait ~ hgroup { position: absolute; left: ${decimal(s.PAD_DP, 1)}px; " +
                 "top: ${decimal(height * s.STAGE_TOP + s.V_PAD_DP, 2)}px; " +
-                "width: calc(min(${STAGE_MAX}px, 100cqw) - ${decimal(figure + s.LANE_DP + s.PAD_DP, 2)}px); " +
+                "width: calc(min(${STAGE_MAX}px, 100cqw) - ${decimal(figure + s.GAP_TO_FIGURE_DP + s.PAD_DP, 2)}px); " +
                 "height: ${decimal(s.boxHeight(height), 2)}px; margin: 0; display: flex; flex-direction: column; " +
                 "justify-content: center; gap: ${decimal(s.GAP_DP, 1)}px; }",
         )
@@ -353,21 +310,13 @@ object StaticHtml {
         )
         if (hidden.isNotEmpty()) appendLine("  $hidden { display: none; }")
         if (plan.wholeRole) appendLine("  .hero .portrait ~ .headline .lead, .hero .portrait ~ hgroup.whole + .headline { display: none; }")
-        appendLine(
-            "  .hero .portrait .trail { --reach: ${decimal(HeroMotion.REST_REACH, 2)}; --mask: 1; " +
-                "--clear: calc(100% - ${decimal(figure + s.LANE_DP, 2)}px); opacity: ${decimal(HeroMotion.REST_FADE, 2)}; }",
-        )
     }
 
     private fun StringBuilder.stagedMotion() {
         val m = HeroMotion
         STAGED_STEPS.forEachIndexed { i, step ->
-            appendLine("  .js .hero > $step { animation-delay: ${m.textAt(i, staged = true)}ms; }")
+            appendLine("  .js .hero > $step { animation-delay: ${m.textAt(i)}ms; }")
         }
-        appendLine(
-            "  .js .hero .portrait .trail { animation: hero-back ${m.DRAW_BACK_MS}ms " +
-                "${linearCurve(m.DRAW_BACK_MS) { m.smooth(it / m.DRAW_BACK_MS) }} ${m.DRAW_BACK_AT_MS}ms both; }",
-        )
     }
 
     /** [at] over [millis] as a CSS `linear()` easing, sampled every 20 ms or so: as good as a frame can show. */
@@ -397,9 +346,9 @@ object StaticHtml {
     /** The single column's stage is never wider than this, as the app's. */
     private const val STAGE_MAX = 480
 
-    /** The app's EaseOutCubic, and the swell's rise and fall (1 - (1 - x)²). */
+    /** The app's EaseOutCubic, for the intro's steps, and [HeroMotion.SLIDE_EASE], for the figure's slide. */
     private const val EASE_OUT_CUBIC = "cubic-bezier(.33, 1, .68, 1)"
-    private const val EASE_OUT_QUAD = "cubic-bezier(.5, 1, .89, 1)"
+    private const val SLIDE_EASE = "cubic-bezier(.22, 1, .36, 1)"
 
     /** Three lines, as the app's MenuGlyph; its name is the button's label. */
     private const val MENU_ICON = "<svg width=\"20\" height=\"20\" viewBox=\"0 0 20 20\" aria-hidden=\"true\" focusable=\"false\">" +
@@ -428,15 +377,12 @@ object StaticHtml {
     fun content(portfolio: Portfolio): String = buildString {
         val p = portfolio.profile
         appendLine("<header class=\"hero\">")
-        // The app's still picture: the echoes are the cut-out again, as CSS masks filled with the accent, the far ones
-        // melted by the SVG filters.
+        // The app's still picture: the figure on its stage. The echoes are the cut-out again, as CSS masks filled with
+        // the accent, shown only while the figure slides in (heroMotion).
         p.photoPath?.let { photo ->
             val url = resourceUrl(photo)
             appendLine("<figure class=\"portrait\" style=\"--photo: url('$url')\">")
-            appendLine(MELT_FILTERS)
-            appendLine("<span class=\"trail\">")
             repeat(PORTRAIT_ECHOES) { appendLine("<span class=\"echo\"><i></i></span>") }
-            appendLine("</span>")
             appendLine("<span class=\"person\"><img src=\"$url\" alt=\"Portrait of ${escape(p.name)}\" decoding=\"async\"></span>")
             appendLine("</figure>")
         }
