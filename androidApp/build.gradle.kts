@@ -25,8 +25,8 @@ android {
         applicationId = "dev.yowkey.portfolio"
         minSdk = libs.versions.androidMinSdk.get().toInt()
         targetSdk = libs.versions.androidTargetSdk.get().toInt()
-        versionCode = 8
-        versionName = "1.7"
+        versionCode = 9
+        versionName = "1.8"
     }
 
     signingConfigs {

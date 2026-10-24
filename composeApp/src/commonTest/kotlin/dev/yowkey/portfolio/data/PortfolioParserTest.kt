@@ -70,8 +70,8 @@ class PortfolioParserTest {
             "\"summary\": \"Builds things.\", \"proof\": [" +
                 points.joinToString { (value, label) -> "{ \"value\": \"$value\", \"label\": \"$label\" }" } + "]",
         )
-        val parsed = PortfolioParser.parse(withProof("53%" to "of the code", "#1 of ~40" to "engineers"))
-        assertEquals(listOf("53%", "#1 of ~40"), parsed.profile.proof.map { it.value })
+        val parsed = PortfolioParser.parse(withProof("53%" to "of the code", "30 days" to "to launch"))
+        assertEquals(listOf("53%", "30 days"), parsed.profile.proof.map { it.value })
         assertTrue(PortfolioParser.parse(validJson).profile.proof.isEmpty(), "proof is optional")
 
         val tooMany = Array(PortfolioParser.MAX_PROOF_POINTS + 1) { "$it" to "label" }

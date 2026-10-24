@@ -21,15 +21,17 @@ Rules the build enforces (it fails rather than ship a broken page):
 
 ### The portrait
 
-`"photo": "portrait.webp"` in `profile` puts my photo in the hero, standing on a tinted stage with its echo trail
-(see `HeroPortrait.kt`). On a phone or tablet my name and role (the headline up to its first " · ") stand on the
-stage, left of the photo, when they fit there (`HeroStage.kt` decides by measuring; the static page gets the same
-answer from a generous width estimate); otherwise, and on a wide window, the name is beside or under the photo as
-usual. Once per page load the photo dashes in from the stage's left edge, its trail draws back, and the name, role,
-headline, proof, buttons and summary read in after it (`HeroEntrance.kt`, on the timeline in `HeroMotion.kt`, which
-the static page plays too). The photo must be a cut-out: transparent around the person, cropped to them, at most
-0.85 times as wide as it is tall (the name's place on the stage counts on it), with
-the bottom edge where the photo ends so the figure stands on the stage's floor. On a Mac, Photos or Preview can lift
+`"photo": "portrait.webp"` in `profile` puts my photo in the hero, standing on a tinted stage with a soft light behind
+the head (see `HeroPortrait.kt`). Without a photo the hero is text only. On a phone or tablet my name and role (the
+headline up to its first " · ") stand on the stage, left of the photo, when they fit there (`HeroStage.kt` decides
+by measuring; the static page gets the same answer from a generous width estimate); otherwise, and on a wide window,
+the name is beside or under the photo as usual. Once per page load the photo slides in from the stage's left edge
+with a short, faint trail that is gone before it settles, and the name, role, headline, proof, buttons and summary
+read in as it does (`HeroEntrance.kt`, on the timeline in `HeroMotion.kt`, which the static page plays too); nothing
+replays after that. The photo must be a cut-out: transparent around the person, cropped to them, with the bottom
+edge where the photo ends so the figure stands on the stage's floor. A head-and-shoulders crop up to about 1.1 times
+as wide as it is tall suits it best: the figure is drawn as tall as the stage but never wider than 0.95 of that, so a
+wider cut-out is drawn smaller, and the name's place beside it never depends on the photo. On a Mac, Photos or Preview can lift
 the subject out of a photo (or a short Swift script with Vision's `VNGenerateForegroundInstanceMaskRequest`); save it
 as a PNG, then:
 
