@@ -429,7 +429,16 @@ fun PortfolioPage(
             maxWidth = PageLayout.MaxWidth,
             scrolled = { listState.canScrollBackward },
             // A derived state: the bar hears of it only when it flips. The progress is read in the bar's draw phase.
-            heroPassed = rememberHeroPassed(listState),
+            // Where the hero's name ends in its row (its top spacing, then the hero's own measure): the bar takes the
+            // name up once that is under it.
+            heroPassed = rememberHeroPassed(
+                listState,
+                nameEnd = remember(heroEntrance, items, layout, density) {
+                    val top = with(density) { items.firstOrNull { it is PageItem.Hero }?.topSpacing(layout)?.roundToPx() ?: 0 }
+                    val end: () -> Int = { heroEntrance.nameEnd.let { if (it > 0) top + it else 0 } }
+                    end
+                },
+            ),
             progress = { listState.layoutInfo.readingProgress() },
             stats = stats,
             onOpenNotes = openNotes,

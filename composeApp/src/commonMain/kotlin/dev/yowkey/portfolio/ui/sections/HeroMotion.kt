@@ -20,6 +20,12 @@ import kotlin.math.sqrt
  * - [IMPACT_AT_MS]: the landing's swell, timed so its attack peaks as the figure lands: the figure shakes and its
  *   colour splits, and the trail bursts out and ripples, each echo [RIPPLE_STEP_MS] after the one in front of it.
  * - [TEXT_AT_MS]: the intro's first step reads in; each next one [TEXT_STAGGER_MS] later, each over [TEXT_MS].
+ *
+ * When the name and role stand on the stage ([HeroStage], "staged"), the landing is followed by the trail drawing
+ * back behind the figure, from [DRAW_BACK_AT_MS] over [DRAW_BACK_MS]: shorter ([REST_REACH] of its reach), fainter
+ * ([REST_FADE]), and kept off the name's place, so the name has a clean stage. The name then reads in at
+ * [NAME_AT_MS], the role [NAME_STAGGER_MS] after it, and the rest below as many again apart.
+ *
  * - [END_MS]: all of it at rest, which is the still picture.
  */
 internal object HeroMotion {
@@ -34,7 +40,16 @@ internal object HeroMotion {
     const val TEXT_STAGGER_MS = 75
     const val TEXT_MS = 450
     const val TEXT_STEPS = 5
-    const val END_MS = TEXT_AT_MS + (TEXT_STEPS - 1) * TEXT_STAGGER_MS + TEXT_MS
+
+    const val DRAW_BACK_AT_MS = 400
+    const val DRAW_BACK_MS = 360
+    const val REST_REACH = 0.35f
+    const val REST_FADE = 0.55f
+    const val NAME_AT_MS = 560
+    const val NAME_STAGGER_MS = 70
+    const val STAGED_STEPS = 6
+
+    const val END_MS = NAME_AT_MS + (STAGED_STEPS - 1) * NAME_STAGGER_MS + TEXT_MS
 
     /** How far each intro step slides in from, toward the start. */
     const val TEXT_SHIFT_DP = 20f
@@ -94,9 +109,19 @@ internal object HeroMotion {
     /** How far through the landing the entrance is at [ms], 0..1: the trail's waves roll on with it. */
     fun landingProgress(ms: Float): Float = ((ms - IMPACT_AT_MS) / IMPACT_MS).coerceIn(0f, 1f)
 
-    /** How far intro step [step] has read in at [ms], 0..1, before easing. */
-    fun textProgress(ms: Float, step: Int): Float =
-        ((ms - TEXT_AT_MS - step * TEXT_STAGGER_MS) / TEXT_MS).coerceIn(0f, 1f)
+    /** When intro step [order] starts to read in, staged or not. */
+    fun textAt(order: Int, staged: Boolean): Int =
+        if (staged) NAME_AT_MS + order * NAME_STAGGER_MS else TEXT_AT_MS + order * TEXT_STAGGER_MS
+
+    /** How far intro step [order] has read in at [ms], 0..1, before easing. */
+    fun textProgress(ms: Float, order: Int, staged: Boolean = false): Float =
+        ((ms - textAt(order, staged)) / TEXT_MS).coerceIn(0f, 1f)
+
+    /** How far the staged trail has drawn back at [ms], 0..1, eased in and out. */
+    fun drawBack(ms: Float): Float = smooth(((ms - DRAW_BACK_AT_MS) / DRAW_BACK_MS).coerceIn(0f, 1f))
+
+    /** Smoothstep: eases in and out, with no overshoot. */
+    fun smooth(t: Float): Float = t * t * (3f - 2f * t)
 
     /**
      * The figure's shake at [seconds] into a scream, as a share of [SHAKE_DP] at full swell: two sines, sideways

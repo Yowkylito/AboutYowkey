@@ -22,9 +22,13 @@ Rules the build enforces (it fails rather than ship a broken page):
 ### The portrait
 
 `"photo": "portrait.webp"` in `profile` puts my photo in the hero, standing on a tinted stage with its echo trail
-(see `HeroPortrait.kt`). Once per page load it dashes in from the stage's left edge, and the name, headline, proof,
-buttons and summary read in after it lands (`HeroEntrance.kt`, on the timeline in `HeroMotion.kt`, which the static
-page plays too). It must be a cut-out: transparent around the person, cropped to them, with
+(see `HeroPortrait.kt`). On a phone or tablet my name and role (the headline up to its first " · ") stand on the
+stage, left of the photo, when they fit there (`HeroStage.kt` decides by measuring; the static page gets the same
+answer from a generous width estimate); otherwise, and on a wide window, the name is beside or under the photo as
+usual. Once per page load the photo dashes in from the stage's left edge, its trail draws back, and the name, role,
+headline, proof, buttons and summary read in after it (`HeroEntrance.kt`, on the timeline in `HeroMotion.kt`, which
+the static page plays too). The photo must be a cut-out: transparent around the person, cropped to them, at most
+0.85 times as wide as it is tall (the name's place on the stage counts on it), with
 the bottom edge where the photo ends so the figure stands on the stage's floor. On a Mac, Photos or Preview can lift
 the subject out of a photo (or a short Swift script with Vision's `VNGenerateForegroundInstanceMaskRequest`); save it
 as a PNG, then:

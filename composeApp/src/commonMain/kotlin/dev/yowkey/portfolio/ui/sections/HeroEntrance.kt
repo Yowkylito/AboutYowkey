@@ -6,7 +6,10 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
@@ -45,11 +48,20 @@ class HeroEntrance internal constructor(startMillis: Float, private var joinsSta
     private var portraitEntered = false
     private val portraitReady = CompletableDeferred<Unit>()
 
+    /**
+     * Where the hero's name ends, in px down from the hero's top, 0 until the hero has laid it out: the bar takes the
+     * name up once that has scrolled under it. Kept here, above the list, with the rest of the hero's state; it
+     * changes only with the layout, never while the entrance plays.
+     */
+    var nameEnd by mutableIntStateOf(0)
+        internal set
+
     /** True while the clock moves the portrait: it ignores gestures and returns to view, and goes where it is put. */
     internal val movesPortrait: Boolean get() = portraitOnClock && clock.value < HeroMotion.END_MS
 
     /** How far intro step [step] has come in, 0..1, eased. Read it in the layer phase. */
-    internal fun shown(step: Int): Float = EaseOutCubic.transform(HeroMotion.textProgress(clock.value, step))
+    internal fun shown(step: IntroStep, staged: Boolean = false): Float =
+        EaseOutCubic.transform(HeroMotion.textProgress(clock.value, step.order(staged), staged))
 
     /**
      * The portrait is in: its image has loaded and half of it is on screen. True the first time while the clock
@@ -113,22 +125,24 @@ fun rememberHeroEntrance(): HeroEntrance {
     }
 }
 
-/** The intro's steps, in the order they read in. */
-internal object IntroStep {
-    const val NAME = 0
-    const val HEADLINE = 1
-    const val PROOF = 2
-    const val ACTIONS = 3
-    const val SUMMARY = 4
+/**
+ * The intro's steps, in the order they read in. The role is a step of its own only when it stands on the stage under
+ * the name ("staged", see [HeroStage]); otherwise it is part of the headline.
+ */
+internal enum class IntroStep {
+    NAME, ROLE, HEADLINE, PROOF, ACTIONS, SUMMARY;
+
+    /** This step's place in the reading order. */
+    fun order(staged: Boolean): Int = if (staged || this == NAME) ordinal else ordinal - 1
 }
 
 /**
  * Intro step [step] of [entrance]: faded out and shifted toward the start until its turn, then in. Only the layer
  * changes, so the step keeps its space (nothing below it moves) and stays in the semantics, and its links work once
- * it shows.
+ * it shows. [staged]: the name and role stand on the stage, and the steps follow that timeline.
  */
-internal fun Modifier.introStep(entrance: HeroEntrance, step: Int): Modifier = graphicsLayer {
-    val shown = entrance.shown(step)
+internal fun Modifier.introStep(entrance: HeroEntrance, step: IntroStep, staged: Boolean = false): Modifier = graphicsLayer {
+    val shown = entrance.shown(step, staged)
     alpha = shown
     translationX = -(1f - shown) * HeroMotion.TEXT_SHIFT_DP.dp.toPx()
 }

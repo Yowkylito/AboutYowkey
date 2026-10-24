@@ -18,6 +18,15 @@ class BarScrollTest {
         assertTrue(BarScroll.heroPassed(firstIndex = 0, firstOffset = 300, heroSize = 1000, fraction = 0.3f))
     }
 
+    /** Once the hero has laid its name out, the name itself decides: on a phone's stage it is gone long before half. */
+    @Test
+    fun theHeroPassesOnceItsNameIsUnderTheBar() {
+        assertFalse(BarScroll.heroPassed(firstIndex = 0, firstOffset = 189, heroSize = 1000, nameEnd = 190), "the name's foot still shows")
+        assertTrue(BarScroll.heroPassed(firstIndex = 0, firstOffset = 190, heroSize = 1000, nameEnd = 190), "the name is gone")
+        assertFalse(BarScroll.heroPassed(firstIndex = 0, firstOffset = 600, heroSize = 1000, nameEnd = 700), "a name low in the row")
+        assertTrue(BarScroll.heroPassed(firstIndex = 1, firstOffset = 0, heroSize = 0, nameEnd = 700), "the hero is gone")
+    }
+
     @Test
     fun progressRunsFromTopToBottom() {
         // Ten rows of 100 px in a 300 px viewport.

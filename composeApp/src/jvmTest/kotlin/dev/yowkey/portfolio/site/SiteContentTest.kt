@@ -6,6 +6,7 @@ import dev.yowkey.portfolio.model.GalleryItem
 import dev.yowkey.portfolio.model.MessageCopy
 import dev.yowkey.portfolio.model.Portfolio
 import dev.yowkey.portfolio.model.Profile
+import dev.yowkey.portfolio.ui.sections.HeroStage
 import dev.yowkey.portfolio.model.Project
 import dev.yowkey.portfolio.model.PublicNote
 import dev.yowkey.portfolio.model.Relation
@@ -298,6 +299,9 @@ class SiteContentTest {
         listOf(0 to 0, bitmap.width - 1 to 0).forEach { (x, y) ->
             assertEquals(0, bitmap.getColor(x, y) ushr 24, "${file.name} is not cut out: its corner ($x, $y) is opaque")
         }
+        // The name's box on the stage is kept clear of a figure this wide at most, before the photo has loaded.
+        val aspect = bitmap.width.toFloat() / bitmap.height
+        assertTrue(aspect <= HeroStage.FIGURE_ASPECT, "${file.name} is ${aspect}x as wide as tall; the stage allows ${HeroStage.FIGURE_ASPECT}")
         val hero = page.substringAfter("<header class=\"hero\">").substringBefore("</header>")
         assertTrue(hero.indexOf(StaticHtml.resourceUrl(path)) in 0 until hero.indexOf("<h1>"), "the portrait does not lead the hero")
         val shipped = File(resources, Profile.PHOTO_DIR).listFiles().orEmpty().map { it.name }.toSet()
@@ -309,7 +313,8 @@ class SiteContentTest {
     fun thePageCarriesTheHerosEntrance() {
         val styles = page.substringAfter("<style>").substringBefore("</style>")
         assertTrue(StaticHtml.heroMotion() in styles, "the entrance is not in the page's styles")
-        assertEquals(2, Regex("--fringe: #[0-9A-F]{6};").findAll(styles).count(), "the split's fringe, light and dark")
+        assertTrue(StaticHtml.heroStage(portfolio.profile) in styles, "the stage's rules are not in the page's styles")
+        assertEquals(2, Regex("--on-stage: #[0-9A-F]{6};").findAll(styles).count(), "the stage's ink, light and dark")
     }
 
     @Test

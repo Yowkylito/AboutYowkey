@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
@@ -25,9 +26,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -63,6 +66,11 @@ import kotlin.math.sin
  * stretched with the speed), and the scream's swell is the impact. If the intro had to go ahead without it, it fades
  * in where it stands instead.
  *
+ * [staged]: the hero's name and role stand on the stage's start side ([HeroStage]). After the landing the trail
+ * then draws back behind the figure, shorter and fainter, which is its resting state from then on, and it is never
+ * drawn over the name's place ([HeroStage.clearOf]), not even when a later scream bursts it out again: it fades out
+ * just before it, so the name always stands on clean stage.
+ *
  * After that the scream plays each time at least half of the portrait comes back on screen (the trail folds back
  * behind the figure while it is off screen, so it bursts out again), and on a pointer coming over it or a press: a
  * hard attack that shakes the figure and splits its colour while the glow blooms, a burst that runs out along the
@@ -74,7 +82,7 @@ import kotlin.math.sin
  * entrance nor a scream recomposes.
  */
 @Composable
-fun HeroPortrait(path: String, name: String, entrance: HeroEntrance, modifier: Modifier = Modifier) {
+fun HeroPortrait(path: String, name: String, entrance: HeroEntrance, modifier: Modifier = Modifier, staged: Boolean = false) {
     val loader = LocalScreenshotImages.current?.thumbnails
     // Started from the cache, as ScreenshotImage is: back at the top, the figure is there in the first frame.
     val cached = remember(path, loader) { loader?.peek(path) }
@@ -216,17 +224,23 @@ fun HeroPortrait(path: String, name: String, entrance: HeroEntrance, modifier: M
                     clipPath(frame) {
                         // The trail, farthest first so each nearer echo paints over the one behind it. Each is wider
                         // than the last and its waves deeper and shorter, so the outline melts as it goes. In the
-                        // dash each echo is where the figure was a moment before, smeared back along its way (wider and
-                        // fainter) as far as the speed then stretched it, so the trail streams out behind the figure
-                        // and closes up as it stops. A swell reaches each echo a little after the one in front of it, so its burst
-                        // runs out along the trail as a ripple, each echo reaching farther and melting deeper.
+                        // dash each echo is where the figure was a moment before, smeared back along its way (wider
+                        // and fainter) as far as the speed then stretched it, so the trail streams out behind the
+                        // figure and closes up as it stops. A swell reaches each echo a little after the one in front
+                        // of it, so its burst runs out along the trail as a ripple, each echo reaching farther and
+                        // melting deeper. Staged, the trail then draws back to its resting reach and strength, and is
+                        // faded out before the name's place.
+                        val back = if (staged) HeroMotion.drawBack(ms) else 0f
+                        val held = 1f - (1f - HeroMotion.REST_REACH) * back
+                        val strength = 1f - (1f - HeroMotion.REST_FADE) * back
                         val phase = (t + HeroMotion.landingProgress(ms)) * WaveCycles * 2f * PI.toFloat()
+                        if (back > 0f) drawIntoCanvas { it.saveLayer(Rect(Offset.Zero, size), Paint()) }
                         for (k in TrailAlphas.size downTo 1) {
                             val then = ms - k * HeroMotion.ECHO_LAG_MS
                             val heard = max(HeroMotion.landing(ms, echo = k), HeroMotion.swellAt(screamed, ScreamMillis, echo = k))
                             val speed = HeroMotion.speed(then)
-                            val reach = out * (1f + HeroMotion.BURST * heard)
-                            val echoWidth = width * (1f + TrailStretch * k * out) * (1f + HeroMotion.SMEAR * speed)
+                            val reach = out * held * (1f + HeroMotion.BURST * heard)
+                            val echoWidth = width * (1f + TrailStretch * k * out * held) * (1f + HeroMotion.SMEAR * speed)
                             val echoX = rest - (1f - HeroMotion.dash(then)) * travel + shakeX + width - echoWidth -
                                 width * TrailStep * k * reach
                             if (echoX + echoWidth <= 0f) continue // not on the stage yet
@@ -241,9 +255,22 @@ fun HeroPortrait(path: String, name: String, entrance: HeroEntrance, modifier: M
                                 wavelength = height * (0.52f - 0.03f * k),
                                 phase = phase + k * 0.8f,
                                 slice = SliceHeight.toPx(),
-                                alpha = TrailAlphas[k - 1] * fade * (1f - HeroMotion.THIN * speed),
+                                alpha = TrailAlphas[k - 1] * fade * strength * (1f - HeroMotion.THIN * speed),
                                 filter = silhouette,
                             )
+                        }
+                        if (back > 0f) {
+                            // Keeps what is already drawn only past the name's place, fading in over a short run.
+                            val clear = HeroStage.clearOf(size.width / density, size.height / density) * density
+                            val fadeTo = clear + HeroStage.TRAIL_FADE_DP.dp.toPx()
+                            val kept = Color.Black.copy(alpha = 1f - back)
+                            drawRect(
+                                Brush.horizontalGradient(
+                                    0f to kept, clear / size.width to kept, fadeTo / size.width to Color.Black,
+                                ),
+                                blendMode = BlendMode.DstIn,
+                            )
+                            drawIntoCanvas { it.restore() }
                         }
                         // The colour splits apart on the figure while the swell shakes it.
                         if (swell > 0.01f) {
@@ -312,9 +339,9 @@ private fun DrawScope.drawEcho(
 }
 
 /** The stage starts this far down, so the head stands clear of it. */
-private const val StageTopFraction = 0.26f
+private const val StageTopFraction = HeroStage.STAGE_TOP
 private val StageRadius = 24.dp
-private val FigureInset = 20.dp
+private val FigureInset = HeroStage.FIGURE_INSET_DP.dp
 
 /** Where the face is in the cut-out, as fractions of its width and height: the sound and the glow come from here. */
 private const val FaceX = 0.46f

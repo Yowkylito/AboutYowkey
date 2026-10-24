@@ -23,6 +23,8 @@ import dev.yowkey.portfolio.ui.image.ScreenshotImages
 import dev.yowkey.portfolio.ui.sections.Hero
 import dev.yowkey.portfolio.ui.sections.HeroEntrance
 import dev.yowkey.portfolio.ui.sections.HeroMotion
+import dev.yowkey.portfolio.ui.sections.HeroStage
+import dev.yowkey.portfolio.ui.sections.SystemFontWidth
 import dev.yowkey.portfolio.ui.sections.IntroStep
 import dev.yowkey.portfolio.ui.theme.LocalReducedMotion
 import dev.yowkey.portfolio.ui.theme.PortfolioTheme
@@ -42,30 +44,34 @@ class HeroEntranceTest {
 
     private val end = HeroMotion.END_MS.toFloat()
 
+    /** Both layouts: the name and role on the stage, and (at twice the font size) the name under it. */
     @Test
     fun theEntrancePlaysThroughWithoutRecomposingTheHero() {
-        val hero = HeroScene(photo = true)
-        hero.scene().use { scene ->
-            val clock = Clock(scene)
-            repeat(4) { clock.frame() }
-            assertTrue(hero.entrance.portraitOnClock, "the portrait came in time and dashes on the clock")
-            assertTrue(hero.entrance.clock.value in 1f..100f, "the entrance is under way: ${hero.entrance.clock.value}")
-            assertEquals(0f, hero.entrance.shown(IntroStep.NAME), "the words wait for the landing")
+        listOf(HeroScene(photo = true), HeroScene(photo = true, fontScale = 2f)).forEach { hero ->
+            assertEquals(hero.fontScale == 1f, hero.staged, "a phone's stage holds the name, unless the text is huge")
+            hero.scene().use { scene ->
+                val clock = Clock(scene)
+                repeat(4) { clock.frame() }
+                assertTrue(hero.entrance.portraitOnClock, "the portrait came in time and dashes on the clock")
+                assertTrue(hero.entrance.clock.value in 1f..100f, "the entrance is under way: ${hero.entrance.clock.value}")
+                assertEquals(0f, hero.entrance.shown(IntroStep.NAME, hero.staged), "the words wait for the landing")
 
-            val recompositions = Recompositions(hero.recomposersBefore)
-            var nameAtLanding = 0f
-            repeat(90) {
+                val recompositions = Recompositions(hero.recomposersBefore)
+                val nameAt = HeroMotion.textAt(0, hero.staged)
+                var nameReading = 0f
+                repeat(100) {
+                    clock.frame()
+                    if (hero.entrance.clock.value < nameAt + 120) nameReading = hero.entrance.shown(IntroStep.NAME, hero.staged)
+                }
+                assertTrue(nameReading > 0f && nameReading < 1f, "the name was reading in: $nameReading")
+                assertEquals(end, hero.entrance.clock.value, "played through")
+                IntroStep.entries.forEach { assertEquals(1f, hero.entrance.shown(it, hero.staged), "$it shows") }
+                assertEquals(0, recompositions.scopes, "the whole entrance was drawn, never composed")
+
+                hero.probe.value++
                 clock.frame()
-                if (hero.entrance.clock.value < HeroMotion.TEXT_AT_MS + 120) nameAtLanding = hero.entrance.shown(IntroStep.NAME)
+                assertTrue(recompositions.scopes > 0, "the count does see a recomposition")
             }
-            assertTrue(nameAtLanding > 0f && nameAtLanding < 1f, "the name was reading in: $nameAtLanding")
-            assertEquals(end, hero.entrance.clock.value, "played through")
-            (0 until HeroMotion.TEXT_STEPS).forEach { assertEquals(1f, hero.entrance.shown(it), "step $it shows") }
-            assertEquals(0, recompositions.scopes, "the whole entrance was drawn, never composed")
-
-            hero.probe.value++
-            clock.frame()
-            assertTrue(recompositions.scopes > 0, "the count does see a recomposition")
         }
     }
 
@@ -91,7 +97,7 @@ class HeroEntranceTest {
         hero.scene().use { scene ->
             Clock(scene).frame()
             assertEquals(end, hero.entrance.clock.value)
-            (0 until HeroMotion.TEXT_STEPS).forEach { assertEquals(1f, hero.entrance.shown(it), "step $it shows at once") }
+            IntroStep.entries.forEach { assertEquals(1f, hero.entrance.shown(it, hero.staged), "$it shows at once") }
         }
     }
 
@@ -123,11 +129,15 @@ class HeroEntranceTest {
         }
     }
 
-    /** A 412 x 915 phone's hero (compact) with a portrait from [image], counting nothing until asked. */
+    /**
+     * A 412 x 915 phone's hero (compact) with a portrait from [image], at [fontScale], counting nothing until asked.
+     * [staged]: whether its name and role stand on the stage, by the rule's estimate, which the app never undercuts.
+     */
     private class HeroScene(
         photo: Boolean,
         private val reducedMotion: Boolean = false,
         private val image: suspend (String) -> ImageBitmap = { ImageBitmap(64, 76) },
+        val fontScale: Float = 1f,
     ) {
         val entrance = HeroEntrance(if (reducedMotion) HeroMotion.END_MS.toFloat() else 0f)
         val probe = mutableStateOf(0)
@@ -141,13 +151,14 @@ class HeroEntranceTest {
             photo = if (photo) "portrait.webp" else null,
             proof = listOf(ProofPoint("53%", "of the code")),
         )
+        val staged = photo && HeroStage.plan(profile.name, HeroStage.roleOf(profile.headline), 412f, 168f, fontScale, SystemFontWidth) != null
         private val images = ScreenshotImages(
             thumbnails = LruLoader(1L shl 20, Dispatchers.Unconfined) { image(it) },
             viewer = LruLoader(1L, Dispatchers.Unconfined) { error("unused") },
             covers = LruLoader(1L, Dispatchers.Unconfined) { error("unused") },
         )
 
-        fun scene() = ImageComposeScene(412, 915, Density(1f)) {
+        fun scene() = ImageComposeScene(412, 915, Density(1f, fontScale)) {
             PortfolioTheme {
                 CompositionLocalProvider(LocalReducedMotion provides reducedMotion, LocalScreenshotImages provides images) {
                     Column {
