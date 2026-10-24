@@ -57,17 +57,24 @@ import kotlin.math.sin
  * silhouette smears away in accent echoes that melt into waves the farther they go, as the sky does in Munch's
  * Scream. That much is the still picture, so it reads as a shout even without motion.
  *
- * The scream itself plays each time at least half of the portrait comes on screen (the trail folds back behind the
- * figure while it is off screen, so it bursts out again), and on a pointer coming over it or a press: a hard attack
- * that shakes the figure and splits its colour while the glow blooms, a burst that runs out along the trail as a
- * ripple, each echo reaching farther and melting deeper as it passes, then a fade back to the still picture. Nothing
- * is drawn as arcs or rings. With reduced motion only the still picture is drawn.
+ * The first time it is in (its image loaded and half of it on screen) it makes the hero's [entrance], once per page
+ * load: the figure dashes in from just past the stage's start edge and lands in its place with a short run-on and
+ * settle, the trail streaming out behind it as its motion trail (each echo where the figure was a moment before,
+ * stretched with the speed), and the scream's swell is the impact. If the intro had to go ahead without it, it fades
+ * in where it stands instead.
  *
- * The caller sizes it, and the stage alone is drawn until the image loads, so nothing shifts. Everything that
- * moves is read in the draw phase, so the animation never recomposes.
+ * After that the scream plays each time at least half of the portrait comes back on screen (the trail folds back
+ * behind the figure while it is off screen, so it bursts out again), and on a pointer coming over it or a press: a
+ * hard attack that shakes the figure and splits its colour while the glow blooms, a burst that runs out along the
+ * trail as a ripple, each echo reaching farther and melting deeper as it passes, then a fade back to the still
+ * picture. Nothing is drawn as arcs or rings. With reduced motion only the still picture is drawn.
+ *
+ * The caller sizes it, and the stage alone is drawn until the image loads, so nothing shifts; nothing it draws leaves
+ * its box or the stage's rounded bottom corners. Everything that moves is read in the draw phase, so neither the
+ * entrance nor a scream recomposes.
  */
 @Composable
-fun HeroPortrait(path: String, name: String, modifier: Modifier = Modifier) {
+fun HeroPortrait(path: String, name: String, entrance: HeroEntrance, modifier: Modifier = Modifier) {
     val loader = LocalScreenshotImages.current?.thumbnails
     val image by produceState<ImageBitmap?>(null, path, loader) {
         value = try {
@@ -94,10 +101,19 @@ fun HeroPortrait(path: String, name: String, modifier: Modifier = Modifier) {
                 spread.snapTo(1f)
                 scream.snapTo(1f)
             }
-            !onScreen -> {
+            // Off screen the trail folds behind the figure, so it bursts out again; not while the entrance moves it.
+            !onScreen -> if (!entrance.movesPortrait) {
                 spread.snapTo(0f)
                 scream.snapTo(1f)
             }
+            // The first time in, the entrance's clock carries it: shown, the trail out, the swell the landing's.
+            entrance.portraitArrives() -> {
+                appear.snapTo(1f)
+                spread.snapTo(1f)
+                scream.snapTo(1f)
+            }
+            // Back in view mid-entrance: the clock carries on with it.
+            entrance.movesPortrait -> Unit
             else -> {
                 if (appear.value < 1f) appear.animateTo(1f, tween(AppearMillis))
                 launch { spread.animateTo(1f, tween(SpreadMillis, easing = EaseOutCubic)) }
@@ -127,9 +143,9 @@ fun HeroPortrait(path: String, name: String, modifier: Modifier = Modifier) {
                         val type = awaitPointerEvent().type
                         // Not consumed: the hero's text selection and the page's scrolling see the same events.
                         if (type != PointerEventType.Enter && type != PointerEventType.Press) continue
-                        // Mid-scream (or mid-arrival) the gesture is ignored; undispatched, so a press arriving with
-                        // its enter in the same frame finds the scream already started.
-                        if (image == null || !onScreen || scream.value < 1f || spread.value < 1f) continue
+                        // Mid-entrance, mid-scream or mid-arrival the gesture is ignored; undispatched, so a press
+                        // arriving with its enter in the same frame finds the scream already started.
+                        if (image == null || !onScreen || entrance.movesPortrait || scream.value < 1f || spread.value < 1f) continue
                         scope.launch(start = CoroutineStart.UNDISPATCHED) {
                             scream.snapTo(0f)
                             scream.animateTo(1f, tween(ScreamMillis, easing = LinearEasing))
@@ -162,24 +178,32 @@ fun HeroPortrait(path: String, name: String, modifier: Modifier = Modifier) {
                     val fade = appear.value
                     val out = spread.value
                     val t = scream.value
+                    // The entrance's clock while it carries the portrait; at its end all it moves is at rest.
+                    val ms = if (entrance.portraitOnClock) entrance.clock.value else HeroMotion.END_MS.toFloat()
                     val screamed = t * ScreamMillis
-                    val swell = HeroMotion.swellAt(screamed, ScreamMillis, echo = 0)
-                    val (shakeX, shakeY) = HeroMotion.shake(screamed / 1000f).let { (sx, sy) ->
-                        HeroMotion.SHAKE_DP.dp.toPx() * swell * sx to HeroMotion.SHAKE_DP.dp.toPx() * swell * sy
-                    }
+                    // The landing's swell or a later scream's: only one of them is ever under way.
+                    val swell = max(HeroMotion.landing(ms), HeroMotion.swellAt(screamed, ScreamMillis, echo = 0))
+                    val shook = HeroMotion.shake((if (ms < HeroMotion.END_MS) ms - HeroMotion.IMPACT_AT_MS else screamed) / 1000f)
+                    val shakeX = HeroMotion.SHAKE_DP.dp.toPx() * swell * shook.first
+                    val shakeY = HeroMotion.SHAKE_DP.dp.toPx() * swell * shook.second
 
                     val height = size.height
                     val width = height * figure.width / figure.height
-                    val x = size.width - width - FigureInset.toPx() + shakeX
+                    val rest = size.width - width - FigureInset.toPx()
+                    // The dash's way in: from just past the stage's start edge (the figure's end edge at 0) to rest.
+                    val travel = rest + width
+                    val x = rest - (1f - HeroMotion.dash(ms)) * travel + shakeX
                     val face = Offset(x + width * FaceX, shakeY + height * FaceY)
                     val figureSize = IntSize(width.roundToInt(), height.roundToInt())
 
                     clipPath(stage) {
                         // The light the shout throws on the stage blooms with it: a soft fill, never a ring.
+                        // It comes in with the figure, from nothing at the dash's start.
                         val glow = width * 1.2f * (1f + GlowBloom * swell)
+                        val lit = (0.2f + 0.35f * swell) * fade * min(1f, HeroMotion.dash(ms))
                         drawCircle(
                             Brush.radialGradient(
-                                listOf(accent.copy(alpha = (0.2f + 0.35f * swell) * fade), Color.Transparent),
+                                listOf(accent.copy(alpha = lit), Color.Transparent),
                                 center = face,
                                 radius = glow,
                             ),
@@ -189,21 +213,29 @@ fun HeroPortrait(path: String, name: String, modifier: Modifier = Modifier) {
                     }
                     clipPath(frame) {
                         // The trail, farthest first so each nearer echo paints over the one behind it. Each is wider
-                        // than the last and its waves deeper and shorter, so the outline melts as it goes. The swell
-                        // reaches each echo a little after the one in front of it, so the burst runs out along the
-                        // trail as a ripple: it reaches farther and melts deeper as it passes.
-                        val phase = t * WaveCycles * 2f * PI.toFloat()
+                        // than the last and its waves deeper and shorter, so the outline melts as it goes. In the
+                        // dash each echo is where the figure was a moment before, smeared back along its way as far
+                        // as the speed then stretched it, so the trail streams out behind the figure and closes up as
+                        // it stops. A swell reaches each echo a little after the one in front of it, so its burst
+                        // runs out along the trail as a ripple, each echo reaching farther and melting deeper.
+                        val phase = (t + HeroMotion.landingProgress(ms)) * WaveCycles * 2f * PI.toFloat()
                         for (k in TrailAlphas.size downTo 1) {
-                            val heard = HeroMotion.swellAt(screamed, ScreamMillis, echo = k)
+                            val then = ms - k * HeroMotion.ECHO_LAG_MS
+                            val heard = max(HeroMotion.landing(ms, echo = k), HeroMotion.swellAt(screamed, ScreamMillis, echo = k))
+                            val speed = HeroMotion.speed(then)
                             val reach = out * (1f + HeroMotion.BURST * heard)
-                            val echoWidth = width * (1f + TrailStretch * k * out)
+                            val echoWidth = width * (1f + TrailStretch * k * out) * (1f + HeroMotion.SMEAR * speed)
+                            val echoX = rest - (1f - HeroMotion.dash(then)) * travel + shakeX + width - echoWidth -
+                                width * TrailStep * k * reach
+                            if (echoX + echoWidth <= 0f) continue // not on the stage yet
                             drawEcho(
                                 image = figure,
-                                x = x + width - echoWidth - width * TrailStep * k * reach,
+                                x = echoX,
                                 y = shakeY,
                                 width = echoWidth,
                                 height = height,
-                                amplitude = (CalmWave.toPx() + MeltWave.toPx() * k.toFloat().pow(1.3f)) * out * (1f + 1.5f * heard),
+                                amplitude = (CalmWave.toPx() + MeltWave.toPx() * k.toFloat().pow(1.3f)) * out *
+                                    (1f + 1.5f * max(heard, speed)),
                                 wavelength = height * (0.52f - 0.03f * k),
                                 phase = phase + k * 0.8f,
                                 slice = SliceHeight.toPx(),
@@ -211,7 +243,7 @@ fun HeroPortrait(path: String, name: String, modifier: Modifier = Modifier) {
                                 filter = silhouette,
                             )
                         }
-                        // The colour splits apart on the figure while the scream shakes it.
+                        // The colour splits apart on the figure while the swell shakes it.
                         if (swell > 0.01f) {
                             val split = HeroMotion.SPLIT_DP.dp.toPx() * swell
                             listOf(-split to silhouette, split to fringe).forEach { (dx, filter) ->
