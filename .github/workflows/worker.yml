@@ -26,8 +26,10 @@ jobs:
     name: Test the worker
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
       - run: npm test
@@ -38,20 +40,25 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      # Whether the token is set, never the token: only the Deploy step has it, so `npm ci`'s install scripts do not.
+      HAS_CLOUDFLARE_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
       - name: Explain the skip until the secrets exist
-        if: env.CLOUDFLARE_API_TOKEN == ''
+        if: env.HAS_CLOUDFLARE_TOKEN != 'true'
         run: |
           echo "Not deployed: the CLOUDFLARE_API_TOKEN secret is not set. See README.md, Visits and feedback." >> "$GITHUB_STEP_SUMMARY"
       - name: Install wrangler
-        if: env.CLOUDFLARE_API_TOKEN != ''
+        if: env.HAS_CLOUDFLARE_TOKEN == 'true'
         run: npm ci
       - name: Deploy
-        if: env.CLOUDFLARE_API_TOKEN != ''
+        if: env.HAS_CLOUDFLARE_TOKEN == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: npx wrangler deploy
