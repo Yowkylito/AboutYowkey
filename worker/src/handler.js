@@ -83,6 +83,12 @@ const PUBLIC = "consent = 1 AND hidden_at IS NULL";
 /** A rating the page counts: any note's that the owner has not hidden, its words public or not. */
 const COUNTED = "rating IS NOT NULL AND hidden_at IS NULL";
 const ENOUGH_FOR_TODAY = "That is plenty for one day, thank you. Try again tomorrow.";
+/**
+ * Whether this visitor (?1, today's id) already sent these words (?2) today: a resend after an answer that never
+ * arrived (a timeout, a lost connection, a second press of a plain form's button). It is answered as the first was,
+ * before the limits, and kept once: no second row, no second alert, no 429 for a note that is in.
+ */
+const RESENT = "COALESCE(MAX(message = ?2), 0) AS resent";
 
 /** The minutes one device waits between notes: NOTE_GAP_MINUTES when it is a whole number (0 turns it off), else 5. */
 function noteGapMinutes(env) {
@@ -400,15 +406,16 @@ async function submitFeedback(request, env, now, cors, alerts) {
 
   const today = localDay(env, now);
   const visitor = await visitorId(request, env, today, request.headers.get("User-Agent") || "");
-  const { n, last } = await env.DB
-    .prepare("SELECT COUNT(*) AS n, MAX(created_at) AS last FROM feedback WHERE visitor = ?1")
-    .bind(visitor)
+  const note = normalizeFeedback(fields);
+  const { n, last, resent } = await env.DB
+    .prepare(`SELECT COUNT(*) AS n, MAX(created_at) AS last, ${RESENT} FROM feedback WHERE visitor = ?1`)
+    .bind(visitor, note.message)
     .first();
+  if (resent) return reply(body.form, { ok: true }, 201, cors, env);
   if (n >= LIMITS.notesPerDay) return reply(body.form, { error: ENOUGH_FOR_TODAY }, 429, cors, env);
   const gap = noteGapMinutes(env);
   const wait = last && gap ? Date.parse(last) + gap * 60000 - now.getTime() : 0;
   if (wait > 0) return reply(body.form, { error: oneNoteAtATime(gap, wait) }, 429, cors, env);
-  const note = normalizeFeedback(fields);
   const { meta } = await env.DB
     .prepare(
       "INSERT INTO feedback (created_at, day, name, contact, rating, message, visitor, consent, relation) " +
@@ -523,9 +530,13 @@ async function submitMessage(request, env, now, cors, alerts) {
 
   const today = localDay(env, now);
   const visitor = await visitorId(request, env, today, request.headers.get("User-Agent") || "");
-  const { n } = await env.DB.prepare("SELECT COUNT(*) AS n FROM messages WHERE visitor = ?1").bind(visitor).first();
-  if (n >= LIMITS.messagesPerDay) return answer({ error: ENOUGH_FOR_TODAY }, 429);
   const message = normalizeMessage(fields);
+  const { n, resent } = await env.DB
+    .prepare(`SELECT COUNT(*) AS n, ${RESENT} FROM messages WHERE visitor = ?1`)
+    .bind(visitor, message.message)
+    .first();
+  if (resent) return answer({ ok: true }, 201);
+  if (n >= LIMITS.messagesPerDay) return answer({ error: ENOUGH_FOR_TODAY }, 429);
   const { meta } = await env.DB
     .prepare("INSERT INTO messages (created_at, day, name, contact, topic, message, visitor) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)")
     .bind(now.toISOString(), today, message.name, message.contact, message.topic, message.message, visitor)

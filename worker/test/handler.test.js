@@ -400,6 +400,42 @@ test(`a visitor may leave ${LIMITS.notesPerDay} notes a day`, async () => {
   assert.equal(feedbackRows().length, LIMITS.notesPerDay + 2);
 });
 
+test("a note sent again, its first answer lost, is answered as the first was and kept once", async () => {
+  delete env.NOTE_GAP_MINUTES;
+  const at = (minutes) => new Date(Date.parse(DAY_ONE) + minutes * 60000).toISOString();
+  const first = await post("/feedback", { message: "Lovely work", rating: 5 }, { now: at(0) });
+  assert.equal(first.status, 201);
+  const again = await post("/feedback", { message: " Lovely work ", rating: 5 }, { now: at(0.5) });
+  assert.equal(again.status, 201, "not the 5-minute rule's 429: the note is in");
+  assert.deepEqual(await again.json(), { ok: true });
+  const form = await call("/feedback", {
+    method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "message=Lovely+work&rating=5", now: at(1),
+  });
+  assert.equal(form.status, 201);
+  assert.match(await form.text(), /Your note is in/);
+  assert.equal(feedbackRows().length, 1);
+  assert.equal(notificationRows().length, 1, "and the owner hears of it once");
+
+  assert.equal((await post("/feedback", { message: "Something else" }, { now: at(1) })).status, 429, "new words still wait their turn");
+  assert.equal((await post("/feedback", { message: "Lovely work" }, { now: at(1), address: "198.51.100.2" })).status, 201, "another visitor's");
+  assert.equal(feedbackRows().length, 2);
+});
+
+test("a message sent again, its first answer lost, is answered as the first was and kept once", async () => {
+  const send = (options) => post("/messages", { contact: "ada@example.com", topic: "job", message: "Are you free?" }, options);
+  assert.equal((await send()).status, 201);
+  const again = await send();
+  assert.equal(again.status, 201);
+  assert.deepEqual(await again.json(), { ok: true });
+  assert.equal(messageRows().length, 1);
+  assert.equal(notificationRows().length, 1, "one alert, not two");
+  for (let i = 1; i < LIMITS.messagesPerDay; i++) assert.equal((await post("/messages", { contact: "ada@example.com", message: `more ${i}` })).status, 201);
+  assert.equal((await send()).status, 201, "a resend past the day's limit is still the message that is in");
+  assert.equal(messageRows().length, LIMITS.messagesPerDay);
+  assert.equal((await send({ now: DAY_TWO })).status, 201);
+  assert.equal(messageRows().length, LIMITS.messagesPerDay + 1, "the same words the next day are a new message");
+});
+
 test("one note per device every 5 minutes, by default and as NOTE_GAP_MINUTES says", async () => {
   delete env.NOTE_GAP_MINUTES;
   const at = (minutes) => new Date(Date.parse(DAY_ONE) + minutes * 60000).toISOString();
