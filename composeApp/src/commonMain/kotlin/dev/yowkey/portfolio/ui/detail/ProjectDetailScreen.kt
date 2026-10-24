@@ -589,7 +589,7 @@ private fun ExpandedDetailDarkPreview() = PortfolioTheme(darkTheme = true) {
 @Composable
 private fun TextOnlyDetailPreview() = PortfolioTheme {
     ProjectDetailScreen(
-        Project("automation", "Workflow automation", "A self-hosted control platform.", highlights = listOf("Confirm-first Git workflow")),
+        Project("notes", "Field notes", "A small offline notes app.", highlights = listOf("Offline-first storage")),
         ExpandedPreviewLayout,
         onBack = {},
     )
