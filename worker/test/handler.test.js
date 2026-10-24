@@ -326,6 +326,21 @@ test("a note is checked before it is kept, and the first problem is the answer",
   assert.equal(feedbackRows()[0].message, "42");
 });
 
+test("a body that says it is too large is turned away before it is read", async () => {
+  for (const path of ["/feedback", "/messages", "/clicks"]) {
+    let read = false;
+    const body = new ReadableStream(
+      { pull(controller) { read = true; controller.enqueue(new TextEncoder().encode("{}")); controller.close(); } },
+      { highWaterMark: 0 }, // pulled only when someone reads
+    );
+    const headers = { "Content-Type": "application/json", "Content-Length": String(LIMITS.body * 64), "User-Agent": CHROME, Origin: SITE };
+    const request = new Request(`https://api.example${path}`, { method: "POST", headers, body, duplex: "half" });
+    const response = await handleRequest(request, env, ctx, { now: new Date(DAY_ONE), fetch: fetchStub });
+    assert.equal(response.status, 413, path);
+    assert.equal(read, false, `${path}: not a byte of it was read`);
+  }
+});
+
 test("the trap field keeps bots out without telling them", async () => {
   const response = await post("/feedback", { message: "Buy now", website: "https://spam.example" });
   assert.equal(response.status, 201);

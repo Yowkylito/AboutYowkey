@@ -465,6 +465,8 @@ async function readBody(request, { form: forms = true, plain = false, tooLarge =
   const form = forms && type === "application/x-www-form-urlencoded";
   const isJson = type === "application/json" || (plain && type === "text/plain");
   if (!form && !isJson) return { form: false, error: forms ? "Send JSON or a URL-encoded form." : "Send JSON.", status: 415 };
+  // A body that says it is larger than any allowed one (UTF-8 takes at most 3 bytes a character) is never read.
+  if (Number(request.headers.get("Content-Length")) > LIMITS.body * 3) return { form, error: tooLarge, status: 413 };
   const text = await request.text();
   if (text.length > LIMITS.body) return { form, error: tooLarge, status: 413 };
   if (form) return { form, fields: Object.fromEntries(new URLSearchParams(text)) };
