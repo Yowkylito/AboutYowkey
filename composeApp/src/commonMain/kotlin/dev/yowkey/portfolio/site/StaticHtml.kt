@@ -20,8 +20,12 @@ import kotlinx.serialization.json.put
 import dev.yowkey.portfolio.ui.components.initialsOf
 import dev.yowkey.portfolio.ui.components.roleOf
 import dev.yowkey.portfolio.ui.components.shorterForms
+import dev.yowkey.portfolio.model.Profile
 import dev.yowkey.portfolio.ui.sections.HeroMotion
+import dev.yowkey.portfolio.ui.sections.HeroStage
+import dev.yowkey.portfolio.ui.sections.SystemFontWidth
 import kotlin.math.abs
+import kotlin.math.min
 import kotlin.math.roundToLong
 
 /**
@@ -49,6 +53,7 @@ object StaticHtml {
             "content" to content(portfolio),
             "toTop" to backToTop(),
             "heroMotion" to heroMotion(),
+            "heroStage" to heroStage(profile),
             "build" to build,
         )
         val placeholder = Regex("\\{\\{(\\w+)}}")
@@ -240,7 +245,6 @@ object StaticHtml {
         val smear = "${m.DASH_MS}ms ${linearCurve(m.DASH_MS) { 1f - m.speed(it) }}"
         // Each part's swell lasts this long; the trail's echoes hear it a ripple step apart, the last at the end.
         val swell = m.IMPACT_MS - m.ECHOES * m.RIPPLE_STEP_MS
-        val steps = listOf("h1", ".headline", ".proof", ".links", ".links + p")
         appendLine("@media (prefers-reduced-motion: no-preference) {")
         appendLine("  .js .hero { animation: hero-intro ${m.END_MS}ms linear both; }")
         appendLine("  .js .hero .portrait { container-type: inline-size; }")
@@ -251,12 +255,14 @@ object StaticHtml {
             "  .js .hero .portrait .echo i { animation: hero-burst ${swell}ms linear both, hero-thin $smear both; " +
                 "animation-delay: calc(${m.IMPACT_AT_MS}ms + var(--k) * ${m.RIPPLE_STEP_MS}ms), calc(var(--k) * ${m.ECHO_LAG_MS}ms); }",
         )
-        appendLine("  ${steps.joinToString(", ") { ".js .hero > $it" }} { animation: hero-step ${m.TEXT_MS}ms $EASE_OUT_CUBIC both; }")
-        steps.forEachIndexed { i, step ->
-            appendLine("  .js .hero > $step { animation-delay: ${m.TEXT_AT_MS + i * m.TEXT_STAGGER_MS}ms; }")
+        appendLine("  ${STAGED_STEPS.joinToString(", ") { ".js .hero > $it" }} { animation: hero-step ${m.TEXT_MS}ms $EASE_OUT_CUBIC both; }")
+        PLAIN_STEPS.forEachIndexed { i, step ->
+            appendLine("  .js .hero > $step { animation-delay: ${m.textAt(i, staged = false)}ms; }")
         }
         appendLine("}")
         appendLine("@keyframes hero-intro { from { --hero-intro: 0; } to { --hero-intro: 1; } }")
+        // The staged trail draws back from its full reach and strength, and from showing over the name's place.
+        appendLine("@keyframes hero-back { from { --reach: 1; --mask: 0; opacity: 1; } }")
         // From just past the stage's start edge: the portrait's width (its container) less the figure's inset.
         appendLine("@keyframes hero-dash { from { translate: calc(20px - 100cqw) 0; } }")
         appendLine("@keyframes hero-smear { from { scale: ${decimal(1f + m.SMEAR, 2)} 1; } }")
@@ -278,11 +284,89 @@ object StaticHtml {
             "@keyframes hero-split { from, to { filter: drop-shadow(0 0 0 transparent) drop-shadow(0 0 0 transparent); } " +
                 "from, $peak { animation-timing-function: $EASE_OUT_QUAD; } " +
                 "$peak { filter: drop-shadow(-${split}px 0 0 color-mix(in srgb, var(--accent) 85%, transparent)) " +
-                "drop-shadow(${split}px 0 0 color-mix(in srgb, var(--fringe) 85%, transparent)); } }",
+                "drop-shadow(${split}px 0 0 color-mix(in srgb, var(--on-stage) 85%, transparent)); } }",
         )
         appendLine(
             "@keyframes hero-burst { from, to { translate: 0 0; } from, $peak { animation-timing-function: $EASE_OUT_QUAD; } " +
                 "$peak { translate: calc(var(--k) * var(--step) * -${decimal(m.BURST, 2)}) 0; } }",
+        )
+    }
+
+    /**
+     * Where the hero's name stands on the static page, filling `{{heroStage}}` in the template's styles: on a single
+     * column, on the portrait's stage with the role under it wherever [HeroStage]'s rule lets them, as in the app. CSS
+     * cannot measure text, so the rule is worked out here for every width the hero can have (it is the `hero`
+     * container), with [SystemFontWidth]'s generous widths; the app takes at least those widths too, so the two
+     * decide alike at every width and the hand-off moves nothing. Each width range that stands them on the stage
+     * places the name (at the plan's size) and the role (cut to the plan's form), hides what of the headline the stage
+     * already says, rests the trail drawn back and clear of them, and, where motion is welcome, follows the staged
+     * timeline: the trail draws back, then the name, the role and the rest read in. Nothing without a portrait.
+     */
+    fun heroStage(profile: Profile): String = buildString {
+        if (profile.photoPath == null) return@buildString
+        val role = HeroStage.roleOf(profile.headline)
+        val forms = shorterForms(role)
+        fun plans(widths: IntRange, height: Float) = widths
+            .map { it to HeroStage.plan(profile.name, role, min(it, STAGE_MAX).toFloat(), height, 1f, SystemFontWidth) }
+            .fold(mutableListOf<Triple<Int, Int, HeroStage.Plan?>>()) { runs, (width, plan) ->
+                val last = runs.lastOrNull()
+                if (last != null && last.third == plan) runs[runs.lastIndex] = Triple(last.first, width, plan)
+                else runs += Triple(width, width, plan)
+                runs
+            }
+        // Phones: the stage is 168px tall under 600px; from 600px to the wide layout's 840px, 208px.
+        listOf(Triple("(max-width: 599px)", 200..599, 168f), Triple("(min-width: 600px) and (max-width: 839px)", 400..839, 208f))
+            .forEach { (media, widths, height) ->
+                val runs = plans(widths, height)
+                runs.forEachIndexed { i, (from, to, plan) ->
+                    if (plan == null) return@forEachIndexed
+                    val range = if (i == runs.lastIndex) "(width >= ${from}px)" else "(${from}px <= width < ${to + 1}px)"
+                    appendLine("@media $media { @container hero $range {")
+                    stagedLayout(plan, forms, height)
+                    appendLine("} }")
+                    appendLine("@media $media and (prefers-reduced-motion: no-preference) { @container hero $range {")
+                    stagedMotion()
+                    appendLine("} }")
+                }
+            }
+    }
+
+    private fun StringBuilder.stagedLayout(plan: HeroStage.Plan, forms: List<String>, height: Float) {
+        val s = HeroStage
+        val figure = s.FIGURE_INSET_DP + height * s.FIGURE_ASPECT
+        val hidden = (0 until forms.indexOf(plan.role).coerceAtLeast(0)).joinToString(", ") { ".hero .portrait ~ hgroup .role .c$it" }
+        appendLine(
+            "  .hero .portrait ~ hgroup { position: absolute; left: ${decimal(s.PAD_DP, 1)}px; " +
+                "top: ${decimal(height * s.STAGE_TOP + s.V_PAD_DP, 2)}px; " +
+                "width: calc(min(${STAGE_MAX}px, 100cqw) - ${decimal(figure + s.LANE_DP + s.PAD_DP, 2)}px); " +
+                "height: ${decimal(s.boxHeight(height), 2)}px; margin: 0; display: flex; flex-direction: column; " +
+                "justify-content: center; gap: ${decimal(s.GAP_DP, 1)}px; }",
+        )
+        // Wrapped word by word, as the rule counts the lines: a balanced or "pretty" wrap could take a line more.
+        appendLine(
+            "  .hero .portrait ~ hgroup h1 { margin: 0; font-size: ${decimal(plan.nameSp, 1)}px; " +
+                "line-height: ${decimal(s.NAME_LINE, 2)}; letter-spacing: -.02em; color: var(--on-stage); text-wrap: wrap; }",
+        )
+        appendLine(
+            "  .hero .portrait ~ hgroup .role { display: block; margin: 0; font-size: ${decimal(plan.roleSp, 1)}px; " +
+                "line-height: ${decimal(s.ROLE_LINE, 2)}; font-weight: 500; color: var(--on-stage); text-wrap: wrap; }",
+        )
+        if (hidden.isNotEmpty()) appendLine("  $hidden { display: none; }")
+        if (plan.wholeRole) appendLine("  .hero .portrait ~ .headline .lead, .hero .portrait ~ hgroup.whole + .headline { display: none; }")
+        appendLine(
+            "  .hero .portrait .trail { --reach: ${decimal(HeroMotion.REST_REACH, 2)}; --mask: 1; " +
+                "--clear: calc(100% - ${decimal(figure + s.LANE_DP, 2)}px); opacity: ${decimal(HeroMotion.REST_FADE, 2)}; }",
+        )
+    }
+
+    private fun StringBuilder.stagedMotion() {
+        val m = HeroMotion
+        STAGED_STEPS.forEachIndexed { i, step ->
+            appendLine("  .js .hero > $step { animation-delay: ${m.textAt(i, staged = true)}ms; }")
+        }
+        appendLine(
+            "  .js .hero .portrait .trail { animation: hero-back ${m.DRAW_BACK_MS}ms " +
+                "${linearCurve(m.DRAW_BACK_MS) { m.smooth(it / m.DRAW_BACK_MS) }} ${m.DRAW_BACK_AT_MS}ms both; }",
         )
     }
 
@@ -306,6 +390,13 @@ object StaticHtml {
         return if (fraction.isEmpty()) "$sign$whole" else "$sign$whole.$fraction"
     }
 
+    /** The intro's steps on the static page, in reading order: under the stage, and with the name and role on it. */
+    private val PLAIN_STEPS = listOf("hgroup > h1", ".headline", ".proof", ".links", ".links + p")
+    private val STAGED_STEPS = listOf("hgroup > h1", "hgroup > .role", ".headline", ".proof", ".links", ".links + p")
+
+    /** The single column's stage is never wider than this, as the app's. */
+    private const val STAGE_MAX = 480
+
     /** The app's EaseOutCubic, and the swell's rise and fall (1 - (1 - x)²). */
     private const val EASE_OUT_CUBIC = "cubic-bezier(.33, 1, .68, 1)"
     private const val EASE_OUT_QUAD = "cubic-bezier(.5, 1, .89, 1)"
@@ -318,6 +409,21 @@ object StaticHtml {
         "<path d=\"M10 16V4.5M4.5 10L10 4.5l5.5 5.5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" " +
         "stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>"
 
+    /**
+     * [role] as its shortest form, then each word group the longer forms add in its own span, the last first to go:
+     * "Android Developer<span class="c1"> at DigiPlus</span><span class="c0"> since 2024</span>". Hiding `c0` leaves
+     * the next shorter form, hiding `c1` too the one after, and without styles it reads whole.
+     */
+    private fun roleMarkup(role: String): String {
+        val forms = shorterForms(role)
+        return buildString {
+            append(escape(forms.last()))
+            for (i in forms.size - 2 downTo 0) {
+                append("<span class=\"c$i\">${escape(forms[i].substring(forms[i + 1].length))}</span>")
+            }
+        }
+    }
+
     /** The semantic body: one `<section>` per part of the page, in the same order as the Compose UI (`Section`). */
     fun content(portfolio: Portfolio): String = buildString {
         val p = portfolio.profile
@@ -328,12 +434,26 @@ object StaticHtml {
             val url = resourceUrl(photo)
             appendLine("<figure class=\"portrait\" style=\"--photo: url('$url')\">")
             appendLine(MELT_FILTERS)
+            appendLine("<span class=\"trail\">")
             repeat(PORTRAIT_ECHOES) { appendLine("<span class=\"echo\"><i></i></span>") }
+            appendLine("</span>")
             appendLine("<span class=\"person\"><img src=\"$url\" alt=\"Portrait of ${escape(p.name)}\" decoding=\"async\"></span>")
             appendLine("</figure>")
         }
+        // The name, then (with a portrait) the role under it, which shows only where the CSS stands both on the stage
+        // (heroStage); the headline's lead is marked so it can stand aside then, and each part is said once.
+        val separator = p.headline.indexOf('·')
+        appendLine(if (separator < 0) "<hgroup class=\"whole\">" else "<hgroup>")
         appendLine("<h1>${escape(p.name)}</h1>")
-        appendLine("<p class=\"headline\">${escape(p.headline)}</p>")
+        if (p.photoPath != null) appendLine("<p class=\"role\">${roleMarkup(HeroStage.roleOf(p.headline))}</p>")
+        appendLine("</hgroup>")
+        if (separator < 0) {
+            appendLine("<p class=\"headline\">${escape(p.headline)}</p>")
+        } else {
+            val rest = p.headline.substring(separator + 1)
+            val lead = p.headline.substring(0, separator + 1) + rest.takeWhile { it == ' ' }
+            appendLine("<p class=\"headline\"><span class=\"lead\">${escape(lead)}</span>${escape(rest.trimStart())}</p>")
+        }
         // The rating and the visit count are the bar's (its proof chip), so the hero does not repeat them.
         if (p.proof.isNotEmpty()) {
             appendLine("<ul class=\"proof\">")

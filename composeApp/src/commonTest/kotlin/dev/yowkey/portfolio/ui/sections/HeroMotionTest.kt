@@ -64,11 +64,31 @@ class HeroMotionTest {
             assertTrue(starts >= landing, "step $step waits for the landing")
             assertEquals(1f, HeroMotion.textProgress(starts + TEXT_MS, step), "and is in within $TEXT_MS ms")
         }
-        assertEquals(
-            (0 until TEXT_STEPS).toList(),
-            listOf(IntroStep.NAME, IntroStep.HEADLINE, IntroStep.PROOF, IntroStep.ACTIONS, IntroStep.SUMMARY),
-            "one step each, in reading order",
-        )
+        val plain = listOf(IntroStep.NAME, IntroStep.HEADLINE, IntroStep.PROOF, IntroStep.ACTIONS, IntroStep.SUMMARY)
+        assertEquals((0 until TEXT_STEPS).toList(), plain.map { it.order(staged = false) }, "one step each, in reading order")
+        assertEquals((0 until HeroMotion.STAGED_STEPS).toList(), IntroStep.entries.map { it.order(staged = true) }, "the role too")
+    }
+
+    /**
+     * On the stage, the trail draws back after the landing has peaked, and the name waits until it is half way back;
+     * then the role, then the rest below, one stagger apart.
+     */
+    @Test
+    fun stagedTheTrailDrawsBackBeforeTheNameAndRoleReadIn() {
+        val peak = millis.maxBy { HeroMotion.landing(it) }
+        assertTrue(HeroMotion.DRAW_BACK_AT_MS > peak, "the impact first: peak at $peak ms")
+        assertEquals(0f, HeroMotion.drawBack(HeroMotion.DRAW_BACK_AT_MS.toFloat()))
+        assertEquals(1f, HeroMotion.drawBack((HeroMotion.DRAW_BACK_AT_MS + HeroMotion.DRAW_BACK_MS).toFloat()))
+        val name = HeroMotion.textAt(IntroStep.NAME.order(true), staged = true).toFloat()
+        assertTrue(HeroMotion.drawBack(name) in 0.3f..0.6f, "the name comes as the trail clears its place: ${HeroMotion.drawBack(name)}")
+        IntroStep.entries.zipWithNext().forEach { (a, b) ->
+            assertEquals(
+                HeroMotion.NAME_STAGGER_MS,
+                HeroMotion.textAt(b.order(true), staged = true) - HeroMotion.textAt(a.order(true), staged = true),
+                "$b follows $a",
+            )
+        }
+        assertTrue(HeroMotion.NAME_STAGGER_MS in 60..90)
     }
 
     /** Nothing moves past the end, so a clock at [END_MS] is the still picture with every word shown. */
@@ -76,7 +96,9 @@ class HeroMotionTest {
     fun everythingIsAtRestByTheEndWhichIsWithinTheBudget() {
         assertTrue(DASH_MS + ECHOES * ECHO_LAG_MS <= END_MS, "the farthest echo is home")
         assertTrue(IMPACT_AT_MS + IMPACT_MS <= END_MS, "the swell is spent")
-        (0 until TEXT_STEPS).forEach { assertEquals(1f, HeroMotion.textProgress(END_MS.toFloat(), it)) }
-        assertTrue(END_MS in 900..1300, "the whole entrance takes about a second: $END_MS ms")
+        assertTrue(HeroMotion.DRAW_BACK_AT_MS + HeroMotion.DRAW_BACK_MS <= END_MS, "the trail is back")
+        (0 until TEXT_STEPS).forEach { assertEquals(1f, HeroMotion.textProgress(END_MS.toFloat(), it, staged = false)) }
+        (0 until HeroMotion.STAGED_STEPS).forEach { assertEquals(1f, HeroMotion.textProgress(END_MS.toFloat(), it, staged = true)) }
+        assertTrue(END_MS in 900..1400, "the whole entrance takes about a second and a third: $END_MS ms")
     }
 }

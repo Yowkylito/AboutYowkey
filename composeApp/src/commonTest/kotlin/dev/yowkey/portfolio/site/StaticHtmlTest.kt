@@ -19,12 +19,15 @@ import dev.yowkey.portfolio.model.Service
 import dev.yowkey.portfolio.model.SkillGroup
 import dev.yowkey.portfolio.ui.Section
 import dev.yowkey.portfolio.ui.sections.HeroMotion
+import dev.yowkey.portfolio.ui.sections.HeroStage
+import dev.yowkey.portfolio.ui.sections.SystemFontWidth
 import dev.yowkey.portfolio.validJson
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class StaticHtmlTest {
@@ -136,7 +139,7 @@ class StaticHtmlTest {
         assertTrue("  .js .hero { animation: hero-intro ${HeroMotion.END_MS}ms linear both; }" in guarded, guarded)
         assertTrue(guarded.lines().drop(1).all { it.startsWith("  .js .hero") }, "every rule needs the script and is the hero's")
         assertTrue(rest.lines().filter { it.isNotBlank() }.all { it.startsWith("@keyframes hero-") }, rest)
-        listOf("h1", ".headline", ".proof", ".links", ".links + p").forEachIndexed { i, step ->
+        listOf("hgroup > h1", ".headline", ".proof", ".links", ".links + p").forEachIndexed { i, step ->
             val delay = HeroMotion.TEXT_AT_MS + i * HeroMotion.TEXT_STAGGER_MS
             assertTrue("  .js .hero > $step { animation-delay: ${delay}ms; }" in guarded, "step $i, $step, at $delay ms")
         }
@@ -146,6 +149,70 @@ class StaticHtmlTest {
         val page = StaticHtml.page(portfolio, "<style>{{heroMotion}}</style>{{content}}", "b")
         assertTrue("<style>$css</style>" in page, "the template's styles carry it")
         assertFalse("class=\"shout\"" in page, "the portrait has no sound lines")
+    }
+
+    private val owner = portfolio.copy(
+        profile = portfolio.profile.copy(
+            name = "Rodelito Tangonan",
+            headline = "Android Developer at DigiPlus since 2024 · Kotlin, Jetpack Compose, Clean Architecture",
+            photo = "portrait.webp",
+        ),
+    )
+
+    /**
+     * The name, then the role under it, then the headline with its lead marked, in reading order; the role in spans
+     * that the stage's rules hide from the end to cut it at whole words, reading whole without styles.
+     */
+    @Test
+    fun theHeroCarriesTheNameTheRoleAndTheHeadlineEachOnce() {
+        val hero = StaticHtml.content(owner).substringBefore("</header>")
+        val markup = listOf(
+            "<span class=\"trail\">\n<span class=\"echo\">",
+            "<hgroup>\n<h1>Rodelito Tangonan</h1>\n<p class=\"role\">Android Developer<span class=\"c1\"> at DigiPlus</span>" +
+                "<span class=\"c0\"> since 2024</span></p>\n</hgroup>",
+            "<p class=\"headline\"><span class=\"lead\">Android Developer at DigiPlus since 2024 · </span>" +
+                "Kotlin, Jetpack Compose, Clean Architecture</p>",
+        )
+        markup.forEach { assertTrue(it in hero, "the hero lacks $it\n$hero") }
+        val order = listOf("<figure", "<h1>", "class=\"role\"", "class=\"headline\"").map { hero.indexOf(it) }
+        assertEquals(order.sorted(), order, "portrait, name, role, headline")
+        val bare = StaticHtml.content(owner.copy(profile = owner.profile.copy(headline = "Engineer", photo = null)))
+        assertTrue("<hgroup class=\"whole\">\n<h1>Rodelito Tangonan</h1>\n</hgroup>\n<p class=\"headline\">Engineer</p>" in bare, bare)
+    }
+
+    /**
+     * The stage's rules follow [HeroStage]'s rule with the static page's estimate, width by width: on a 412px phone
+     * (a 372px hero) the name and the whole role stand on the stage and the headline keeps only its rest; at 360px
+     * they do not, and nothing is said about it; the tablet's taller stage takes the name at 36px. Each range rests
+     * the trail drawn back and, where motion is welcome, follows the staged timeline.
+     */
+    @Test
+    fun theStageRulesFollowTheRuleWidthByWidth() {
+        val css = StaticHtml.heroStage(owner.profile)
+        val phone = Regex("@media \\(max-width: 599px\\) \\{ @container hero ([^{]+) \\{\n([\\s\\S]*?)\n\\} \\}").findAll(css).toList()
+        assertTrue(phone.isNotEmpty(), css)
+        val first = Regex("\\((\\d+)px <= width|width >= (\\d+)px").find(phone.first().groupValues[1])!!.groupValues
+        val from = (first[1].ifEmpty { first[2] }).toInt()
+        assertNull(HeroStage.plan(owner.profile.name, HeroStage.roleOf(owner.profile.headline), from - 1f, 168f, 1f, SystemFontWidth))
+        assertNotNull(HeroStage.plan(owner.profile.name, HeroStage.roleOf(owner.profile.headline), from.toFloat(), 168f, 1f, SystemFontWidth))
+        assertTrue(from in 321..372, "staged from a ${from}px hero: a 412px phone, not a 360px one")
+        val at372 = phone.first { range ->
+            val bounds = Regex("\\d+").findAll(range.groupValues[1]).map { it.value.toInt() }.toList()
+            372 >= bounds[0] && (bounds.size == 1 || 372 < bounds[1])
+        }.groupValues[2]
+        listOf(
+            "  .hero .portrait ~ hgroup h1 { margin: 0; font-size: 30px;",
+            "color: var(--on-stage); text-wrap: wrap; }",
+            "  .hero .portrait ~ .headline .lead, .hero .portrait ~ hgroup.whole + .headline { display: none; }",
+            "  .hero .portrait .trail { --reach: 0.35; --mask: 1;",
+        ).forEach { assertTrue(it in at372, "a 372px hero lacks $it\n$at372") }
+        assertFalse(".c0" in at372, "the whole role")
+        assertTrue("@media (min-width: 600px) and (max-width: 839px) { @container hero (width >= " in css)
+        assertTrue("font-size: 36px;" in css, "the tablet's name")
+        val motion = "@media (max-width: 599px) and (prefers-reduced-motion: no-preference) { @container hero"
+        assertTrue(motion in css && "  .js .hero > hgroup > .role { animation-delay: ${HeroMotion.NAME_AT_MS + HeroMotion.NAME_STAGGER_MS}ms; }" in css)
+        assertTrue("  .js .hero .portrait .trail { animation: hero-back ${HeroMotion.DRAW_BACK_MS}ms linear(" in css)
+        assertEquals("", StaticHtml.heroStage(owner.profile.copy(photo = null)), "no portrait, no stage")
     }
 
     /** One link per section the page has, to its id, in its order, under the app's names for them. */
