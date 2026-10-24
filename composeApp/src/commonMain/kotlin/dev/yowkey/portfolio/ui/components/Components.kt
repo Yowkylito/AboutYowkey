@@ -55,7 +55,10 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.yowkey.portfolio.model.Link
@@ -228,18 +231,26 @@ fun PlayGlyph(modifier: Modifier = Modifier) {
     )
 }
 
+/** A line of a list, its dot in the middle of the text's first line. */
 @Composable
 fun Bullet(text: String, modifier: Modifier = Modifier) {
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Box(
             Modifier
-                .padding(top = 9.dp)
-                .size(5.dp)
+                .padding(top = markTop(middle = 11.5.sp, size = BulletDot))
+                .size(BulletDot)
                 .background(MaterialTheme.colorScheme.primary, CircleShape),
         )
         Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
+
+/**
+ * How far down a line of text to put a mark [size] tall so that its middle is [middle] down the line. [middle] is in
+ * sp, as the line's height is, so the mark keeps its place on the line at any text size the reader picks.
+ */
+@Composable
+fun markTop(middle: TextUnit, size: Dp): Dp = with(LocalDensity.current) { middle.toDp() } - size / 2
 
 /**
  * Opens [link] with the platform's handler: a new tab on the web, the default browser or mail app on desktop. Then,
@@ -332,6 +343,8 @@ private fun BoxScope.SwitchSlot(alignment: Alignment, content: @Composable () ->
         content = { content() },
     )
 }
+
+private val BulletDot = 5.dp
 
 private val SwitchWidth = 60.dp
 private val SwitchHeight = 32.dp

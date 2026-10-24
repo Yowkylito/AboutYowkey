@@ -154,7 +154,8 @@ fun SectionNote(text: String, modifier: Modifier = Modifier) {
 
 /**
  * A timeline entry; the rail is drawn, not composed, and stops at the last job. The role and its place read as one
- * heading block, the bullets start a clear step below it, and each bullet is a paragraph apart from the next.
+ * heading block, the bullets start a clear step below it, and each bullet is a paragraph apart from the next. The dot
+ * and the rail's start are placed in sp, as the title's line is, so the dot stays on the title at any text size.
  */
 @Composable
 fun JobEntry(experience: Experience, isLast: Boolean, wide: Boolean, modifier: Modifier = Modifier) {
@@ -174,8 +175,8 @@ fun JobEntry(experience: Experience, isLast: Boolean, wide: Boolean, modifier: M
                 .weight(1f)
                 .drawBehind {
                     val x = 4.dp.toPx()
-                    if (!isLast) drawLine(rail, Offset(x, 16.dp.toPx()), Offset(x, size.height), 1.dp.toPx())
-                    drawCircle(dot, radius = 4.dp.toPx(), center = Offset(x, 9.dp.toPx()))
+                    if (!isLast) drawLine(rail, Offset(x, 16.sp.toPx()), Offset(x, size.height), 1.dp.toPx())
+                    drawCircle(dot, radius = 4.dp.toPx(), center = Offset(x, 9.sp.toPx()))
                 }
                 .padding(start = 28.dp, bottom = if (isLast) 0.dp else 44.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
