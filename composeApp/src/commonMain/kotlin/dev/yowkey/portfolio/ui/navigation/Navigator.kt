@@ -7,7 +7,7 @@ import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * The app's two screens. Written into the URL's fragment on the web (`#/projects/<id>`), so a project can be
- * linked to and the browser's Back button leaves it; a fragment needs no server routing on GitHub Pages.
+ * linked to and the browser's Back button leaves it; a fragment needs no server routing on a static host.
  */
 @Immutable
 sealed interface Route {

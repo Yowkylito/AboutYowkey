@@ -3,7 +3,7 @@
 The portfolio of **Rodelito Tangonan**, Android developer. It is built so that a recruiter who gives it seven seconds
 still leaves knowing who I am, what I have shipped and how to reach me.
 
-**Live:** https://yowkylito.github.io/AboutYowkey/
+**Live:** https://aboutyowkey.pages.dev/
 
 ![The first screen: my name and role, three proof points, the contact buttons and the portrait](docs/images/hero.webp)
 
@@ -69,7 +69,7 @@ These ideas shaped every choice above:
 ## Built with
 
 Kotlin and Compose Multiplatform (WebAssembly in the browser, the JVM on the desktop, Android on the phone), a small
-Cloudflare Worker for the visits, notes and messages, and GitHub Pages.
+Cloudflare Worker for the visits, notes and messages, and Cloudflare Pages for the site.
 
 For developers: [editing the content, running, deploying, the backend and the phone app](docs/DEVELOPMENT.md),
 [how the code is laid out](docs/ARCHITECTURE.md), and [what has been checked for production](docs/READINESS.md).

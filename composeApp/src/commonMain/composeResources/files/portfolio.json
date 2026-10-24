@@ -1,5 +1,5 @@
 {
-  "siteUrl": "https://yowkylito.github.io/AboutYowkey/",
+  "siteUrl": "https://aboutyowkey.pages.dev/",
   "api": "https://aboutyowkey-api.aboutyowkey-api.workers.dev",
   "profile": {
     "name": "Rodelito Tangonan",
@@ -867,7 +867,7 @@
     {
       "id": "about-yowkey",
       "icon": "about-yowkey.webp",
-      "visibility": "public",
+      "visibility": "private",
       "title": "This portfolio",
       "tagline": "One Compose UI compiled to WebAssembly, with crawlable HTML built from the same JSON",
       "summary": "A Compose Multiplatform app running in your browser through Kotlin/WebAssembly, with a crawlable HTML version generated from the same content at build time.",
@@ -875,7 +875,7 @@
       "highlights": [
         "Adaptive layout from phone to wide desktop using window size classes",
         "Content lives in one JSON file shared by the app and the generated HTML",
-        "Built, tested and deployed to GitHub Pages by GitHub Actions"
+        "Built and tested by GitHub Actions, served from Cloudflare Pages"
       ],
       "engineering": {
         "builtWith": ["Compose Multiplatform", "Kotlin/Wasm", "Koin", "kotlinx.serialization"],
@@ -943,10 +943,7 @@
           "Lighthouse CI against the live site after every deploy"
         ]
       },
-      "stack": ["Compose Multiplatform", "Kotlin/Wasm", "Koin", "GitHub Pages"],
-      "links": [
-        { "label": "Source on GitHub", "url": "https://github.com/Yowkylito/AboutYowkey" }
-      ],
+      "stack": ["Compose Multiplatform", "Kotlin/Wasm", "Koin", "Cloudflare Pages"],
       "screenshots": [
         { "file": "portfolio-hero.webp", "caption": "The page you are on, rendered by Compose from WebAssembly", "width": 800, "height": 600 },
         { "file": "portfolio-projects.webp", "caption": "Project cards with screenshot grids that open a full-screen viewer", "width": 800, "height": 600 }
