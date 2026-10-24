@@ -27,7 +27,7 @@ SITE_URL = "https://yowkylito.github.io/AboutYowkey/"
 TIME_ZONE = "Asia/Manila"
 # The links on the page whose clicks are counted (POST /clicks), comma-separated, lowercase.
 TRACKED_LINKS = "linkedin,github"
-# Anti-spam: one note per device (the same daily hash as a visit) every this many minutes, on top of 5 a day.
+# Anti-spam: one note per address (a daily hash of its network, not the browser) every this many minutes, on top of 5 a day.
 NOTE_GAP_MINUTES = "5"
 
 [triggers]

@@ -353,9 +353,9 @@ test("one note per device every 5 minutes, by default and as NOTE_GAP_MINUTES sa
   const almost = await post("/feedback", { message: "again" }, { now: at(4.5) });
   assert.equal((await almost.json()).error, "One note every 5 minutes, thank you. Try again in 1 minute.");
   assert.equal((await post("/feedback", { message: "another device" }, { now: at(1), address: "198.51.100.2" })).status, 201, "a different device");
-  assert.equal((await post("/feedback", { message: "other browser" }, { now: at(1), agent: CHROME.replace("130", "131") })).status, 201, "a different browser");
+  assert.equal((await post("/feedback", { message: "other browser" }, { now: at(1), agent: CHROME.replace("130", "131") })).status, 429, "the same address in another browser");
   assert.equal((await post("/feedback", { message: "later" }, { now: at(5) })).status, 201, "five minutes on");
-  assert.equal(feedbackRows().length, 4);
+  assert.equal(feedbackRows().length, 3);
 
   const form = await call("/feedback", {
     method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "message=burst", now: at(6),
@@ -367,6 +367,61 @@ test("one note per device every 5 minutes, by default and as NOTE_GAP_MINUTES sa
   assert.equal((await post("/feedback", { message: "two minutes on" }, { now: at(7) })).status, 201);
   env.NOTE_GAP_MINUTES = "ten";
   assert.equal((await post("/feedback", { message: "too soon" }, { now: at(8) })).status, 429, "anything but a whole number means the default");
+});
+
+/** The shim, with each query a moment away as D1's are, so requests sent at once interleave as they do on Cloudflare. */
+function roundTrips(db) {
+  const later = (result) => new Promise((resolve) => setTimeout(() => resolve(result()), 1));
+  const statement = (bound) => ({
+    first: (column) => later(() => bound.first(column)),
+    all: () => later(() => bound.all()),
+    run: () => later(() => bound.run()),
+  });
+  return { ...db, prepare: (sql) => ({ ...statement(db.prepare(sql)), bind: (...params) => statement(db.prepare(sql).bind(...params)) }) };
+}
+
+test("the limits are the address's: another browser, another IPv6 address in the same /64, or a burst sent at once get no more", async () => {
+  const agents = Array.from({ length: LIMITS.notesPerDay + 2 }, (_, i) => `${CHROME} Edg/${i}`);
+  for (const [i, agent] of agents.entries()) {
+    assert.equal((await post("/feedback", { message: `note ${i}` }, { agent })).status, i < LIMITS.notesPerDay ? 201 : 429, `browser ${i}`);
+  }
+  for (const [i, agent] of agents.slice(0, LIMITS.messagesPerDay + 1).entries()) {
+    const sent = await post("/messages", { contact: "a@example.com", message: `message ${i}` }, { agent });
+    assert.equal(sent.status, i < LIMITS.messagesPerDay ? 201 : 429, `message from browser ${i}`);
+  }
+
+  const v6 = (address) => post("/feedback", { message: address }, { address });
+  for (let i = 1; i <= LIMITS.notesPerDay; i++) assert.equal((await v6(`2001:db8:a:b::${i}`)).status, 201);
+  assert.equal((await v6("2001:0db8:000a:000b:ffff::1")).status, 429, "the same /64, written another way");
+  assert.equal((await v6("2001:db8:a:c::1")).status, 201, "the next /64 is someone else");
+
+  // All at once, with D1 a round trip away: each passes the count before any is kept, so the insert must hold the line.
+  env.DB = roundTrips(env.DB);
+  const burst = await Promise.all(
+    Array.from({ length: 12 }, (_, i) => post("/feedback", { message: `burst ${i}` }, { address: "198.51.100.77" })),
+  );
+  assert.equal(burst.filter((response) => response.status === 201).length, LIMITS.notesPerDay);
+  assert.equal(burst.filter((response) => response.status === 429).length, 12 - LIMITS.notesPerDay);
+  const messages = await Promise.all(
+    Array.from({ length: 8 }, (_, i) => post("/messages", { contact: "b@example.com", message: `m ${i}` }, { address: "198.51.100.78" })),
+  );
+  assert.equal(messages.filter((response) => response.status === 201).length, LIMITS.messagesPerDay);
+
+  env.NOTE_GAP_MINUTES = "5";
+  const gapBurst = await Promise.all(
+    Array.from({ length: 4 }, (_, i) => post("/feedback", { message: `gap ${i}` }, { address: "198.51.100.79" })),
+  );
+  assert.equal(gapBurst.filter((response) => response.status === 201).length, 1, "one note every 5 minutes, even sent at once");
+});
+
+test("a sender's id is kept only for its day: the next day's first note or message clears the old ones", async () => {
+  await post("/feedback", { message: "day one" });
+  await post("/messages", { contact: "a@example.com", message: "day one" });
+  assert.match(feedbackRows()[0].visitor, /^[0-9a-f]{64}$/, "today's id holds today's limit");
+  await post("/feedback", { message: "day two" }, { now: DAY_TWO, address: "198.51.100.2" });
+  await post("/messages", { contact: "b@example.com", message: "day two" }, { now: DAY_TWO, address: "198.51.100.2" });
+  assert.deepEqual(feedbackRows().map((row) => row.visitor === ""), [true, false]);
+  assert.deepEqual(messageRows().map((row) => row.visitor === ""), [true, false]);
 });
 
 test("a plain form post gets a page back, with the way home", async () => {

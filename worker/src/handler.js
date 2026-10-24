@@ -42,7 +42,7 @@ export const LIMITS = Object.freeze({
   notesPerDay: 5,
   /**
    * And at most one every this many minutes (wrangler.toml's NOTE_GAP_MINUTES overrides it), so a burst from one
-   * device is turned away before the day's limit is reached.
+   * address is turned away before the day's limit is reached.
    */
   noteGapMinutes: 5,
   /** Messages one visitor may send in a day; the next gets a 429. */
@@ -84,7 +84,7 @@ const PUBLIC = "consent = 1 AND hidden_at IS NULL";
 const COUNTED = "rating IS NOT NULL AND hidden_at IS NULL";
 const ENOUGH_FOR_TODAY = "That is plenty for one day, thank you. Try again tomorrow.";
 
-/** The minutes one device waits between notes: NOTE_GAP_MINUTES when it is a whole number (0 turns it off), else 5. */
+/** The minutes one address waits between notes: NOTE_GAP_MINUTES when it is a whole number (0 turns it off), else 5. */
 function noteGapMinutes(env) {
   const set = String(env.NOTE_GAP_MINUTES ?? "").trim();
   return /^\d+$/.test(set) ? Number(set) : LIMITS.noteGapMinutes;
@@ -208,6 +208,34 @@ function isBot(agent) {
 async function visitorId(request, env, today, agent) {
   const address = request.headers.get("CF-Connecting-IP") || "unknown";
   return sha256Hex(`${today}|${address}|${agent}|${env.VISITOR_SALT || ""}`);
+}
+
+/**
+ * Who is writing, for today's limits on notes and messages: a hash of the day, the sender's network and the salt.
+ * Not the browser, which a sender changes at will, and for IPv6 the /64 a device takes its addresses from. Kept
+ * only for its day (forgetOldSenders): without the browser in it, the salt alone could turn it back into an address.
+ */
+async function senderId(request, env, today) {
+  const address = request.headers.get("CF-Connecting-IP") || "unknown";
+  return sha256Hex(`${today}|sender|${networkOf(address)}|${env.VISITOR_SALT || ""}`);
+}
+
+/** All of an IPv4 address; the first 64 bits of an IPv6 one, written out in full so every spelling agrees. */
+export function networkOf(address) {
+  const value = String(address).trim().toLowerCase();
+  const mapped = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/.exec(value);
+  if (mapped) return mapped[1];
+  if (!value.includes(":")) return value;
+  const [head, tail] = value.split("::");
+  const left = head ? head.split(":") : [];
+  const right = tail ? tail.split(":") : [];
+  const groups = tail === undefined ? left : [...left, ...Array(Math.max(8 - left.length - right.length, 0)).fill("0"), ...right];
+  return `${groups.slice(0, 4).map((group) => group.padStart(4, "0")).join(":")}::/64`;
+}
+
+/** Clears the sender ids of [table]'s rows from before [today]: they only ever held a day's limit. */
+async function forgetOldSenders(db, table, today) {
+  await db.prepare(`UPDATE ${table} SET visitor = '' WHERE visitor <> '' AND day <> ?1`).bind(today).run();
 }
 
 /**
@@ -381,23 +409,22 @@ async function submitFeedback(request, env, now, cors, alerts) {
   if (problems.length) return reply(body.form, { error: problems[0], problems }, 400, cors, env);
 
   const today = localDay(env, now);
-  const visitor = await visitorId(request, env, today, request.headers.get("User-Agent") || "");
-  const { n, last } = await env.DB
-    .prepare("SELECT COUNT(*) AS n, MAX(created_at) AS last FROM feedback WHERE visitor = ?1")
-    .bind(visitor)
-    .first();
-  if (n >= LIMITS.notesPerDay) return reply(body.form, { error: ENOUGH_FOR_TODAY }, 429, cors, env);
-  const gap = noteGapMinutes(env);
-  const wait = last && gap ? Date.parse(last) + gap * 60000 - now.getTime() : 0;
-  if (wait > 0) return reply(body.form, { error: oneNoteAtATime(gap, wait) }, 429, cors, env);
+  const visitor = await senderId(request, env, today);
+  const refused = await noteRefusal(env, visitor, now);
+  if (refused) return reply(body.form, { error: refused }, 429, cors, env);
   const note = normalizeFeedback(fields);
+  const since = new Date(now.getTime() - noteGapMinutes(env) * 60000).toISOString();
+  // The limits again, in the insert itself: notes sent at once all pass the check above before any is kept.
   const { meta } = await env.DB
     .prepare(
       "INSERT INTO feedback (created_at, day, name, contact, rating, message, visitor, consent, relation) " +
-        "VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        "SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9 WHERE (SELECT COUNT(*) FROM feedback WHERE visitor = ?7) < ?10 " +
+        "AND NOT EXISTS (SELECT 1 FROM feedback WHERE visitor = ?7 AND created_at > ?11)",
     )
-    .bind(now.toISOString(), today, note.name, note.contact, note.rating, note.message, visitor, note.consent ? 1 : 0, note.relation)
+    .bind(now.toISOString(), today, note.name, note.contact, note.rating, note.message, visitor, note.consent ? 1 : 0, note.relation, LIMITS.notesPerDay, since)
     .run();
+  if (meta.changes !== 1) return reply(body.form, { error: (await noteRefusal(env, visitor, now)) || ENOUGH_FOR_TODAY }, 429, cors, env);
+  await forgetOldSenders(env.DB, "feedback", today);
   // The owner's alert names the visitor (or "Someone"), never their contact.
   await alertOwner(env, alerts, {
     kind: "feedback",
@@ -406,6 +433,18 @@ async function submitFeedback(request, env, now, cors, alerts) {
     refId: Number(meta.last_row_id),
   });
   return reply(body.form, { ok: true }, 201, cors, env);
+}
+
+/** Why [visitor] may not leave a note at [now]: the day's notes used up, or the last one too recent. Null if they may. */
+async function noteRefusal(env, visitor, now) {
+  const { n, last } = await env.DB
+    .prepare("SELECT COUNT(*) AS n, MAX(created_at) AS last FROM feedback WHERE visitor = ?1")
+    .bind(visitor)
+    .first();
+  if (n >= LIMITS.notesPerDay) return ENOUGH_FOR_TODAY;
+  const gap = noteGapMinutes(env);
+  const wait = last && gap ? Date.parse(last) + gap * 60000 - now.getTime() : 0;
+  return wait > 0 ? oneNoteAtATime(gap, wait) : null;
 }
 
 /** "New note (★5) · Colleague": the stars when given, and who it is from when that is worth a badge. */
@@ -504,14 +543,20 @@ async function submitMessage(request, env, now, cors, alerts) {
   if (problems.length) return answer({ error: problems[0], problems }, 400);
 
   const today = localDay(env, now);
-  const visitor = await visitorId(request, env, today, request.headers.get("User-Agent") || "");
+  const visitor = await senderId(request, env, today);
   const { n } = await env.DB.prepare("SELECT COUNT(*) AS n FROM messages WHERE visitor = ?1").bind(visitor).first();
   if (n >= LIMITS.messagesPerDay) return answer({ error: ENOUGH_FOR_TODAY }, 429);
   const message = normalizeMessage(fields);
+  // The limit again, in the insert itself, for messages sent at once.
   const { meta } = await env.DB
-    .prepare("INSERT INTO messages (created_at, day, name, contact, topic, message, visitor) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)")
-    .bind(now.toISOString(), today, message.name, message.contact, message.topic, message.message, visitor)
+    .prepare(
+      "INSERT INTO messages (created_at, day, name, contact, topic, message, visitor) " +
+        "SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7 WHERE (SELECT COUNT(*) FROM messages WHERE visitor = ?7) < ?8",
+    )
+    .bind(now.toISOString(), today, message.name, message.contact, message.topic, message.message, visitor, LIMITS.messagesPerDay)
     .run();
+  if (meta.changes !== 1) return answer({ error: ENOUGH_FOR_TODAY }, 429);
+  await forgetOldSenders(env.DB, "messages", today);
   // The one alert with a contact in it, for the owner's phone only: who to write back to.
   await alertOwner(env, alerts, {
     kind: "message",
