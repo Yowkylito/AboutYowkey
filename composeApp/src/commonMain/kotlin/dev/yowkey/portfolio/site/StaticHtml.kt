@@ -186,15 +186,6 @@ object StaticHtml {
                 "<feDisplacementMap in=\"SourceGraphic\" in2=\"rows\" scale=\"$scale\" xChannelSelector=\"R\" yChannelSelector=\"G\"/></filter>"
         } + "</svg>"
 
-    /**
-     * The shout's three sound lines left of the face, as the app's, drawn for a 224px-tall portrait (the CSS scales
-     * them to the others): nearest first, radius 49, 72 and 95, sweeping 50°, 64° and 78°.
-     */
-    private const val SHOUT_LINES = "<svg class=\"shout\" width=\"1\" height=\"1\" aria-hidden=\"true\" focusable=\"false\">" +
-        "<path d=\"M-44.4-20.7A49 49 0 0 0-44.4 20.7\" stroke-width=\"3\" opacity=\".85\"/>" +
-        "<path d=\"M-61.1-38.2A72 72 0 0 0-61.1 38.2\" stroke-width=\"2.5\" opacity=\".6\"/>" +
-        "<path d=\"M-73.8-59.8A95 95 0 0 0-73.8 59.8\" stroke-width=\"2\" opacity=\".38\"/></svg>"
-
     /** Three lines, as the app's MenuGlyph; its name is the button's label. */
     private const val MENU_ICON = "<svg width=\"20\" height=\"20\" viewBox=\"0 0 20 20\" aria-hidden=\"true\" focusable=\"false\">" +
         "<path d=\"M2 5h16M2 10h16M2 15h16\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/></svg>"
@@ -208,13 +199,13 @@ object StaticHtml {
         val p = portfolio.profile
         appendLine("<header class=\"hero\">")
         // The app's still picture: the echoes are the cut-out again, as CSS masks filled with the accent, the far ones
-        // melted by the SVG filters; the sound lines sit under the figure, which covers their ends.
+        // melted by the SVG filters.
         p.photoPath?.let { photo ->
             val url = resourceUrl(photo)
             appendLine("<figure class=\"portrait\" style=\"--photo: url('$url')\">")
             appendLine(MELT_FILTERS)
             repeat(PORTRAIT_ECHOES) { appendLine("<span class=\"echo\"><i></i></span>") }
-            appendLine("<span class=\"person\">$SHOUT_LINES<img src=\"$url\" alt=\"Portrait of ${escape(p.name)}\" decoding=\"async\"></span>")
+            appendLine("<span class=\"person\"><img src=\"$url\" alt=\"Portrait of ${escape(p.name)}\" decoding=\"async\"></span>")
             appendLine("</figure>")
         }
         appendLine("<h1>${escape(p.name)}</h1>")
