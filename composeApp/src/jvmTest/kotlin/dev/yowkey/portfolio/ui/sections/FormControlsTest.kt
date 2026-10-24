@@ -3,8 +3,6 @@ package dev.yowkey.portfolio.ui.sections
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.ColorScheme
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
@@ -29,21 +27,22 @@ import kotlin.test.assertTrue
 
 /**
  * Nothing but its edge shows where an empty text field or an unlit star of the rating is, so WCAG 1.4.11 asks 3:1 of
- * that edge against the page, in both themes; and each star, a control of its own, is a 48 dp target. Measured on the
- * real forms: the fields found through their semantics, their left border read off the rendered pixels.
+ * that edge against what it sits on, the forms' dialog, in both themes; and each star, a control of its own, is a
+ * 48 dp target. Measured on the real forms: the fields found through their semantics, their left border read off the
+ * rendered pixels.
  */
 class FormControlsTest {
 
     @Test
     fun theFieldsShowTheirEdgesAt3To1InBothThemes() {
         for (dark in listOf(false, true)) {
-            forms(dark) { image, scheme, nodes ->
+            forms(dark) { image, surface, nodes ->
                 val fields = nodes.filter { SemanticsProperties.EditableText in it.config }
                 assertEquals(6, fields.size, "the note form's three fields and the message form's three")
                 fields.forEach { field ->
-                    val edge = strongest(image, scheme.background, field.boundsInRoot.run { Rect(left - 1, center.y, left + 3, center.y + 1) })
-                    val ratio = contrast(edge, scheme.background)
-                    assertTrue(ratio >= 3.0, "dark=$dark: a field's border is ${"%.2f".format(ratio)}:1 on the page")
+                    val edge = strongest(image, surface, field.boundsInRoot.run { Rect(left - 1, center.y, left + 3, center.y + 1) })
+                    val ratio = contrast(edge, surface)
+                    assertTrue(ratio >= 3.0, "dark=$dark: a field's border is ${"%.2f".format(ratio)}:1 on the dialog")
                 }
             }
         }
@@ -52,11 +51,11 @@ class FormControlsTest {
     @Test
     fun theUnlitStarsShowAt3To1InBothThemes() {
         for (dark in listOf(false, true)) {
-            forms(dark) { image, scheme, nodes ->
+            forms(dark) { image, surface, nodes ->
                 val stars = (1..5).map { star -> nodes.single { it.label == FeedbackCopy.ratingLabel(star) } }
                 stars.forEach { star ->
-                    val ratio = contrast(strongest(image, scheme.background, star.boundsInRoot), scheme.background)
-                    assertTrue(ratio >= 3.0, "dark=$dark: ${star.label} is ${"%.2f".format(ratio)}:1 on the page")
+                    val ratio = contrast(strongest(image, surface, star.boundsInRoot), surface)
+                    assertTrue(ratio >= 3.0, "dark=$dark: ${star.label} is ${"%.2f".format(ratio)}:1 on the dialog")
                 }
             }
         }
@@ -72,13 +71,16 @@ class FormControlsTest {
         }
     }
 
-    /** Both forms, empty, on the page's background, 412 dp wide; [check] gets the frame, the scheme and every node. */
-    private fun forms(dark: Boolean, check: (Bitmap, ColorScheme, List<SemanticsNode>) -> Unit) {
-        lateinit var scheme: ColorScheme
+    /**
+     * Both forms, empty, on their dialog's surface, 412 dp wide; [check] gets the frame, the surface's colour and every
+     * node.
+     */
+    private fun forms(dark: Boolean, check: (Bitmap, Color, List<SemanticsNode>) -> Unit) {
+        var surface = Color.Unspecified
         ImageComposeScene((412 * DENSITY).roundToInt(), (1700 * DENSITY).roundToInt(), Density(DENSITY)) {
             PortfolioTheme(darkTheme = dark) {
-                scheme = MaterialTheme.colorScheme
-                Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+                surface = formDialogColor()
+                Column(Modifier.fillMaxSize().background(surface)) {
                     MessageForm(MessageUiState.Idle, onSend = {}, onReset = {}, wide = false)
                     FeedbackForm(FeedbackUiState.Idle, onSend = {}, onReset = {}, wide = false)
                 }
@@ -86,7 +88,7 @@ class FormControlsTest {
         }.use { scene ->
             val image = scene.render()
             val nodes = scene.semanticsOwners.flatMap { it.unmergedRootSemanticsNode.withDescendants() }
-            check(Bitmap.makeFromImage(image), scheme, nodes)
+            check(Bitmap.makeFromImage(image), surface, nodes)
         }
     }
 
