@@ -165,6 +165,13 @@ function localDay(env, now) {
 
 // ---- Visits ----
 
+/**
+ * The rows of any day but today (?1) in `visitors` and `clickers`, whose keys start with the day. Written as two
+ * ranges so SQLite seeks them in the key: `day <> ?1` read every one of today's rows, on every new visitor, and D1
+ * bills and limits the rows a query reads (5 million a day on the free plan), so a busy day's reads grew as its square.
+ */
+const NOT_TODAY = "day < ?1 OR day > ?1";
+
 async function visitCounts(db, today) {
   const row = await db
     .prepare(
@@ -192,7 +199,7 @@ async function recordVisit(request, env, now) {
       .bind(today, countryOf(request))
       .run();
     // An id carries its day, so an earlier day's rows can never match again: nothing about a visitor outlives the day.
-    await env.DB.prepare("DELETE FROM visitors WHERE day <> ?1").bind(today).run();
+    await env.DB.prepare(`DELETE FROM visitors WHERE ${NOT_TODAY}`).bind(today).run();
   }
   return visitCounts(env.DB, today);
 }
@@ -253,7 +260,7 @@ async function recordClick(request, env, now, cors) {
       .prepare("INSERT INTO clicks (day, link, count) VALUES (?1, ?2, 1) ON CONFLICT (day, link) DO UPDATE SET count = count + 1")
       .bind(today, link)
       .run();
-    await env.DB.prepare("DELETE FROM clickers WHERE day <> ?1").bind(today).run();
+    await env.DB.prepare(`DELETE FROM clickers WHERE ${NOT_TODAY}`).bind(today).run();
   }
   return json({ ok: true, counted }, 200, cors);
 }

@@ -125,6 +125,23 @@ test("yesterday's visitor ids are dropped when a new day is counted, and the add
   ]);
 });
 
+test("a new visitor or click seeks the day's ids in the key, never reading all of today's", async () => {
+  const statements = [];
+  const prepare = env.DB.prepare;
+  env.DB.prepare = (sql) => (statements.push(sql), prepare(sql));
+  await call("/visits", { method: "POST" });
+  await click("linkedin");
+  const plan = (sql) => {
+    const params = Math.max(...Array.from(sql.matchAll(/\?(\d+)/g), (match) => Number(match[1])));
+    return env.DB.raw.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...Array(params).fill("2026-10-24"));
+  };
+  const plans = statements.filter((sql) => /\b(visitors|clickers)\b/.test(sql)).map((sql) => [sql, plan(sql)]);
+  assert.ok(plans.some(([sql]) => sql.startsWith("DELETE FROM visitors")) && plans.some(([sql]) => sql.startsWith("DELETE FROM clickers")));
+  for (const [sql, plan] of plans) {
+    for (const { detail } of plan) assert.doesNotMatch(detail, /^SCAN/, `${sql}: ${detail}`);
+  }
+});
+
 // ---- Browsers and origins ----
 
 test("the site's pages get CORS headers, a preflight a 204, and another page is turned away", async () => {
