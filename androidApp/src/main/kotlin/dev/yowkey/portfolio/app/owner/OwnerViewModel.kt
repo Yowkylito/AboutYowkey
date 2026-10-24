@@ -20,7 +20,10 @@ import dev.yowkey.portfolio.admin.NoteAction
 import dev.yowkey.portfolio.admin.after
 import dev.yowkey.portfolio.app.OwnerLink
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -124,6 +127,15 @@ class OwnerViewModel(
     /** Ids being acted on, so their buttons wait. */
     private val _working = MutableStateFlow(emptySet<Long>())
     val working: StateFlow<Set<Long>> = _working.asStateFlow()
+
+    /**
+     * The loads and actions underway. Signing out cancels them, so nothing read with the old token lands on a screen
+     * after [clear] has emptied it.
+     */
+    private val work = SupervisorJob(viewModelScope.coroutineContext[Job])
+
+    /** Per list, a load asked for while one was underway, to run when that one ends (see [load]). Main thread only. */
+    private val again = HashMap<MutableStateFlow<*>, () -> Unit>()
 
     private val _notices = Channel<String>(Channel.BUFFERED)
 
@@ -309,10 +321,19 @@ class OwnerViewModel(
         if (!message.isRead && id !in _working.value) act(message, MessageAction.Read)
     }
 
+    /**
+     * Loads [target] with [fetch], keeping what it shows while it does. Asked again while a load of it is underway
+     * (an action's reload of the dashboard, say), it runs once more when that one ends, however often it was asked:
+     * the load underway may have read the worker before the change that asked for it, so dropping the request left
+     * the screen stale.
+     */
     private fun <T> load(target: MutableStateFlow<Loadable<T>>, fetch: suspend (AdminApi) -> T, then: () -> Unit = {}) {
-        if (target.value.loading) return
+        if (target.value.loading) {
+            again[target] = { load(target, fetch, then) }
+            return
+        }
         target.update { it.copy(loading = true) }
-        viewModelScope.launch {
+        viewModelScope.launch(work) {
             target.value = try {
                 Loadable(fetch(session.api()))
             } catch (e: CancellationException) {
@@ -323,13 +344,14 @@ class OwnerViewModel(
                 target.value.copy(loading = false, error = sentence)
             }
             then()
+            again.remove(target)?.invoke()
         }
     }
 
     private fun perform(id: Long, call: suspend (AdminApi) -> Unit, done: () -> String?) {
         if (id in _working.value) return
         _working.update { it + id }
-        viewModelScope.launch {
+        viewModelScope.launch(work) {
             try {
                 call(session.api())
                 done()?.let(::notice)
@@ -355,6 +377,8 @@ class OwnerViewModel(
     }
 
     private fun clear() {
+        work.cancelChildren()
+        again.clear()
         _dashboard.value = Loadable()
         _messages.value = Loadable()
         _notes.value = Loadable()

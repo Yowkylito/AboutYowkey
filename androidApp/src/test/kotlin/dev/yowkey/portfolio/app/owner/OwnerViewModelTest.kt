@@ -3,6 +3,7 @@ package dev.yowkey.portfolio.app.owner
 import androidx.lifecycle.SavedStateHandle
 import dev.yowkey.portfolio.admin.MessageFilter
 import dev.yowkey.portfolio.app.OwnerLink
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -53,6 +54,31 @@ class OwnerViewModelTest {
         assertEquals(MessageFilter.Hiring, after.filter.value)
         assertEquals(listOf("GET /admin/messages?limit=100"), worker.requests.filter { it.startsWith("GET") }, "and the tab's data loads again")
         assertNotNull(after.messages.value.value)
+    }
+
+    @Test
+    fun aReloadAskedForWhileOneIsUnderwayRunsAfterIt() = runTest(main) {
+        val owner = owner()
+        val gate = CompletableDeferred<Unit>().also { worker.summaryGate = it }
+        owner.start(link = null) // the dashboard's summary is read (1 unread) and held back
+        owner.select(Tab.Messages)
+        owner.openMessage(1) // marks it read, then asks for the dashboard again while the first load is underway
+        assertEquals(0, worker.unread)
+        gate.complete(Unit)
+        assertEquals(2, worker.requests.count { it == "GET /admin/summary" }, "read again after the change")
+        assertEquals(0, owner.dashboard.value.value?.summary?.messages?.unread, "the badge shows the message as read")
+        assertFalse(owner.dashboard.value.loading)
+    }
+
+    @Test
+    fun aLoadUnderwayWhenTheOwnerSignsOutLeavesNothingBehind() = runTest(main) {
+        val access = FakeAccess(worker)
+        val owner = OwnerViewModel(access, FakeDevice())
+        val gate = CompletableDeferred<Unit>().also { worker.summaryGate = it }
+        owner.start(link = null)
+        owner.signOut()
+        gate.complete(Unit)
+        assertEquals(Loadable(), owner.dashboard.value, "the signed-out owner's figures are not put back")
     }
 
     @Test
