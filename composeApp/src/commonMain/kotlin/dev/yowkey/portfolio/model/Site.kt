@@ -293,7 +293,6 @@ object FeedbackCopy {
     /** At the top of the form's dialog: what happens to a note, before anyone writes one. */
     const val FORM_INTRO = "A bug on this site, or a thought on my work: your note appears here as soon as you send " +
         "it, with your name if you give one. Leave the name empty to stay anonymous. Your email never shows."
-    const val CLOSE = "Close"
     const val NAME = "Name"
     const val CONTACT = "Email"
     const val RATING = "Overall impression"
