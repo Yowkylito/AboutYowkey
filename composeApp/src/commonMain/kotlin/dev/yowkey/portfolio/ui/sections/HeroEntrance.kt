@@ -6,7 +6,10 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
@@ -44,6 +47,14 @@ class HeroEntrance internal constructor(startMillis: Float, private var joinsSta
         private set
     private var portraitEntered = false
     private val portraitReady = CompletableDeferred<Unit>()
+
+    /**
+     * Where the hero's name ends, in px down from the hero's top, 0 until the hero has laid it out: the bar takes the
+     * name up once that has scrolled under it. Kept here, above the list, with the rest of the hero's state; it
+     * changes only with the layout, never while the entrance plays.
+     */
+    var nameEnd by mutableIntStateOf(0)
+        internal set
 
     /** True while the clock moves the portrait: it ignores gestures and returns to view, and goes where it is put. */
     internal val movesPortrait: Boolean get() = portraitOnClock && clock.value < HeroMotion.END_MS

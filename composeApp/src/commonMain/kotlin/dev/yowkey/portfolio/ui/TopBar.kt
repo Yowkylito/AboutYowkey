@@ -325,17 +325,19 @@ private fun CompactMenu(sections: List<Section>, active: Section, onNavigate: (S
 
 /**
  * Whether the hero's name has gone under the bar, for [TopBar]'s `heroPassed`: a derived state over [listState], so
- * its readers hear of it only when it flips, never on each scroll frame.
+ * its readers hear of it only when it flips, never on each scroll frame. [nameEnd] is where the hero's name ends, in
+ * px from the top of its row (0 until the hero has laid it out); it changes only with the layout.
  */
 @Composable
-fun rememberHeroPassed(listState: LazyListState): () -> Boolean {
-    val passed = remember(listState) {
+fun rememberHeroPassed(listState: LazyListState, nameEnd: () -> Int = { 0 }): () -> Boolean {
+    val passed = remember(listState, nameEnd) {
         derivedStateOf {
             val first = listState.layoutInfo.visibleItemsInfo.firstOrNull()
             BarScroll.heroPassed(
                 firstIndex = listState.firstVisibleItemIndex,
                 firstOffset = listState.firstVisibleItemScrollOffset,
                 heroSize = if (first?.index == 0) first.size else 0,
+                nameEnd = nameEnd(),
             )
         }
     }
@@ -359,10 +361,10 @@ fun LazyListLayoutInfo.readingProgress(): Float {
 object BarScroll {
 
     /**
-     * How much of the hero row must have gone past the top before the name moves into the bar. The row carries the
-     * hero's top spacing, portrait, name, headline, proof, buttons and summary; the name ends a fifth of the way down
-     * it on a phone and two fifths down on a wide window (measured on this content). Half is past both, so the bar
-     * never shows the name while any of the hero's is still in view, yet takes it up soon after.
+     * How much of the hero row must have gone past the top before the name moves into the bar, when where the name
+     * ends is not known (yet). The row carries the hero's top spacing, portrait, name, headline, proof, buttons and
+     * summary; the name ends at most two fifths of the way down it (on the stage on a phone, far sooner). Half is
+     * past that, so the bar never shows the name while any of the hero's is still in view.
      */
     const val HERO_PASSED_FRACTION = 0.5f
 
@@ -370,11 +372,22 @@ object BarScroll {
     data class Item(val index: Int, val offset: Int, val size: Int)
 
     /**
-     * True once the hero (the first row, [heroSize] px tall, 0 when it is not laid out) has scrolled [fraction] of
-     * its height past the top, or is gone altogether.
+     * True once the hero's name, which ends [nameEnd] px down the hero (the first row), has gone up under the bar, as
+     * the static page's bar does: then the bar takes the name up. Before the hero has laid its name out ([nameEnd]
+     * 0), once [fraction] of the hero's height ([heroSize] px, 0 when it is not laid out) has gone. Either way true
+     * once the hero is gone altogether.
      */
-    fun heroPassed(firstIndex: Int, firstOffset: Int, heroSize: Int, fraction: Float = HERO_PASSED_FRACTION): Boolean =
-        firstIndex > 0 || (heroSize > 0 && firstOffset >= heroSize * fraction)
+    fun heroPassed(
+        firstIndex: Int,
+        firstOffset: Int,
+        heroSize: Int,
+        nameEnd: Int = 0,
+        fraction: Float = HERO_PASSED_FRACTION,
+    ): Boolean = when {
+        firstIndex > 0 -> true
+        nameEnd > 0 -> firstOffset >= nameEnd
+        else -> heroSize > 0 && firstOffset >= heroSize * fraction
+    }
 
     /**
      * How far down the page the reader is, 0 at the top and 1 at the bottom, counted in rows: the rows above the

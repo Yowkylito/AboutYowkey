@@ -22,6 +22,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -41,6 +45,7 @@ import dev.yowkey.portfolio.model.ProofPoint
 import dev.yowkey.portfolio.ui.components.LinkButton
 import dev.yowkey.portfolio.ui.components.OutlinedCard
 import kotlin.math.max
+import kotlin.math.roundToInt
 import dev.yowkey.portfolio.ui.theme.LocalReducedMotion
 import dev.yowkey.portfolio.ui.theme.PortfolioTheme
 
@@ -78,10 +83,11 @@ fun Hero(
     val photo = profile.photoPath
     val reducedMotion = LocalReducedMotion.current
     LaunchedEffect(entrance, reducedMotion) { entrance.play(reducedMotion, hasPhoto = photo != null) }
+    val ruler = remember(entrance) { NameRuler(entrance) }
     if (wide && profile.proof.isNotEmpty()) {
-        Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Row(modifier.fillMaxWidth().onPlaced(ruler::placeHero), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1.5f), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                HeroIntro(profile, compact, entrance)
+                HeroIntro(profile, compact, entrance, ruler)
                 HeroActions(profile.email, onSeeProjects, onContact, Modifier.introStep(entrance, IntroStep.ACTIONS))
                 HeroSummary(profile.summary, Modifier.introStep(entrance, IntroStep.SUMMARY))
             }
@@ -94,7 +100,7 @@ fun Hero(
             }
         }
     } else {
-        BoxWithConstraints(modifier) {
+        BoxWithConstraints(modifier.onPlaced(ruler::placeHero)) {
             val stageHeight = if (compact) 168.dp else 208.dp
             val stageWidth = min(maxWidth, StageMaxWidth)
             val plan = photo?.let { rememberStagePlan(profile.name, HeroStage.roleOf(profile.headline), stageWidth, stageHeight) }
@@ -103,10 +109,10 @@ fun Hero(
                 photo?.let {
                     Box(Modifier.widthIn(max = StageMaxWidth).fillMaxWidth().height(stageHeight)) {
                         HeroPortrait(it, profile.name, entrance, Modifier.matchParentSize(), staged = staged)
-                        plan?.let { StagedTitle(profile.name, it, entrance, stageWidth, stageHeight) }
+                        plan?.let { StagedTitle(profile.name, it, entrance, ruler, stageWidth, stageHeight) }
                     }
                 }
-                if (plan == null) HeroIntro(profile, compact, entrance) else HeadlineBelow(profile.headline, plan, entrance)
+                if (plan == null) HeroIntro(profile, compact, entrance, ruler) else HeadlineBelow(profile.headline, plan, entrance)
                 if (profile.proof.isNotEmpty()) {
                     ProofPoints(profile.proof, Modifier.padding(vertical = 4.dp).introStep(entrance, IntroStep.PROOF, staged))
                 }
@@ -144,7 +150,14 @@ private fun rememberStagePlan(name: String, role: String, stageWidth: Dp, stageH
  * reaches.
  */
 @Composable
-private fun StagedTitle(name: String, plan: HeroStage.Plan, entrance: HeroEntrance, stageWidth: Dp, stageHeight: Dp) {
+private fun StagedTitle(
+    name: String,
+    plan: HeroStage.Plan,
+    entrance: HeroEntrance,
+    ruler: NameRuler,
+    stageWidth: Dp,
+    stageHeight: Dp,
+) {
     val color = MaterialTheme.colorScheme.onPrimaryContainer
     Column(
         Modifier
@@ -157,7 +170,8 @@ private fun StagedTitle(name: String, plan: HeroStage.Plan, entrance: HeroEntran
             text = name,
             style = stageNameStyle(plan.nameSp),
             color = color,
-            modifier = Modifier.semantics { heading() }.introStep(entrance, IntroStep.NAME, staged = true),
+            modifier = Modifier.semantics { heading() }.onGloballyPositioned(ruler::placeName)
+                .introStep(entrance, IntroStep.NAME, staged = true),
         )
         Text(
             text = plan.role,
@@ -184,15 +198,14 @@ private fun HeadlineBelow(headline: String, plan: HeroStage.Plan, entrance: Hero
     )
 }
 
-
 @Composable
-private fun HeroIntro(profile: Profile, compact: Boolean, entrance: HeroEntrance) {
+private fun HeroIntro(profile: Profile, compact: Boolean, entrance: HeroEntrance, ruler: NameRuler) {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(
             text = profile.name,
             style = if (compact) MaterialTheme.typography.displayMedium else MaterialTheme.typography.displayLarge,
             color = MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.semantics { heading() }.introStep(entrance, IntroStep.NAME),
+            modifier = Modifier.semantics { heading() }.onGloballyPositioned(ruler::placeName).introStep(entrance, IntroStep.NAME),
         )
         Text(
             text = profile.headline,
@@ -297,3 +310,21 @@ private fun stageRoleStyle(sizeSp: Float) = TextStyle(
 
 /** The single column's stage is never wider than this. */
 private val StageMaxWidth = 480.dp
+
+/**
+ * Notes where the hero's name ends, down from the hero's top, into [HeroEntrance.nameEnd] for the bar. Measured from
+ * the laid-out name, so it holds in every layout (on the stage, under it, beside the portrait); only its height
+ * counts, which the entrance's slide never moves.
+ */
+private class NameRuler(private val entrance: HeroEntrance) {
+    private var hero: LayoutCoordinates? = null
+
+    fun placeHero(coordinates: LayoutCoordinates) {
+        hero = coordinates
+    }
+
+    fun placeName(name: LayoutCoordinates) {
+        val top = hero?.takeIf { it.isAttached && name.isAttached } ?: return
+        entrance.nameEnd = top.localPositionOf(name, Offset(0f, name.size.height.toFloat())).y.roundToInt()
+    }
+}
