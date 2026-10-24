@@ -42,44 +42,45 @@
       "role": "Android developer",
       "period": "Sep 2024 – Present",
       "title": "ArenaPlus",
-      "tagline": "Co-built the V2 Android app from day one, then led its move from WebView to native",
-      "summary": "ArenaPlus is DigiPlus's sports entertainment app. I co-built its V2 Android app from the first commit, wrote more than half of its code, built its deposit, withdrawal and bank-linking flows, and led the migration that took the app from a hybrid WebView shell to a native-only runtime.",
+      "tagline": "Wrote 53% of ArenaPlus V2's code, then led the app's migration from WebView to native",
+      "summary": "ArenaPlus is DigiPlus's sports entertainment app, and its Android app was a hybrid WebView shell. I co-built the native V2 app from its first commit and wrote 53% of its code, including the deposit, withdrawal and bank-linking flows, then led the migration that brought V2 into the shipping app. The result is a native-only Android app, delivered without pausing releases.",
       "figures": [
-        { "value": "53%", "label": "of V2's code, written by me" },
-        { "value": "270K+", "label": "lines across 413 commits" }
+        { "value": "53%", "label": "of ArenaPlus V2's code, written by me" },
+        { "value": "270K+", "label": "lines of code I wrote for V2" },
+        { "value": "413", "label": "commits in 12 months, from V2's first day" }
       ],
       "impact": [
-        "Took ArenaPlus from a hybrid WebView app to a native-only app, without stopping releases",
-        "Players deposit, withdraw and link bank accounts through flows I built end to end",
-        "Recognised for it: Rank #2 of the Top 9 awardees chosen by executive leadership, #1 story-point owner of about 40 engineers, and the ArenaPlus team's Rockstar of the Month"
+        "Moved ArenaPlus from a hybrid WebView app to a native-only Android app, without pausing releases",
+        "Gave the native app its money flows: deposits, withdrawals and automated bank-linking, designed and built by me end to end",
+        "Recognised along the way: Rank #2 of the Top 9 awardees picked by executive leadership, #1 story-point owner of about 40 engineers (2.4x the team average), and the ArenaPlus team's Rockstar of the Month"
       ],
       "highlights": [
-        "Set up V2's architecture, UI foundations and navigation from day one, then wrote 53% of its code: 270K+ lines across 413 commits",
-        "Led the WebView-to-native migration, moving the app over flow by flow, each with a way back to its web version",
-        "Built deposits, withdrawals and bank-linking end to end, with identity-verification checks where the rules require them",
-        "Integrated third-party SDKs for analytics and attribution",
-        "Built a shake-to-open API debugger for testing, and skeleton loading states"
+        "Set up V2's Gradle architecture, UI foundations and navigation on day one, then wrote 53% of its code: 270K+ lines across 413 commits",
+        "Led the WebView-to-native migration: brought V2 into the shipping app and moved it over phase by phase, checking each flow against its web version on a device",
+        "Designed and built deposits, withdrawals and automated bank-linking end to end, including a custom withdrawal flow and identity checks where the rules require them",
+        "Built the growth features on third-party analytics and attribution SDKs: automated channel attribution, campaign triggers and first-deposit bonus delivery",
+        "Built a shake-to-open API debugger for inspecting network calls on a device, and skeleton loading states"
       ],
       "optimizations": [
-        "Cut cold-start work: SDK set-up moved off the main thread, unused SDKs removed and the network stack pre-warmed behind the splash; added startup benchmarks and Baseline Profiles",
-        "Removed wasted recomposition with a Compose stability configuration and stable allocations in the navigation host",
-        "Reduced memory use under heavy real-time traffic, and made the app ready for 16 KB memory pages",
-        "Security review of the app's network, WebView and logging layers; shipped the fixes with tests",
-        "Audited the minified release build so every serialized model survives R8, then smoke-tested it on a device",
-        "Checked each native flow against its web version, screen by screen, before switching it on"
+        "Cut cold-start work: moved SDK set-up off the main thread, removed unused SDKs and pre-warmed the network stack behind the splash, then added startup benchmarks and Baseline Profiles",
+        "Removed wasted recomposition by marking network models stable for the Compose compiler and remembering unstable allocations in navigation",
+        "Reduced memory use under heavy real-time traffic, and made the app ready for 16 KB memory pages to stay Google Play compliant",
+        "Optimized the integrations that feed the app its sports data",
+        "Reviewed the app's network, WebView and logging layers for security, and shipped the fixes with tests",
+        "Audited the minified release build so every serialized model survives R8, then smoke-tested it on a device"
       ],
       "engineering": {
         "builtWith": ["Jetpack Compose", "Koin", "Retrofit + OkHttp", "WebSockets"],
         "platforms": ["Android"],
-        "architecture": "A multi-module Compose app: feature modules over shared core modules for UI and data, wired with Koin. During the migration the new app ran inside the original one, and each flow could open natively or in its web version.",
+        "architecture": "A multi-module Kotlin and Jetpack Compose app wired with Koin, with Retrofit and OkHttp for APIs and WebSockets for real-time data. The migration brought it inside the original app, so releases kept shipping while flows moved to native one at a time.",
         "decisions": [
           {
             "title": "Migrate inside the shipping app",
             "detail": "The new app went into the original one instead of replacing it, so releases continued and each flow could move to native on its own schedule."
           },
           {
-            "title": "Every flow can fall back",
-            "detail": "Each native flow keeps a way back to its web version, so a problem in one flow does not leave players stuck."
+            "title": "Web parity before each move",
+            "detail": "Each flow was checked against its web version, screen by screen on a device, before it moved to native, so players kept the behaviour they knew."
           },
           {
             "title": "Stable types for Compose",
@@ -100,31 +101,31 @@
       "role": "Android developer, solo",
       "period": "Jun – Jul 2026",
       "title": "Arena Social",
-      "tagline": "Built alone and shipped in 30 days: a web product turned into a native Android app",
-      "summary": "Arena Social is a fan community app in the ArenaPlus family, where fans make picks and predictions and watch video. I built its Android app on my own, from the first commit to launch in 30 days, wrapping the web experience in native navigation, loading and video.",
+      "tagline": "Built alone and launched in 30 days: a web-only product turned into a native Android app",
+      "summary": "Arena Social is a fan community app in the ArenaPlus family, where fans make picks and predictions and watch video, and it lived only on the web. I built its Android app alone, from the first commit to launch in 30 days, and wrote ~100% of the code. Fans now get native navigation, loading and a pinned video player around the web content.",
       "figures": [
-        { "value": "30 days", "label": "from first commit to launch" },
+        { "value": "30 days", "label": "from first commit to launch, built alone" },
         { "value": "~100%", "label": "of the code, written by me" },
-        { "value": "95%", "label": "of the commits" }
+        { "value": "95%", "label": "of the commits: 22 of 23" }
       ],
       "impact": [
-        "DigiPlus got a native Android app for a web-only product in one month, built by one developer",
+        "DigiPlus got a native Android app for a web-only product in one month, from one developer",
         "Fans get native navigation, loading and a pinned video player around the web content"
       ],
       "highlights": [
-        "Architected the app on Clean Architecture with MVI: Compose screens, use cases and repositories, wired with Koin",
-        "Native navigation around the web content: custom navigators, a header, a bottom bar and a profile sheet that follow the signed-in state",
-        "A video player that stays pinned to the top of the Watch screen while the page scrolls under it",
-        "Native splash, loading and error screens for every web page"
+        "Architected the app on Clean Architecture with MVI from the first commit: Compose screens, use cases and repositories, wired with Koin",
+        "Built custom native navigators around the web content: a header, a bottom bar and a profile sheet that follow the signed-in state",
+        "Built a video player that stays pinned to the top of the Watch screen while the page scrolls under it",
+        "Gave every web page a native splash, loading and error state instead of a blank WebView"
       ],
       "optimizations": [
         "Removed the WebView's white flash between pages and its cookie prompt, so pages open like native screens",
-        "Audited every loading path and gave each a native loading or error state"
+        "Audited every loading path and gave each one a native loading or error state"
       ],
       "engineering": {
         "builtWith": ["Jetpack Compose", "Koin", "Android WebView"],
         "platforms": ["Android"],
-        "architecture": "One app module layered as Clean Architecture: Compose screens over MVI ViewModels, use cases and repositories, wired with Koin. A WebView host with nested scrolling renders the web sections inside native chrome: header, bottom bar, profile sheet, splash, loading and error views.",
+        "architecture": "An app layered as Clean Architecture: Compose screens over MVI ViewModels, use cases and repositories, wired with Koin. A WebView host with nested scrolling renders the web sections inside native chrome: header, bottom bar, profile sheet, splash, loading and error views.",
         "decisions": [
           {
             "title": "Native chrome, web content",
@@ -143,9 +144,12 @@
       "company": "DigiPlus",
       "role": "Android developer",
       "title": "GameZone",
-      "tagline": "DigiPlus's Filipino card games app: optimizations and bug fixes on its Android app",
-      "summary": "GameZone is DigiPlus's online home for Filipino card games such as Tongits and Pusoy. I worked on its Android app, mainly on optimizations and on fixing bugs alongside the team.",
-      "highlights": ["Helped find and fix bugs in the Android app, working alongside the team"],
+      "tagline": "Optimization work and bug fixes on DigiPlus's Filipino card games app for Android",
+      "summary": "GameZone is DigiPlus's online home for Filipino card games such as Tongits and Pusoy. I contributed to its Android app alongside the GameZone team: optimization work, and finding and fixing bugs.",
+      "highlights": [
+        "Worked on the Android app of a second DigiPlus product, alongside the GameZone team",
+        "Helped find and fix bugs in the app"
+      ],
       "optimizations": ["Optimization work on the Android app"],
       "engineering": { "platforms": ["Android"] }
     },
@@ -154,28 +158,29 @@
       "company": "DigiPlus",
       "period": "Jul 2026",
       "title": "Workflow automation",
-      "tagline": "Chat-driven ticket and build automation that runs dev jobs on a local machine",
-      "summary": "Internal tooling I built for my day-to-day work: ticket management, task planning and analysis, scheduling and reporting, driven from the team chat and the issue tracker, with an Android app to follow and control the jobs.",
+      "tagline": "Automated my ticket, planning and reporting routine with an AI agent and an Android app",
+      "summary": "Ticket handling, daily planning and status updates were repetitive manual work. I built internal tooling that turns tickets from the team chat and the issue tracker into jobs an AI coding agent works, and an Android app to follow, cancel and retry them live. Planning and reporting now come from one place, and no Git change goes out without my approval.",
       "impact": [
         "Less repetitive manual work: ticket handling, daily planning and status updates are faster and simpler",
-        "Clearer priorities and faster reporting, from one place"
+        "Clearer priorities and faster reporting, from one place",
+        "AI help without losing control: every Git operation waits for my explicit yes"
       ],
       "highlights": [
-        "A control plane and an execution plane: runner agents take jobs from queues on a local PC, stream logs back live and keep an audit trail",
-        "Tickets come in from the team chat and the issue tracker through a chat bot and a tracker poller, and an AI coding agent works them",
-        "Confirm-first Git: nothing is pushed without a human yes",
-        "An Android client whose Gradle rules enforce Clean Architecture at compile time, with live build streaming over SSE, remote cancel and AI-assisted retries"
+        "Built the tooling end to end on my own: a Node.js service and a Kotlin Android app",
+        "Turned tickets from the team chat and the issue tracker into jobs an AI coding agent works, with a record of every run",
+        "Kept a human in the loop: Git operations wait for my explicit confirmation before they run",
+        "Streamed build logs live to the Android app over Server-Sent Events, with remote cancel, AI-assisted retries and prompt refinement with Gemini",
+        "Enforced Clean Architecture in the Android app at compile time: Gradle dependency rules turn a layer violation into a build error"
       ],
       "engineering": {
         "builtWith": ["Node.js + Express", "SQLite", "Server-Sent Events", "Jetpack Compose"],
         "platforms": ["Self-hosted server", "Android"],
-        "architecture": "A control plane and an execution plane. Runner agents take work from job queues and run it on a local PC; logs stream back over Server-Sent Events and an audit trail records what ran. Chat and tracker integrations feed in the tickets. The Android client is split into Gradle modules whose dependency rules enforce Clean Architecture, with Ktor, Koin and DataStore.",
+        "architecture": "A self-hosted service takes in tickets, has an AI coding agent work them and records each run. An Android app follows every job live over Server-Sent Events and can cancel or retry it. The app is split into Gradle modules whose dependency rules enforce Clean Architecture, built with Compose, Ktor, Koin and DataStore.",
         "decisions": [
           {
-            "title": "Control plane split from execution",
-            "detail": "Runner agents with job queues execute on the local PC while the control plane coordinates, streams logs and keeps audit trails."
+            "title": "Human approval before Git",
+            "detail": "Changes made by the AI agent never reach Git on their own: every Git operation waits for an explicit confirmation."
           },
-          { "title": "Confirm-first Git", "detail": "Git operations triggered from chat wait for an explicit confirmation before they run." },
           {
             "title": "Layer boundaries enforced by Gradle",
             "detail": "Clean Architecture boundaries are Gradle dependency rules between modules, so a layer violation fails compilation instead of relying on review."
