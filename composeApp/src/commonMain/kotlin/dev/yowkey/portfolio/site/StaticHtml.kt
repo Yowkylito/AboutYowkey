@@ -388,14 +388,69 @@ object StaticHtml {
     }
 
     /**
+     * A form's place in the Contact section, as the app's: its title with who reads what is sent (the badge), one
+     * line, and a button that opens the form in a modal `<dialog>`, which follows it. The title keeps the form's old
+     * id ([id], `message` or `feedback`), so a link to `#message` or `#feedback` still lands on it, the button just
+     * under it. The dialog is labelled by its own copy of the title and holds [dialogIntro], if any, over the form
+     * that [form] writes, unchanged, and a close button ([close]) at its top right. The [primary] form's button is
+     * filled, the other's outlined, as the app's.
+     *
+     * The page's script opens it with `showModal()`: Esc closes it, as does a click on the backdrop or the close
+     * button, and the focus goes back to the button. The buttons also name the dialog with `commandfor`, so a
+     * browser that knows invoker commands opens and closes it even if the script fails. Without any script (no `js`
+     * class on the page) nothing could open it, so the template's CSS shows the form in the section instead, under
+     * the section's title, and draws neither the button nor the dialog's head; the form posts plainly to the
+     * backend, which answers with a page.
+     */
+    private fun StringBuilder.formEntry(
+        id: String,
+        title: String,
+        audience: String,
+        intro: String,
+        open: String,
+        close: String,
+        primary: Boolean,
+        dialogIntro: String? = null,
+        form: StringBuilder.() -> Unit,
+    ) {
+        val dialog = "$id-dialog"
+        val badge = "<span class=\"badge\">${escape(audience)}</span>"
+        appendLine("<div class=\"form-entry\">")
+        appendLine("<h3 id=\"$id\">${escape(title)} $badge</h3>")
+        appendLine("<p class=\"note\">${escape(intro)}</p>")
+        appendLine(
+            "<button class=\"open-form${if (primary) "" else " outlined"}\" type=\"button\" aria-haspopup=\"dialog\" aria-controls=\"$dialog\" " +
+                "commandfor=\"$dialog\" command=\"show-modal\">${escape(open)}</button>",
+        )
+        val described = dialogIntro?.let { " aria-describedby=\"$dialog-intro\"" }.orEmpty()
+        appendLine("<dialog class=\"form-dialog\" id=\"$dialog\" aria-labelledby=\"$dialog-title\"$described>")
+        appendLine(
+            "<div class=\"dialog-head\"><h4 id=\"$dialog-title\">${escape(title)} $badge</h4>" +
+                "<button class=\"close\" type=\"button\" aria-label=\"${escape(close)}\" commandfor=\"$dialog\" command=\"close\">$CLOSE_ICON</button></div>",
+        )
+        appendLine("<div class=\"dialog-body\">")
+        dialogIntro?.let { appendLine("<p class=\"dialog-intro\" id=\"$dialog-intro\">${escape(it)}</p>") }
+        form()
+        appendLine("</div>")
+        appendLine("</dialog>")
+        appendLine("</div>")
+    }
+
+    /**
      * The private message form, as the app's: name (optional), how to reach you (required), the topic as four radio
      * buttons (none picked is filed as "Something else"), the message. It posts to the backend at [api] like the note
      * form: through the page's script, or as a plain form the backend answers with a page. The `website` trap is the
-     * note form's too.
+     * note form's too. In the section, only its title, its line and its button ([formEntry]).
      */
-    private fun StringBuilder.messageForm(api: String) {
-        appendLine("<h3 id=\"message\">${escape(MessageCopy.TITLE)} <span class=\"badge\">${escape(MessageCopy.PRIVATE)}</span></h3>")
-        appendLine("<p class=\"note\">${escape(MessageCopy.INTRO)}</p>")
+    private fun StringBuilder.messageForm(api: String) = formEntry(
+        id = "message",
+        title = MessageCopy.TITLE,
+        audience = MessageCopy.PRIVATE,
+        intro = MessageCopy.INTRO,
+        open = MessageCopy.OPEN,
+        close = MessageCopy.CLOSE,
+        primary = true,
+    ) {
         appendLine("<form class=\"message\" method=\"post\" action=\"${escape("$api/messages")}\" data-api=\"${escape(api)}\">")
         appendLine("<div class=\"fields\">")
         appendLine(
@@ -498,11 +553,19 @@ object StaticHtml {
      * hidden field, for the plain form too). It posts to the backend at [api] the way the app does, through the page's
      * script, the relation included when one is picked; without the script the browser posts the plain
      * form and the backend answers with a page. The `website` field is a trap for bots that fill every field:
-     * people never see it, and a filled one is quietly dropped.
+     * people never see it, and a filled one is quietly dropped. In the section, only its title, its line and its
+     * button ([formEntry]); what happens to a note is said at the top of its dialog, before anyone writes one.
      */
-    private fun StringBuilder.feedbackForm(api: String) {
-        appendLine("<h3 id=\"feedback\">${escape(FeedbackCopy.TITLE)} <span class=\"badge\">${escape(FeedbackCopy.PUBLIC)}</span></h3>")
-        appendLine("<p class=\"note\">${escape(FeedbackCopy.INTRO)}</p>")
+    private fun StringBuilder.feedbackForm(api: String) = formEntry(
+        id = "feedback",
+        title = FeedbackCopy.TITLE,
+        audience = FeedbackCopy.PUBLIC,
+        intro = FeedbackCopy.INTRO,
+        open = FeedbackCopy.OPEN,
+        close = FeedbackCopy.CLOSE,
+        primary = false,
+        dialogIntro = FeedbackCopy.FORM_INTRO,
+    ) {
         appendLine("<form class=\"feedback\" method=\"post\" action=\"${escape("$api/feedback")}\" data-api=\"${escape(api)}\">")
         appendLine("<div class=\"fields\">")
         appendLine(
