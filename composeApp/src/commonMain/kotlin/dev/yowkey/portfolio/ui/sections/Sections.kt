@@ -275,11 +275,15 @@ fun ContactBlock(email: String?, links: List<Link>, modifier: Modifier = Modifie
     }
 }
 
+/**
+ * The page's last row. Back to top floats over the page's bottom end and nothing scrolls out from under it there, so
+ * the words keep out of its corner: on a phone they wrap short of it instead of running under it.
+ */
 @Composable
 fun Footer(platformLabel: String, modifier: Modifier = Modifier) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(20.dp)) {
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-        Box(Modifier.padding(bottom = 8.dp)) {
+        Box(Modifier.padding(end = BackToTopRoom, bottom = 8.dp)) {
             Text(
                 "Built with Compose Multiplatform · running on $platformLabel",
                 style = MaterialTheme.typography.bodyMedium,
@@ -288,3 +292,6 @@ fun Footer(platformLabel: String, modifier: Modifier = Modifier) {
         }
     }
 }
+
+/** Back to top's 48 dp and a gap: the corner the footer's words keep out of. */
+private val BackToTopRoom = 56.dp
