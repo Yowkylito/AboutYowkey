@@ -284,10 +284,16 @@ data class FeedbackDraft(
  * Hiring goes to the private [MessageCopy] form; a note is the public one, and says so.
  */
 object FeedbackCopy {
-    const val TITLE = "Leave a note"
+    const val TITLE = "Feedback"
     const val PUBLIC = "Public"
-    const val INTRO = "A bug on this site, or a thought on my work: your note appears here as soon as you send it, " +
-        "with your name if you give one. Your email never does."
+    /** Under the title in the Contact section, over the button that opens the form. */
+    const val INTRO = "Feedback as a friend, a colleague, someone I know, or anonymously."
+    /** The button in the Contact section that opens the form in a dialog. */
+    const val OPEN = "Give feedback"
+    /** At the top of the form's dialog: what happens to a note, before anyone writes one. */
+    const val FORM_INTRO = "A bug on this site, or a thought on my work: your note appears here as soon as you send " +
+        "it, with your name if you give one. Leave the name empty to stay anonymous. Your email never shows."
+    const val CLOSE = "Close"
     const val NAME = "Name"
     const val CONTACT = "Email"
     const val RATING = "Overall impression"
@@ -435,6 +441,9 @@ object MessageCopy {
     const val PRIVATE = "Private"
     const val INTRO = "A job, a freelance project, or anything you would rather not post: only I read this, nothing " +
         "from it is ever shown on the site, and I reply to the contact you leave."
+    /** The button in the Contact section that opens the form in a dialog. */
+    const val OPEN = "Write a message"
+    const val CLOSE = "Close"
     const val NAME = "Name"
     const val CONTACT = "How to reach you"
     /** After "Required: " in the app and "(required: …)" on the static page. */
