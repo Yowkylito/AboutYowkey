@@ -18,6 +18,7 @@ import dev.yowkey.portfolio.model.Screenshot
 import dev.yowkey.portfolio.model.Service
 import dev.yowkey.portfolio.model.SkillGroup
 import dev.yowkey.portfolio.ui.Section
+import dev.yowkey.portfolio.ui.sections.HeroMotion
 import dev.yowkey.portfolio.validJson
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -106,17 +107,45 @@ class StaticHtmlTest {
     }
 
     /**
-     * The availability is the hero's eyebrow, not the bar's: the bar has no pill any more, with an availability or
-     * without, and with a backend or without.
+     * The location and the availability stay in the content file but show on neither the bar nor the hero: the bar
+     * has no pill and the hero no eyebrow, with a backend or without.
      */
     @Test
-    fun theAvailabilityIsTheHerosNotTheBars() {
-        val owner = everySection.copy(profile = everySection.profile.copy(availability = "Open to relocation to any Country"))
+    fun theLocationAndTheAvailabilityShowOnNeitherTheBarNorTheHero() {
+        val owner = everySection.copy(
+            profile = everySection.profile.copy(location = "Quezon City, Philippines", availability = "Open to relocation to any Country"),
+        )
         listOf(owner, owner.copy(api = "https://api.example")).forEach {
             val bar = StaticHtml.bar(it)
             assertFalse("class=\"pill\"" in bar || "class=\"dot\"" in bar || "Open to relocation" in bar, bar)
-            assertTrue("<p class=\"eyebrow\">Open to relocation to any Country</p>" in StaticHtml.content(it))
+            val hero = StaticHtml.content(it).substringBefore("</header>")
+            assertFalse("class=\"eyebrow\"" in hero || "Open to relocation" in hero || "Quezon City" in hero, hero)
         }
+    }
+
+    /**
+     * The static hero plays the app's entrance, written from its timeline, so the app can take over mid-flight: only
+     * where motion is welcome and scripts run, the steps in reading order a stagger apart, and a clock as long as the
+     * entrance for the app to read. Every rule outside the guard is a keyframe, so without it nothing moves or hides.
+     */
+    @Test
+    fun theStaticHeroPlaysTheAppsEntranceOnlyWhereMotionIsWelcome() {
+        val css = StaticHtml.heroMotion()
+        assertTrue(css.startsWith("@media (prefers-reduced-motion: no-preference) {\n"), css.take(80))
+        val (guarded, rest) = css.split("\n}\n", limit = 2)
+        assertTrue("  .js .hero { animation: hero-intro ${HeroMotion.END_MS}ms linear both; }" in guarded, guarded)
+        assertTrue(guarded.lines().drop(1).all { it.startsWith("  .js .hero") }, "every rule needs the script and is the hero's")
+        assertTrue(rest.lines().filter { it.isNotBlank() }.all { it.startsWith("@keyframes hero-") }, rest)
+        listOf("h1", ".headline", ".proof", ".links", ".links + p").forEachIndexed { i, step ->
+            val delay = HeroMotion.TEXT_AT_MS + i * HeroMotion.TEXT_STAGGER_MS
+            assertTrue("  .js .hero > $step { animation-delay: ${delay}ms; }" in guarded, "step $i, $step, at $delay ms")
+        }
+        val dash = Regex("hero-dash ${HeroMotion.DASH_MS}ms (linear\\([^)]*\\))").find(guarded)?.groupValues?.get(1)
+        assertTrue(dash != null && dash.startsWith("linear(0 0%, ") && dash.endsWith(", 1 100%)"), "the dash's spring, from 0 to 1: $dash")
+        assertFalse(Regex("\\d[eE][-+]?\\d").containsMatchIn(css), "a number CSS cannot read")
+        val page = StaticHtml.page(portfolio, "<style>{{heroMotion}}</style>{{content}}", "b")
+        assertTrue("<style>$css</style>" in page, "the template's styles carry it")
+        assertFalse("class=\"shout\"" in page, "the portrait has no sound lines")
     }
 
     /** One link per section the page has, to its id, in its order, under the app's names for them. */

@@ -78,6 +78,7 @@ import dev.yowkey.portfolio.ui.sections.FeedbackForm
 import dev.yowkey.portfolio.ui.sections.Footer
 import dev.yowkey.portfolio.ui.sections.GroupHeader
 import dev.yowkey.portfolio.ui.sections.Hero
+import dev.yowkey.portfolio.ui.sections.HeroEntrance
 import dev.yowkey.portfolio.ui.sections.JobEntry
 import dev.yowkey.portfolio.ui.sections.MessageForm
 import dev.yowkey.portfolio.ui.sections.MoreNotesButton
@@ -88,6 +89,7 @@ import dev.yowkey.portfolio.ui.sections.ServiceCard
 import dev.yowkey.portfolio.ui.sections.SkillGroups
 import dev.yowkey.portfolio.ui.sections.StarNotesSheet
 import dev.yowkey.portfolio.ui.sections.WorkCard
+import dev.yowkey.portfolio.ui.sections.rememberHeroEntrance
 import dev.yowkey.portfolio.ui.detail.ProjectDetailScreen
 import dev.yowkey.portfolio.ui.navigation.Navigator
 import dev.yowkey.portfolio.ui.navigation.PageReading
@@ -293,6 +295,7 @@ private fun PortfolioContent(
     }
     val seen = remember { mutableSetOf<Any>() }
     val proofReveal = rememberProofReveal()
+    val heroEntrance = rememberHeroEntrance()
     val reducedMotion = LocalReducedMotion.current
     val project = remember(portfolio, route) {
         (route as? Route.Project)?.let { r -> portfolio.projects.firstOrNull { it.id == r.id } }
@@ -338,6 +341,7 @@ private fun PortfolioContent(
                     notesControls = notesControls,
                     coverKeepClear = { if (backToTop.value && uncovered) keepClearPx else 0 },
                     proofReveal = proofReveal,
+                    heroEntrance = heroEntrance,
                 )
                 BackToTop(
                     visible = { backToTop.value && uncovered },
@@ -353,7 +357,8 @@ private fun PortfolioContent(
 
 /**
  * The page's list. [reading] runs its section jumps and learns from its form rows when the focus is in a form (see
- * [ReadingFrame], which hosts this). [proofReveal] is the bar's proof's entrance, kept by the caller so it plays once.
+ * [ReadingFrame], which hosts this). [proofReveal] is the bar's proof's entrance and [heroEntrance] the hero's, kept
+ * by the caller so each plays once.
  */
 @Composable
 fun PortfolioPage(
@@ -374,6 +379,7 @@ fun PortfolioPage(
     notesControls: NotesControls = NotesControls(),
     coverKeepClear: () -> Int = { 0 },
     proofReveal: ProofReveal = rememberProofReveal(),
+    heroEntrance: HeroEntrance = rememberHeroEntrance(),
 ) {
     val items = remember(portfolio, layout, notes) {
         buildPageItems(
@@ -441,7 +447,8 @@ fun PortfolioPage(
         )
         LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
             items(items, key = { it.key }, contentType = { it::class.simpleName }) { item ->
-                val progress = rememberRevealProgress(item.key, seen, reducedMotion)
+                // The hero brings itself in (its HeroEntrance), so its row shows as it is.
+                val progress = rememberRevealProgress(item.key, seen, reducedMotion || item is PageItem.Hero)
                 // A form row scrolled away with the focus in it goes without a word: let the reading keys back in.
                 if (item.holdsForm) DisposableEffect(item.key) { onDispose { reading.formFocusChanged(item.key, focused = false) } }
                 Box(
@@ -463,7 +470,7 @@ fun PortfolioPage(
                     ) {
                         PageRow(
                             item, layout, platformLabel, numbered.indexOf(item.section) + 1, navigate, onOpenProject, isCoverPlaying,
-                            feedback, message, onOpenLink, notes, notesControls,
+                            feedback, message, onOpenLink, notes, notesControls, heroEntrance,
                         )
                     }
                 }
@@ -510,6 +517,7 @@ private fun PageRow(
     onOpenLink: (Link) -> Unit,
     notes: SiteNotes?,
     notesControls: NotesControls,
+    heroEntrance: HeroEntrance,
 ) {
     when (item) {
         is PageItem.Hero -> SelectionContainer {
@@ -519,6 +527,7 @@ private fun PageRow(
                 wide = layout.wideSections,
                 onSeeProjects = { onNavigate(Section.Projects) },
                 onContact = { onNavigate(Section.Contact) },
+                entrance = heroEntrance,
             )
         }
         is PageItem.Services -> SectionFrame(item, number, layout) {

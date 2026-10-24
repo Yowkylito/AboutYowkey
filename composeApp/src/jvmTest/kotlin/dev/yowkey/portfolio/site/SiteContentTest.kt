@@ -98,13 +98,12 @@ class SiteContentTest {
 
     /** The seven-second skim: every point is in the hero, ahead of the first section. */
     @Test
-    fun heroShowsProofAvailabilityAndContact() {
+    fun heroShowsProofAndContact() {
         val hero = page.substringAfter("<header class=\"hero\">").substringBefore("</header>")
         val proof = portfolio.profile.proof
         assertTrue(proof.size >= 2, "the hero needs at least two proof points")
         proof.forEach { assertTrue(StaticHtml.escape(it.label) in hero, "hero lacks proof ${it.value}") }
-        listOfNotNull(portfolio.profile.location, portfolio.profile.availability, portfolio.profile.email)
-            .forEach { assertTrue(StaticHtml.escape(it) in hero, "hero lacks $it") }
+        portfolio.profile.email?.let { assertTrue(StaticHtml.escape(it) in hero, "hero lacks $it") }
     }
 
     /** The page is light unless the visitor switched; a saved choice is applied before the styles, so it never flashes. */
@@ -302,6 +301,14 @@ class SiteContentTest {
         assertTrue(hero.indexOf(StaticHtml.resourceUrl(path)) in 0 until hero.indexOf("<h1>"), "the portrait does not lead the hero")
         val shipped = File(resources, Profile.PHOTO_DIR).listFiles().orEmpty().map { it.name }.toSet()
         assertEquals(setOf(portfolio.profile.photo), shipped, "shipped but unused, remove them")
+    }
+
+    /** The shipped page's styles carry the hero's entrance, and the colour its split needs in either theme. */
+    @Test
+    fun thePageCarriesTheHerosEntrance() {
+        val styles = page.substringAfter("<style>").substringBefore("</style>")
+        assertTrue(StaticHtml.heroMotion() in styles, "the entrance is not in the page's styles")
+        assertEquals(2, Regex("--fringe: #[0-9A-F]{6};").findAll(styles).count(), "the split's fringe, light and dark")
     }
 
     @Test

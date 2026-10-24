@@ -20,6 +20,9 @@ import kotlinx.serialization.json.put
 import dev.yowkey.portfolio.ui.components.initialsOf
 import dev.yowkey.portfolio.ui.components.roleOf
 import dev.yowkey.portfolio.ui.components.shorterForms
+import dev.yowkey.portfolio.ui.sections.HeroMotion
+import kotlin.math.abs
+import kotlin.math.roundToLong
 
 /**
  * The crawlable HTML twin of the Compose UI. Search engines, link previews and browsers without WasmGC read this;
@@ -45,6 +48,7 @@ object StaticHtml {
             "bar" to bar(portfolio),
             "content" to content(portfolio),
             "toTop" to backToTop(),
+            "heroMotion" to heroMotion(),
             "build" to build,
         )
         val placeholder = Regex("\\{\\{(\\w+)}}")
@@ -201,7 +205,7 @@ object StaticHtml {
         "<path d=\"M13.6 10.1A5.9 5.9 0 0 1 5.9 2.4a5.9 5.9 0 1 0 7.7 7.7z\" fill=\"currentColor\"/></svg>"
 
     /** The hero portrait's trail, as the app's: seven echoes, farthest first. */
-    private const val PORTRAIT_ECHOES = 7
+    private const val PORTRAIT_ECHOES = HeroMotion.ECHOES
 
     /**
      * Noise that varies only down the page, pushing each row of an echo sideways (its vertical push is zeroed), so the
@@ -218,13 +222,93 @@ object StaticHtml {
         } + "</svg>"
 
     /**
-     * The shout's three sound lines left of the face, as the app's, drawn for a 224px-tall portrait (the CSS scales
-     * them to the others): nearest first, radius 49, 72 and 95, sweeping 50°, 64° and 78°.
+     * The hero's entrance on the static page, filling `{{heroMotion}}` in the template's styles: [HeroMotion]'s
+     * timeline written as CSS, so the static page plays the app's own choreography and the app can take over from it
+     * mid-flight without a jump. The figure dashes in on the same spring, sampled into a `linear()` easing; each echo
+     * follows its path a lag behind the one in front, widened and thinned with its speed; the landing shakes the
+     * figure, splits its colour (two drop shadows of its silhouette) and sends a burst out along the trail; then the
+     * intro's steps read in, in reading order. `.hero` runs one more animation, `hero-intro`, for the entrance's whole
+     * length: it changes nothing and is the clock the app reads (see `staticIntroMillis`).
+     *
+     * Only where motion is welcome and the page is scripted (the head's `js` class): otherwise the static page shows
+     * the still picture and every word at once, and every animation ends there, whatever loads or fails.
      */
-    private const val SHOUT_LINES = "<svg class=\"shout\" width=\"1\" height=\"1\" aria-hidden=\"true\" focusable=\"false\">" +
-        "<path d=\"M-44.4-20.7A49 49 0 0 0-44.4 20.7\" stroke-width=\"3\" opacity=\".85\"/>" +
-        "<path d=\"M-61.1-38.2A72 72 0 0 0-61.1 38.2\" stroke-width=\"2.5\" opacity=\".6\"/>" +
-        "<path d=\"M-73.8-59.8A95 95 0 0 0-73.8 59.8\" stroke-width=\"2\" opacity=\".38\"/></svg>"
+    fun heroMotion(): String = buildString {
+        val m = HeroMotion
+        val dash = "${m.DASH_MS}ms ${linearCurve(m.DASH_MS) { m.dash(it) }}"
+        // The smear (and the thinning) eases from its most to none as the dash's speed falls: its easing is the speed, inverted.
+        val smear = "${m.DASH_MS}ms ${linearCurve(m.DASH_MS) { 1f - m.speed(it) }}"
+        // Each part's swell lasts this long; the trail's echoes hear it a ripple step apart, the last at the end.
+        val swell = m.IMPACT_MS - m.ECHOES * m.RIPPLE_STEP_MS
+        val steps = listOf("h1", ".headline", ".proof", ".links", ".links + p")
+        appendLine("@media (prefers-reduced-motion: no-preference) {")
+        appendLine("  .js .hero { animation: hero-intro ${m.END_MS}ms linear both; }")
+        appendLine("  .js .hero .portrait { container-type: inline-size; }")
+        appendLine("  .js .hero .portrait .person { animation: hero-dash $dash both; }")
+        appendLine("  .js .hero .portrait .echo { animation: hero-dash $dash both, hero-smear $smear both; animation-delay: calc(var(--k) * ${m.ECHO_LAG_MS}ms); }")
+        appendLine("  .js .hero .portrait .person img { animation: hero-shake ${swell}ms linear ${m.IMPACT_AT_MS}ms both, hero-split ${swell}ms linear ${m.IMPACT_AT_MS}ms both; }")
+        appendLine(
+            "  .js .hero .portrait .echo i { animation: hero-burst ${swell}ms linear both, hero-thin $smear both; " +
+                "animation-delay: calc(${m.IMPACT_AT_MS}ms + var(--k) * ${m.RIPPLE_STEP_MS}ms), calc(var(--k) * ${m.ECHO_LAG_MS}ms); }",
+        )
+        appendLine("  ${steps.joinToString(", ") { ".js .hero > $it" }} { animation: hero-step ${m.TEXT_MS}ms $EASE_OUT_CUBIC both; }")
+        steps.forEachIndexed { i, step ->
+            appendLine("  .js .hero > $step { animation-delay: ${m.TEXT_AT_MS + i * m.TEXT_STAGGER_MS}ms; }")
+        }
+        appendLine("}")
+        appendLine("@keyframes hero-intro { from { --hero-intro: 0; } to { --hero-intro: 1; } }")
+        // From just past the stage's start edge: the portrait's width (its container) less the figure's inset.
+        appendLine("@keyframes hero-dash { from { translate: calc(20px - 100cqw) 0; } }")
+        appendLine("@keyframes hero-smear { from { scale: ${decimal(1f + m.SMEAR, 2)} 1; } }")
+        appendLine("@keyframes hero-thin { from { opacity: ${decimal(1f - m.THIN, 2)}; } }")
+        appendLine("@keyframes hero-step { from { opacity: 0; translate: -${decimal(m.TEXT_SHIFT_DP, 1)}px 0; } }")
+        append("@keyframes hero-shake {")
+        // Sampled four times a cycle of its quicker sine, until the swell has all but died away.
+        val every = 12
+        (0..swell step every).forEach { at ->
+            val loud = m.swellAt(at.toFloat(), swell + m.ECHOES * m.RIPPLE_STEP_MS, echo = 0)
+            if (at > 0 && loud < 0.03f) return@forEach
+            val (x, y) = m.shake(at / 1000f)
+            append(" ${decimal(100f * at / swell, 2)}% { translate: ${decimal(m.SHAKE_DP * loud * x, 2)}px ${decimal(m.SHAKE_DP * loud * y, 2)}px; }")
+        }
+        appendLine(" to { translate: 0 0; } }")
+        val peak = "${decimal(100f * m.ATTACK, 1)}%"
+        val split = decimal(m.SPLIT_DP, 1)
+        appendLine(
+            "@keyframes hero-split { from, to { filter: drop-shadow(0 0 0 transparent) drop-shadow(0 0 0 transparent); } " +
+                "from, $peak { animation-timing-function: $EASE_OUT_QUAD; } " +
+                "$peak { filter: drop-shadow(-${split}px 0 0 color-mix(in srgb, var(--accent) 85%, transparent)) " +
+                "drop-shadow(${split}px 0 0 color-mix(in srgb, var(--fringe) 85%, transparent)); } }",
+        )
+        appendLine(
+            "@keyframes hero-burst { from, to { translate: 0 0; } from, $peak { animation-timing-function: $EASE_OUT_QUAD; } " +
+                "$peak { translate: calc(var(--k) * var(--step) * -${decimal(m.BURST, 2)}) 0; } }",
+        )
+    }
+
+    /** [at] over [millis] as a CSS `linear()` easing, sampled every 20 ms or so: as good as a frame can show. */
+    private fun linearCurve(millis: Int, at: (Float) -> Float): String {
+        val samples = millis / 20
+        return (0..samples).joinToString(", ", "linear(", ")") { i ->
+            val share = i.toFloat() / samples
+            "${decimal(at(share * millis), 4)} ${decimal(100f * share, 2)}%"
+        }
+    }
+
+    /** [value] with at most [places] decimals and never an exponent, as CSS wants: "0.5", "12", "-3.25". */
+    private fun decimal(value: Float, places: Int): String {
+        var scale = 1L
+        repeat(places) { scale *= 10 }
+        val scaled = (value.toDouble() * scale).roundToLong()
+        val whole = abs(scaled) / scale
+        val fraction = (abs(scaled) % scale).toString().padStart(places, '0').trimEnd('0')
+        val sign = if (scaled < 0) "-" else ""
+        return if (fraction.isEmpty()) "$sign$whole" else "$sign$whole.$fraction"
+    }
+
+    /** The app's EaseOutCubic, and the swell's rise and fall (1 - (1 - x)²). */
+    private const val EASE_OUT_CUBIC = "cubic-bezier(.33, 1, .68, 1)"
+    private const val EASE_OUT_QUAD = "cubic-bezier(.5, 1, .89, 1)"
 
     /** Three lines, as the app's MenuGlyph; its name is the button's label. */
     private const val MENU_ICON = "<svg width=\"20\" height=\"20\" viewBox=\"0 0 20 20\" aria-hidden=\"true\" focusable=\"false\">" +
@@ -239,17 +323,15 @@ object StaticHtml {
         val p = portfolio.profile
         appendLine("<header class=\"hero\">")
         // The app's still picture: the echoes are the cut-out again, as CSS masks filled with the accent, the far ones
-        // melted by the SVG filters; the sound lines sit under the figure, which covers their ends.
+        // melted by the SVG filters.
         p.photoPath?.let { photo ->
             val url = resourceUrl(photo)
             appendLine("<figure class=\"portrait\" style=\"--photo: url('$url')\">")
             appendLine(MELT_FILTERS)
             repeat(PORTRAIT_ECHOES) { appendLine("<span class=\"echo\"><i></i></span>") }
-            appendLine("<span class=\"person\">$SHOUT_LINES<img src=\"$url\" alt=\"Portrait of ${escape(p.name)}\" decoding=\"async\"></span>")
+            appendLine("<span class=\"person\"><img src=\"$url\" alt=\"Portrait of ${escape(p.name)}\" decoding=\"async\"></span>")
             appendLine("</figure>")
         }
-        val eyebrow = listOfNotNull(p.location, p.availability)
-        if (eyebrow.isNotEmpty()) appendLine("<p class=\"eyebrow\">${eyebrow.joinToString(" · ") { escape(it) }}</p>")
         appendLine("<h1>${escape(p.name)}</h1>")
         appendLine("<p class=\"headline\">${escape(p.headline)}</p>")
         // The rating and the visit count are the bar's (its proof chip), so the hero does not repeat them.
