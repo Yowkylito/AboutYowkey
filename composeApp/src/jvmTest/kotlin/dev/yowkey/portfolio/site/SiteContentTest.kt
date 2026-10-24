@@ -281,6 +281,14 @@ class SiteContentTest {
         assertEquals(setOf(portfolio.profile.photo), shipped, "shipped but unused, remove them")
     }
 
+    /** The shipped page's styles carry the hero's entrance, and the colour its split needs in either theme. */
+    @Test
+    fun thePageCarriesTheHerosEntrance() {
+        val styles = page.substringAfter("<style>").substringBefore("</style>")
+        assertTrue(StaticHtml.heroMotion() in styles, "the entrance is not in the page's styles")
+        assertEquals(2, Regex("--fringe: #[0-9A-F]{6};").findAll(styles).count(), "the split's fringe, light and dark")
+    }
+
     @Test
     fun noIconIsLeftUnlisted() {
         val listed = portfolio.projects.mapNotNull { it.icon }.toSet()

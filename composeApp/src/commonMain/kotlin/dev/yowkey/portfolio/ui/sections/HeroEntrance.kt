@@ -29,7 +29,8 @@ import kotlin.math.roundToInt
  *
  * The intro waits for the portrait (its image loaded and half of it on screen) only [PORTRAIT_WAIT_MS]: with no photo
  * it reads in at once, and with a failed or slow image it goes ahead alone, the portrait fading in on its own when it
- * comes. Under reduced motion, and in previews, it starts settled: the still picture and every word at once.
+ * comes. Under reduced motion, and in previews, it starts settled: the still picture and every word at once. On the
+ * web the static page plays the same entrance before the app arrives, and this starts where that one has got to.
  */
 @Stable
 class HeroEntrance internal constructor(startMillis: Float) {
@@ -90,13 +91,17 @@ class HeroEntrance internal constructor(startMillis: Float) {
 }
 
 /**
- * One [HeroEntrance] for this composition's life, settled from the start under reduced motion and in previews; the
- * page keeps one above its list.
+ * One [HeroEntrance] for this composition's life; the page keeps one above its list. It starts settled under reduced
+ * motion and in previews, and on the web where the static page has played the entrance already: part way through
+ * when the app arrives mid-entrance, so it carries on from the same frame ([staticIntroMillis]).
  */
 @Composable
 fun rememberHeroEntrance(): HeroEntrance {
     val settled = LocalReducedMotion.current || LocalInspectionMode.current
-    return remember { HeroEntrance(if (settled) HeroMotion.END_MS.toFloat() else 0f) }
+    return remember {
+        val end = HeroMotion.END_MS
+        HeroEntrance(if (settled) end.toFloat() else staticIntroMillis()?.coerceIn(0, end)?.toFloat() ?: 0f)
+    }
 }
 
 /** The intro's steps, in the order they read in. */

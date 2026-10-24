@@ -1,12 +1,14 @@
 <!doctype html>
 <!--
   Template for the generateStaticSite Gradle task. The double-brace placeholders are filled from portfolio.json, except
-  {{build}}, the id of the build (the git commit); do not edit the generated build/generated/site/index.html.
+  {{build}}, the id of the build (the git commit), and the hero's entrance in the styles, which is written from the
+  app's own timeline; do not edit the generated build/generated/site/index.html.
 
   Boot: the static <main> is a full, crawlable version of the page and shows first. If the browser supports
   WasmGC, composeApp.js loads the Compose app into #app (invisible), and once it has drawn real content Kotlin
   adds body.app-ready, which fades the app in over it. Without WasmGC, or if the script fails, the static page
-  simply stays.
+  simply stays. The hero's entrance plays here first; the app reads how far it has got (the .hero's hero-intro
+  animation) and carries on from that frame, usually its end, so no word the visitor can see vanishes to come in again.
 -->
 <html lang="en">
 <head>
@@ -48,15 +50,15 @@
       --accent: #2563EB; --on-accent: #FFFFFF;
       /* Added for the bar: the monogram's deeper end. */
       --accent-deep: #1D4ED8;
-      /* The hero portrait's stage: the app's primaryContainer. */
-      --stage: #DBEAFE;
+      /* The hero portrait's stage and its colour split's far fringe: the app's primaryContainer and onPrimaryContainer. */
+      --stage: #DBEAFE; --fringe: #1E3A8A;
     }
     :root[data-theme="dark"] {
       color-scheme: dark;
       --bg: #0C0E13; --surface: #15181F; --ink: #F4F4F5; --muted: #A1A1AA; --line: #27272A; --line-strong: #3F3F46;
       --accent: #60A5FA; --on-accent: #0B1D3F;
       --accent-deep: #3B82F6;
-      --stage: #1E3A8A;
+      --stage: #1E3A8A; --fringe: #BFDBFE;
     }
     * { box-sizing: border-box; }
     /*
@@ -238,9 +240,10 @@
     /*
       The hero's portrait, as the app's still picture: the cut-out stands at the end of a tinted stage, head clear of
       its top, shouting toward the start. Seven echoes of the silhouette (the image as a mask, filled with the accent)
-      trail away, each wider and fainter than the last, the far ones melted by the SVG filters. The app also makes it
-      scream; here it stays still. Clipped at the bottom corners only, so the head rises above the stage. Beside the
-      intro from 840px, as the app's wide layout. --step is 0.095 of the figure's width.
+      trail away, each wider and fainter than the last, the far ones melted by the SVG filters. Clipped at the bottom
+      corners only, so the head rises above the stage. Beside the intro from 840px, as the app's wide layout. --step
+      is 0.095 of the figure's width. The entrance (the dash, the landing and the intro reading in) follows the hero's
+      rules, written from the app's timeline; the scream on hover and on coming back into view is the app's alone.
     */
     .portrait { position: relative; height: 168px; max-width: 480px; margin: 0 0 20px; overflow: hidden; border-radius: 0 0 24px 24px; --step: 13px; }
     .portrait::before { content: ""; position: absolute; inset: 26% 0 0; border-radius: 24px; background: linear-gradient(var(--stage), color-mix(in srgb, var(--stage) 40%, var(--bg))); }
@@ -269,6 +272,12 @@
     .hero .proof { list-style: none; padding: 0; margin: 24px 0 8px; display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); max-width: 960px; }
     .hero .proof strong { display: block; color: var(--accent); font-size: 28px; line-height: 1.2; }
     .hero .proof li { color: var(--muted); font-size: 15px; line-height: 1.5; }
+    /*
+      The hero's entrance, played once as the page first shows: the figure dashes in and lands, then the intro reads
+      in. Written by StaticHtml.heroMotion from the app's own timeline (HeroMotion), so the app, fading in over this
+      page, carries on from the same frame; only with scripts and where motion is welcome, ending on the still picture.
+    */
+{{heroMotion}}
     .muted { color: var(--muted); }
     section { margin-top: 96px; }
     h2 { font-size: 28px; letter-spacing: -0.01em; margin: 0 0 24px; }
