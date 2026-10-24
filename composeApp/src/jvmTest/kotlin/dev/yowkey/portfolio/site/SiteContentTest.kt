@@ -38,6 +38,28 @@ class SiteContentTest {
     private val stills = gallery.filterNot { it.isClip }
     private val clips = gallery.filter { it.isClip }
 
+    /**
+     * The shipped page's policy, read the way a browser reads it: it comes before every script, and each inline
+     * script the page has (hashed here with the JVM's own SHA-256) is allowed by it, so none is blocked.
+     */
+    @Test
+    fun theShippedPagesPolicyAllowsEachOfItsInlineScripts() {
+        val meta = Regex("<meta http-equiv=\"Content-Security-Policy\" content=\"([^\"]+)\">").find(page)
+        assertNotNull(meta, "the page has its policy")
+        assertTrue(page.indexOf(meta.value) < page.indexOf("<script"), "the policy comes before the first script")
+        val policy = meta.groupValues[1].replace("&#39;", "'")
+        val scripts = Regex("<script>([\\s\\S]*?)</script>").findAll(page).map { it.groupValues[1] }.toList()
+        assertTrue(scripts.size >= 5, "the theme, the bar, the notes, the message form and the boot scripts")
+        val sha256 = java.security.MessageDigest.getInstance("SHA-256")
+        scripts.forEach { script ->
+            val hash = java.util.Base64.getEncoder().encodeToString(sha256.digest(script.toByteArray(Charsets.UTF_8)))
+            assertTrue("'sha256-$hash'" in policy, "a script the policy would block: ${script.trim().take(80)}")
+        }
+        assertFalse(Regex("<script(?! type=\"application/ld\\+json\")[^>]+>").containsMatchIn(page), "no other kind of inline script")
+        val api = assertNotNull(portfolio.api)
+        assertTrue("connect-src 'self' $api;" in policy && "form-action $api;" in policy, policy)
+    }
+
     @Test
     fun everyProjectAndJobIsInTheCrawlablePage() {
         portfolio.projects.forEach { assertTrue(StaticHtml.escape(it.title) in page, "missing project ${it.title}") }

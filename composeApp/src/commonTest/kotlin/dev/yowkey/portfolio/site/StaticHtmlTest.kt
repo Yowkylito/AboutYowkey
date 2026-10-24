@@ -221,6 +221,51 @@ class StaticHtmlTest {
         assertFalse("</script><b>" in page)
     }
 
+    /**
+     * `<!--<script>` would send the parser into the script's "double escaped" state, where the element's own
+     * `</script>` no longer ends it and the rest of the page is swallowed. No `<` at all reaches the JSON-LD.
+     */
+    @Test
+    fun jsonLdHasNoAngleBracketToOpenAnythingWith() {
+        val hostile = portfolio.copy(profile = portfolio.profile.copy(summary = "<!--<script> a < b"))
+        val page = StaticHtml.page(hostile, "<script>{{jsonLd}}</script><main></main>", "949ee26")
+        val script = page.substringAfter("<script>").substringBefore("</script>")
+        assertFalse('<' in script, script)
+        assertTrue("\\u003c!--\\u003cscript> a \\u003c b" in script, "still the same JSON: $script")
+        assertTrue(page.endsWith("</script><main></main>"))
+    }
+
+    /**
+     * The policy allows each inline script by its hash (the boot script's with the build id in it), never the JSON-LD
+     * data block, and lets requests and form posts reach the backend's origin and nowhere else.
+     */
+    @Test
+    fun theContentSecurityPolicyNamesThePagesOwnScriptsAndBackend() {
+        val withApi = portfolio.copy(api = "https://api.example.dev")
+        val template = "<meta http-equiv=\"Content-Security-Policy\" content=\"{{csp}}\">" +
+            "<script type=\"application/ld+json\">{{jsonLd}}</script><script>theme()</script>" +
+            "<script>load(\"composeApp.js?v={{build}}\")</script>"
+        val page = StaticHtml.page(withApi, template, "949ee26")
+        val policy = page.substringAfter("content=\"").substringBefore('"').replace("&#39;", "'")
+        assertTrue("script-src 'self' 'wasm-unsafe-eval' ${Sha256.cspSource("theme()")} " +
+            "${Sha256.cspSource("load(\"composeApp.js?v=949ee26\")")};" in policy, policy)
+        assertTrue("connect-src 'self' https://api.example.dev;" in policy, policy)
+        assertTrue("form-action https://api.example.dev;" in policy, policy)
+        assertTrue("object-src 'none'" in policy && "base-uri 'self'" in policy && "default-src 'self'" in policy, policy)
+        assertFalse("unsafe-inline' 'sha" in policy || Regex("script-src[^;]*unsafe-inline").containsMatchIn(policy), policy)
+
+        val none = StaticHtml.page(portfolio.copy(api = null), template, "949ee26")
+        assertTrue("form-action &#39;none&#39;" in none, "no backend: no form may post anywhere")
+    }
+
+    /** A value that happens to contain `{{content}}` is text, not a second place for the content to land. */
+    @Test
+    fun placeholdersAreFilledOnceAndNeverInsideAValue() {
+        val tricky = portfolio.copy(profile = portfolio.profile.copy(summary = "Ask me about {{content}} or {{build}}"))
+        val page = StaticHtml.page(tricky, "<meta content=\"{{description}}\"><main>{{content}}</main>", "949ee26")
+        assertTrue("<meta content=\"Ask me about {{content}} or {{build}}\">" in page, page.substringBefore("<main>"))
+    }
+
     private val media = Screenshot("ride.webp", "A \"ride\" <clip>", 480, 270)
 
     @Test

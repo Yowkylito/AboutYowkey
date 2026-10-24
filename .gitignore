@@ -14,3 +14,13 @@ keystore.properties
 node_modules/
 .wrangler/
 .dev.vars
+# Wrangler's other local secret files, and the Firebase service-account key that docs/DEVELOPMENT.md pipes into
+# `wrangler secret put FCM_SERVICE_ACCOUNT < key.json` before deleting it.
+.dev.vars.*
+!.dev.vars.example
+.env
+.env.*
+key.json
+*service-account*.json
+*.p12
+*.pem
