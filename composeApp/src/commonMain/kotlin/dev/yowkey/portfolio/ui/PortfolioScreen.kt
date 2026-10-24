@@ -400,25 +400,7 @@ fun PortfolioPage(
     val navigate: (Section) -> Unit = remember(starts, jumpTo) { { section -> starts[section]?.let(jumpTo) } }
     // The bar's proof leads to the notes, which it sums up: their dashboard, landing as a section's header does.
     val openNotes: () -> Unit = remember(items, jumpTo) { { notesRow(items)?.let(jumpTo) } }
-    // Recomputed on every scroll frame (a few visible rows), but readers are only told when the set of ids changes.
-    val playingCovers = remember(items, coversActive) {
-        derivedStateOf {
-            if (!coversActive) return@derivedStateOf emptySet()
-            val info = listState.layoutInfo
-            CoverPlayback.select(
-                info.visibleItemsInfo.mapNotNull { visible ->
-                    val row = items.getOrNull(visible.index) as? PageItem.Projects ?: return@mapNotNull null
-                    val clear = CoverPlayback.clearOf(visible.offset, visible.size, info.viewportEndOffset, coverKeepClear())
-                    CoverPlayback.VisibleRow(
-                        coverClipIds = row.projects.filter { it.coverClip != null }.map { it.id },
-                        visibleFraction = if (!clear) 0f else CoverPlayback.visibleFraction(
-                            visible.offset, visible.size, info.viewportStartOffset, info.viewportEndOffset,
-                        ),
-                    )
-                },
-            )
-        }
-    }
+    val playingCovers = rememberPlayingCovers(listState, items, coversActive, coverKeepClear)
     val isCoverPlaying: (String) -> Boolean = remember(playingCovers) { { id -> id in playingCovers.value } }
 
     Column(modifier.fillMaxSize()) {
