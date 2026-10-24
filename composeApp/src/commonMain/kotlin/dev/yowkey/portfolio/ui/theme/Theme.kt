@@ -58,6 +58,14 @@ private val DarkColors = darkColorScheme(
     surfaceContainerHighest = Color(0xFF272B33),
 )
 
+/**
+ * The edge of a form control that nothing else marks: an empty text field's border, an unlit star of the rating.
+ * The schemes' outline is a hairline for cards and badges, 1.4:1 on the light page and 1.9:1 on the dark one, and a
+ * control's edge needs 3:1 (WCAG 1.4.11). Zinc 500, the next step of the same scale, is 4.6:1 on the light page and
+ * 4.0:1 on the dark one (3.7:1 on a dark card), so one value serves both themes.
+ */
+val ControlOutline = Color(0xFF71717A)
+
 private val BaseTypography = Typography()
 
 /**

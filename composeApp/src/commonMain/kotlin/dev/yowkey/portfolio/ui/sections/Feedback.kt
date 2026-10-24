@@ -20,6 +20,8 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.TextFieldColors
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -45,6 +47,7 @@ import dev.yowkey.portfolio.model.Relation
 import dev.yowkey.portfolio.ui.FeedbackUiState
 import dev.yowkey.portfolio.ui.components.StarGlyph
 import dev.yowkey.portfolio.ui.components.StatusBadge
+import dev.yowkey.portfolio.ui.theme.ControlOutline
 
 /**
  * The public note form, after the notes it joins as soon as it is sent: name and email (both optional, the email
@@ -85,6 +88,10 @@ internal fun FormTitle(title: String, audience: String) {
     }
 }
 
+/** The forms' text fields: at rest each is edged in [ControlOutline], so an empty one still shows where it is. */
+@Composable
+internal fun formFieldColors(): TextFieldColors = OutlinedTextFieldDefaults.colors(unfocusedBorderColor = ControlOutline)
+
 @Composable
 private fun DraftForm(state: FeedbackUiState, onSend: (FeedbackDraft) -> Unit, wide: Boolean) {
     var name by rememberSaveable { mutableStateOf("") }
@@ -107,6 +114,7 @@ private fun DraftForm(state: FeedbackUiState, onSend: (FeedbackDraft) -> Unit, w
                 placeholder = { Text("Optional") },
                 singleLine = true,
                 enabled = !sending,
+                colors = formFieldColors(),
             )
         }
         val contactField: @Composable (Modifier) -> Unit = { fieldModifier ->
@@ -119,6 +127,7 @@ private fun DraftForm(state: FeedbackUiState, onSend: (FeedbackDraft) -> Unit, w
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                 enabled = !sending,
+                colors = formFieldColors(),
             )
         }
         if (wide) {
@@ -143,6 +152,7 @@ private fun DraftForm(state: FeedbackUiState, onSend: (FeedbackDraft) -> Unit, w
             supportingText = { Text("${message.length} / ${FeedbackDraft.MAX_MESSAGE}") },
             isError = problem != null && message.isBlank(),
             enabled = !sending,
+            colors = formFieldColors(),
         )
         val shown = problem ?: (state as? FeedbackUiState.Failed)?.message
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -197,25 +207,26 @@ private fun RelationChips(relation: String, onPick: (Relation) -> Unit, enabled:
 
 /**
  * Five stars, one tap each: a radio group, so a screen reader hears "4 · Good, selected". Tapping the chosen star
- * again clears the rating; it is optional, after all.
+ * again clears the rating; it is optional, after all. Each star is a 48 dp target, and an unlit one is drawn in
+ * [ControlOutline], since its outline is all that shows the control is there.
  */
 @Composable
 private fun RatingRow(rating: Int, onRate: (Int) -> Unit, enabled: Boolean) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(FeedbackCopy.RATING, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Row(Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(Modifier.selectableGroup()) {
             for (star in 1..5) {
                 val lit = star <= rating
                 val label = FeedbackCopy.ratingLabel(star)
                 Box(
                     Modifier
-                        .size(40.dp)
+                        .size(48.dp)
                         .clip(CircleShape)
                         .selectable(selected = star == rating, enabled = enabled, role = Role.RadioButton) { onRate(star) }
                         .semantics { contentDescription = label },
                     contentAlignment = Alignment.Center,
                 ) {
-                    StarGlyph(filled = lit, color = if (lit) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline)
+                    StarGlyph(filled = lit, color = if (lit) MaterialTheme.colorScheme.primary else ControlOutline)
                 }
             }
         }
