@@ -1,7 +1,7 @@
 package dev.yowkey.portfolio.app.owner
 
-import android.app.Application
 import androidx.compose.runtime.Immutable
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.yowkey.portfolio.R
@@ -19,11 +19,14 @@ import dev.yowkey.portfolio.admin.MessageFilter
 import dev.yowkey.portfolio.admin.NoteAction
 import dev.yowkey.portfolio.admin.after
 import dev.yowkey.portfolio.app.OwnerLink
-import dev.yowkey.portfolio.app.push.AlertNotifier
-import dev.yowkey.portfolio.app.push.PollWorker
-import dev.yowkey.portfolio.app.push.PushRegistration
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -32,13 +35,17 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.ZoneId
+import java.util.concurrent.atomic.AtomicBoolean
 
 /** The admin view's sections, in the navigation bar's order. */
 enum class Tab(val label: String, val icon: Int) {
@@ -80,17 +87,26 @@ data class PushInfo(val firebase: Boolean, val registered: Boolean, val notifica
 /**
  * The admin view's state and actions. Every call to the worker is caught: offline or failing, a screen shows what it
  * had with a sentence, never a crash; a 401 anywhere signs out to the sign-in screen with the reason.
+ *
+ * @param session the owner's session ([OwnerSession.asAccess] on the phone)
+ * @param device the phone's side of the alerts, for Settings and the first sign-in
+ * @param saved the activity's saved state, which keeps the admin view's place through the process being killed
+ * @param io where every session and worker call runs: opening the sealed token is a Keystore call, and decoding a
+ *   list of messages or notes is JSON work, neither of which belongs on the main thread with the frames
  */
 class OwnerViewModel(
-    private val app: Application,
-    private val session: OwnerSession,
-    private val store: OwnerStore,
-    private val notifier: AlertNotifier,
+    private val session: OwnerAccess,
+    private val device: OwnerDevice,
+    private val saved: SavedStateHandle = SavedStateHandle(),
+    private val io: CoroutineDispatcher = Dispatchers.IO,
 ) : ViewModel() {
 
     val signedIn: StateFlow<Boolean> = session.signedIn
 
-    private val _nav = MutableStateFlow(OwnerNav())
+    /** Set when the activity's saved state brought a place back: the process was killed while the app was away. */
+    private val restored: OwnerNav? = saved.nav()
+
+    private val _nav = MutableStateFlow(restored ?: OwnerNav())
     val nav: StateFlow<OwnerNav> = _nav.asStateFlow()
 
     private val _signIn = MutableStateFlow(SignInState())
@@ -102,7 +118,9 @@ class OwnerViewModel(
     private val _messages = MutableStateFlow(Loadable<List<AdminMessage>>())
     val messages: StateFlow<Loadable<List<AdminMessage>>> = _messages.asStateFlow()
 
-    private val _filter = MutableStateFlow(MessageFilter.All)
+    private val _filter = MutableStateFlow(
+        saved.get<String>(KEY_FILTER)?.let { name -> MessageFilter.entries.firstOrNull { it.name == name } } ?: MessageFilter.All,
+    )
     val filter: StateFlow<MessageFilter> = _filter.asStateFlow()
 
     private val _notes = MutableStateFlow(Loadable<List<AdminNote>>())
@@ -117,6 +135,18 @@ class OwnerViewModel(
     /** Ids being acted on, so their buttons wait. */
     private val _working = MutableStateFlow(emptySet<Long>())
     val working: StateFlow<Set<Long>> = _working.asStateFlow()
+
+    /**
+     * The loads and actions underway. Signing out cancels them, so nothing read with the old token lands on a screen
+     * after [clear] has emptied it.
+     */
+    private val work = viewModelScope.coroutineContext.let { CoroutineScope(it + SupervisorJob(it[Job])) }
+
+    /** Per list, a load asked for while one was underway, to run when that one ends (see [load]). Main thread only. */
+    private val again = HashMap<MutableStateFlow<*>, () -> Unit>()
+
+    /** Whether the next dashboard load is to fetch the thirty days too (see [refreshDashboard]); read on [io]. */
+    private val wholeDashboardDue = AtomicBoolean(false)
 
     private val _notices = Channel<String>(Channel.BUFFERED)
 
@@ -133,11 +163,18 @@ class OwnerViewModel(
         viewModelScope.launch {
             signedIn.drop(1).collect { now -> if (!now) clear() }
         }
+        // The place and the filter go into the activity's saved state as they change, so a process killed while the
+        // app was away comes back where the owner left it rather than on the portfolio. MainActivity does not call
+        // start() then (it has saved state), so the place's data loads here.
+        _nav.onEach(saved::putNav).launchIn(viewModelScope)
+        _filter.onEach { saved[KEY_FILTER] = it.name }.launchIn(viewModelScope)
+        if (restored != null && !restored.portfolio) refresh(restored.tab)
     }
 
     /** The first screen: [link]'s place when a shortcut or notification opened the app, else admin if signed in. */
     fun start(link: OwnerLink?) {
-        if (link != null) open(link) else _nav.value = OwnerNav(portfolio = !signedIn.value)
+        if (link != null) return open(link) // which loads the place's tab itself
+        _nav.value = OwnerNav(portfolio = !signedIn.value)
         if (!_nav.value.portfolio) refresh(_nav.value.tab)
     }
 
@@ -182,7 +219,7 @@ class OwnerViewModel(
         _signIn.value = SignInState(busy = true)
         viewModelScope.launch {
             _signIn.value = try {
-                val summary = session.signIn(password)
+                val summary = withContext(io) { session.signIn(password) } // seals the token: the Keystore, then a disk write
                 _dashboard.update { it.copy(value = it.value?.copy(summary = summary)) }
                 refresh(_nav.value.tab)
                 SignInState()
@@ -200,7 +237,7 @@ class OwnerViewModel(
 
     fun signOut() {
         viewModelScope.launch {
-            session.signOut()
+            withContext(io) { session.signOut() }
             _nav.value = OwnerNav(portfolio = true)
         }
     }
@@ -209,13 +246,7 @@ class OwnerViewModel(
     fun refresh(tab: Tab) {
         if (!signedIn.value) return
         when (tab) {
-            Tab.Dashboard, Tab.Settings -> load(_dashboard, { api ->
-                coroutineScope {
-                    val summary = async { api.summary() }
-                    val days = async { api.days(30) }
-                    Dashboard(summary.await(), days.await())
-                }
-            })
+            Tab.Dashboard, Tab.Settings -> refreshDashboard(whole = true)
             Tab.Messages -> load(_messages, { it.messages() }) { markOpenMessageRead() }
             Tab.Notes -> load(_notes, { it.notes() })
             Tab.Records -> {
@@ -240,7 +271,7 @@ class OwnerViewModel(
         perform(message.id, { it.act(message.id, action) }) {
             _messages.update { loaded -> loaded.copy(value = loaded.value?.mapNotNull { if (it.id == message.id) it.after(action, now()) else it }) }
             if (action == MessageAction.Delete) closeMessage()
-            refresh(Tab.Dashboard) // the unread badge and the hiring count
+            refreshDashboard(whole = false) // the unread badge and the hiring count
             when (action) {
                 MessageAction.Archive -> "Archived."
                 MessageAction.Unarchive -> "Back in the inbox."
@@ -254,7 +285,7 @@ class OwnerViewModel(
     fun act(note: AdminNote, action: NoteAction) {
         perform(note.id, { it.act(note.id, action) }) {
             _notes.update { loaded -> loaded.copy(value = loaded.value?.mapNotNull { if (it.id == note.id) it.after(action, now()) else it }) }
-            refresh(Tab.Dashboard)
+            refreshDashboard(whole = false) // the note counts
             when (action) {
                 NoteAction.Publish -> "Back on the site."
                 NoteAction.Unpublish -> "Taken off the site."
@@ -275,22 +306,16 @@ class OwnerViewModel(
 
     /** Runs the backup check once now (it also runs every 15 minutes on its own). */
     fun checkNow() {
-        PollWorker.runOnce(app)
+        device.checkNow()
         notice("Checking for new alerts. Anything new shows as a notification.")
     }
 
-    fun pushInfo(): PushInfo = PushInfo(
-        firebase = PushRegistration.isAvailable(app),
-        registered = store.pushToken != null,
-        notificationsAllowed = notifier.canNotify(),
-    )
+    fun pushInfo(): PushInfo = device.pushInfo()
 
     /** Asked once, on the first sign-in, for the notification permission (Android 13+). */
-    fun shouldAskForNotifications(): Boolean = !store.askedForNotifications && !notifier.canNotify()
+    fun shouldAskForNotifications(): Boolean = device.shouldAskForNotifications()
 
-    fun askedForNotifications() {
-        store.askedForNotifications = true
-    }
+    fun askedForNotifications() = device.askedForNotifications()
 
     fun notice(text: String) {
         _notices.trySend(text)
@@ -302,12 +327,45 @@ class OwnerViewModel(
         if (!message.isRead && id !in _working.value) act(message, MessageAction.Read)
     }
 
+    /**
+     * Reloads the dashboard. [whole]: the summary and the thirty days of visits, as the Dashboard and Settings tabs
+     * show them. Otherwise the summary alone (the unread badge, the hiring and note counts), which is all that a
+     * message or a note action changes, so each action, opening an unread message included, costs one request after
+     * it rather than two. A dashboard never loaded loads whole either way.
+     */
+    private fun refreshDashboard(whole: Boolean) {
+        if (whole) wholeDashboardDue.set(true)
+        load(_dashboard, { api ->
+            // Read when the load starts, so a whole reload asked for during a summary reload is not lost.
+            val wholeNow = wholeDashboardDue.getAndSet(false)
+            val days = _dashboard.value.value?.days?.takeUnless { wholeNow }
+            if (days != null) {
+                Dashboard(api.summary(), days)
+            } else {
+                coroutineScope {
+                    val summary = async { api.summary() }
+                    val thirty = async { api.days(30) }
+                    Dashboard(summary.await(), thirty.await())
+                }
+            }
+        })
+    }
+
+    /**
+     * Loads [target] with [fetch], keeping what it shows while it does. Asked again while a load of it is underway
+     * (an action's reload of the dashboard, say), it runs once more when that one ends, however often it was asked:
+     * the load underway may have read the worker before the change that asked for it, so dropping the request left
+     * the screen stale.
+     */
     private fun <T> load(target: MutableStateFlow<Loadable<T>>, fetch: suspend (AdminApi) -> T, then: () -> Unit = {}) {
-        if (target.value.loading) return
+        if (target.value.loading) {
+            again[target] = { load(target, fetch, then) }
+            return
+        }
         target.update { it.copy(loading = true) }
-        viewModelScope.launch {
+        work.launch {
             target.value = try {
-                Loadable(fetch(session.api()))
+                Loadable(withContext(io) { fetch(session.api()) })
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -316,15 +374,16 @@ class OwnerViewModel(
                 target.value.copy(loading = false, error = sentence)
             }
             then()
+            again.remove(target)?.invoke()
         }
     }
 
     private fun perform(id: Long, call: suspend (AdminApi) -> Unit, done: () -> String?) {
         if (id in _working.value) return
         _working.update { it + id }
-        viewModelScope.launch {
+        work.launch {
             try {
-                call(session.api())
+                withContext(io) { call(session.api()) }
                 done()?.let(::notice)
             } catch (e: CancellationException) {
                 throw e
@@ -348,6 +407,8 @@ class OwnerViewModel(
     }
 
     private fun clear() {
+        work.coroutineContext.cancelChildren()
+        again.clear()
         _dashboard.value = Loadable()
         _messages.value = Loadable()
         _notes.value = Loadable()
@@ -363,5 +424,33 @@ class OwnerViewModel(
 
     private companion object {
         const val DEFAULT_ZONE = "Asia/Manila"
+        const val KEY_FILTER = "owner.filter"
     }
+}
+
+private const val KEY_PORTFOLIO = "owner.portfolio"
+private const val KEY_TAB = "owner.tab"
+private const val KEY_MESSAGE = "owner.message"
+private const val KEY_NOTE = "owner.note"
+private const val KEY_DAILY = "owner.daily"
+
+/** [nav] as plain values, which is all a saved-state Bundle keeps. */
+private fun SavedStateHandle.putNav(nav: OwnerNav) {
+    this[KEY_PORTFOLIO] = nav.portfolio
+    this[KEY_TAB] = nav.tab.name
+    this[KEY_MESSAGE] = nav.messageId
+    this[KEY_NOTE] = nav.noteId
+    this[KEY_DAILY] = nav.dailyRecords
+}
+
+/** The place [putNav] kept; null when there is none (a fresh start). */
+private fun SavedStateHandle.nav(): OwnerNav? {
+    val tab = get<String>(KEY_TAB)?.let { name -> Tab.entries.firstOrNull { it.name == name } } ?: return null
+    return OwnerNav(
+        portfolio = get<Boolean>(KEY_PORTFOLIO) ?: true,
+        tab = tab,
+        messageId = get<Long>(KEY_MESSAGE),
+        noteId = get<Long>(KEY_NOTE),
+        dailyRecords = get<Boolean>(KEY_DAILY) ?: false,
+    )
 }

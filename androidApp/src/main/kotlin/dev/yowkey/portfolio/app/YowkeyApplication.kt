@@ -5,9 +5,12 @@ import android.os.Build
 import android.util.Log
 import androidx.work.Configuration
 import dev.yowkey.portfolio.BuildConfig
+import dev.yowkey.portfolio.app.owner.AndroidOwnerDevice
+import dev.yowkey.portfolio.app.owner.OwnerDevice
 import dev.yowkey.portfolio.app.owner.OwnerSession
 import dev.yowkey.portfolio.app.owner.OwnerStore
 import dev.yowkey.portfolio.app.owner.OwnerViewModel
+import dev.yowkey.portfolio.app.owner.asAccess
 import dev.yowkey.portfolio.app.push.AlertNotifier
 import dev.yowkey.portfolio.app.push.PollWorker
 import dev.yowkey.portfolio.data.UrlConnectionTransport
@@ -15,7 +18,6 @@ import dev.yowkey.portfolio.di.AndroidHost
 import dev.yowkey.portfolio.di.appModule
 import dev.yowkey.portfolio.di.platformModule
 import dev.yowkey.portfolio.ui.theme.AndroidThemeStore
-import org.koin.android.ext.koin.androidApplication
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
 import org.koin.core.module.dsl.viewModel
@@ -57,6 +59,8 @@ class YowkeyApplication : Application(), Configuration.Provider {
         }
         single { AlertNotifier(androidContext(), get()) }
         single { OwnerSession(androidContext(), get(), get<UrlConnectionTransport>(), get(), get()) }
-        viewModel { OwnerViewModel(androidApplication(), get(), get(), get()) }
+        single<OwnerDevice> { AndroidOwnerDevice(androidContext(), get(), get()) }
+        // The third get() is the activity's SavedStateHandle, which Koin makes from the view model's creation extras.
+        viewModel { OwnerViewModel(get<OwnerSession>().asAccess(), get(), get()) }
     }
 }

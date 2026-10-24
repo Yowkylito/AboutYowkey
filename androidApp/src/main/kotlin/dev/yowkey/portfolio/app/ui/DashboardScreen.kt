@@ -32,10 +32,15 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.yowkey.portfolio.admin.CountryCount
 import dev.yowkey.portfolio.admin.DayVisits
@@ -197,12 +202,21 @@ private fun CountriesCard(countries: List<CountryCount>) {
                 Text("No countries yet: they are counted from the first visit after this update.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             val most = countries.maxOfOrNull { it.count }?.coerceAtLeast(1) ?: 1
-            countries.forEach { country ->
+            val style = MaterialTheme.typography.bodyMedium
+            val labels = countries.map { "${flagOf(it.country)} ${it.country}".trim() }
+            // Each column is as wide as its widest entry, measured: fixed at 64 and 40 dp, a four-digit count broke
+            // over two lines at a 1.3 font scale and a five-digit one at the default. The bars still line up.
+            val measurer = rememberTextMeasurer()
+            val labelWidth = (widest(measurer, labels, style) + 8.dp).coerceAtLeast(64.dp)
+            val countWidth = widest(measurer, countries.map { it.count.toString() }, style).coerceAtLeast(40.dp)
+            countries.forEachIndexed { index, country ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "${flagOf(country.country)} ${country.country}".trim(),
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.width(64.dp),
+                        labels[index],
+                        style = style,
+                        maxLines = 1,
+                        softWrap = false,
+                        modifier = Modifier.width(labelWidth),
                     )
                     Box(Modifier.weight(1f).height(8.dp).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(4.dp))) {
                         Box(
@@ -212,11 +226,24 @@ private fun CountriesCard(countries: List<CountryCount>) {
                                 .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(4.dp)),
                         )
                     }
-                    Text(country.count.toString(), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(start = 12.dp).width(40.dp))
+                    Text(
+                        country.count.toString(),
+                        style = style,
+                        maxLines = 1,
+                        softWrap = false,
+                        modifier = Modifier.padding(start = 12.dp).width(countWidth),
+                    )
                 }
             }
         }
     }
+}
+
+/** The width of the widest of [texts] on one line in [style], at the current density and font scale. */
+@Composable
+private fun widest(measurer: TextMeasurer, texts: List<String>, style: TextStyle): Dp {
+    val px = texts.maxOfOrNull { measurer.measure(it, style, maxLines = 1, softWrap = false).size.width } ?: 0
+    return with(LocalDensity.current) { px.toDp() }
 }
 
 @Composable
