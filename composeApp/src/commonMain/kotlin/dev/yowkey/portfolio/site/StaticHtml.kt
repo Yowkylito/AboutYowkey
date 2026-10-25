@@ -131,8 +131,12 @@ object StaticHtml {
                 "<span aria-hidden=\"true\">${escape(initialsOf(p.name))}</span></a>",
         )
         append("<div class=\"brand\">")
-        where(p)
-        portfolio.api?.let { proofChip(it) }
+        // Where the owner is, and the chip beside it: one cell, so the two stand together and the name replaces both.
+        val front = buildString {
+            where(p)
+            portfolio.api?.let { proofChip(it) }
+        }
+        if (front.isNotEmpty()) append("<span class=\"front\">$front</span>")
         val role = roleOf(p.headline)
         append("<span class=\"who\"><strong>${escape(p.name)}</strong><span aria-label=\"${escape(role)}\">${fitted(role, ROLE_SHORT)}</span></span>")
         appendLine("</div>")

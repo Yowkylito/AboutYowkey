@@ -97,8 +97,8 @@ fun ProjectCard(
 }
 
 /**
- * A project as one row, under the full cards: its icon, title and badges, its one line, and an arrow, the whole row
- * opening its page. Nothing about it is hidden that the card would show but the cover and the chips.
+ * A project as one row, under the full cards: its icon, title and badges, its one line, what it is built with in
+ * plain words, and an arrow, the whole row opening its page. Only the cover is left for the page.
  */
 @Composable
 fun CompactProjectRow(project: Project, onOpen: () -> Unit, modifier: Modifier = Modifier) {
@@ -106,13 +106,11 @@ fun CompactProjectRow(project: Project, onOpen: () -> Unit, modifier: Modifier =
         Row(Modifier.padding(horizontal = 24.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 ProjectHeading(project, MaterialTheme.typography.titleMedium, maxTitleLines = 1, iconSize = 32.dp)
-                Text(
-                    project.cardLine,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Text(project.cardLine, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                val builtWith = (project.headlineTech + project.engineering?.platforms.orEmpty()).joinToString(" · ")
+                if (builtWith.isNotEmpty()) {
+                    Text(builtWith, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
             Spacer(Modifier.width(16.dp))
             ArrowGlyph(MaterialTheme.colorScheme.primary)

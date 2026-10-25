@@ -82,8 +82,8 @@ class StaticHtmlTest {
         assertTrue(bar.startsWith("<div id=\"top\"></div>\n<header class=\"bar\">"), bar.take(80))
         listOf(
             "<a class=\"mark\" href=\"#top\" aria-label=\"Ada &lt;King&gt;  Lovelace, back to top\"><span aria-hidden=\"true\">AL</span></a>",
-            "<div class=\"brand\"><span class=\"where\" aria-label=\"Open to &lt;work&gt;\">",
-            "</span></span><span class=\"who\"><strong>Ada &lt;King&gt;  Lovelace</strong><span aria-label=\"Engineer at &quot;Acme&quot;\">" +
+            "<div class=\"brand\"><span class=\"front\"><span class=\"where\" aria-label=\"Open to &lt;work&gt;\">",
+            "</span></span></span><span class=\"who\"><strong>Ada &lt;King&gt;  Lovelace</strong><span aria-label=\"Engineer at &quot;Acme&quot;\">" +
                 "<span class=\"full\" aria-hidden=\"true\">Engineer at &quot;Acme&quot;</span><span class=\"short\" aria-hidden=\"true\">Engineer at &quot;Acme&quot;</span></span></span></div>",
             "<nav class=\"sections\" id=\"sections\" aria-label=\"Sections\"><ul>",
             "<button class=\"theme\" type=\"button\" role=\"switch\" aria-checked=\"false\" aria-label=\"Dark theme\"><span class=\"knob\"></span><svg class=\"sun\"",
@@ -276,7 +276,7 @@ class StaticHtmlTest {
     fun withABackendTheSlotHoldsWhereThenTheProofChipForTheScriptToFill() {
         val owner = everySection.copy(api = "https://api.example/\"x")
         val slot = StaticHtml.bar(owner).substringAfter("<div class=\"brand\">").substringBefore("</div>")
-        assertTrue(slot.startsWith("<span class=\"where\""), slot)
+        assertTrue(slot.startsWith("<span class=\"front\"><span class=\"where\""), slot)
         val brand = slot.substring(slot.indexOf("<a class=\"proof\""))
         assertTrue(
             brand.startsWith(
@@ -287,7 +287,7 @@ class StaticHtmlTest {
             ),
             brand,
         )
-        assertTrue(brand.substringAfter("<span class=\"seen\">").substringAfter("</svg>").startsWith("<b class=\"visits\"></b><span class=\"words\"></span></span></a><span class=\"who\">"), brand)
+        assertTrue(brand.substringAfter("<span class=\"seen\">").substringAfter("</svg>").startsWith("<b class=\"visits\"></b><span class=\"words\"></span></span></a></span><span class=\"who\">"), brand)
         assertFalse("aria-label" in brand.substringBefore("<span class=\"who\">"), "the script names the chip once it has the numbers")
         assertFalse(Regex("\\d").containsMatchIn(brand.substringBefore("<svg")), "no number before the backend's")
         assertTrue("id=\"notes\"" in StaticHtml.content(owner), "the chip's jump lands on the notes")

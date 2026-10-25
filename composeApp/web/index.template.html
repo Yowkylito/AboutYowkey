@@ -161,12 +161,18 @@
       overflow: hidden; white-space: nowrap; color: var(--muted); font-size: 13px; font-weight: 500; line-height: 1;
       border: 1px solid var(--line); border-radius: 999px;
     }
+    /* Where the owner is stays; the chip joins it once it has numbers to show, except on a phone's bar. */
+    .bar .front { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
     .where .short { display: none; }
-    @media (max-width: 640px) {
+    @media (max-width: 374px) {
       .where .full { display: none; }
       .where .short { display: inline; }
     }
-    .brand:has(.proof.on) .where, .bar.passed .where { opacity: 0; visibility: hidden; transform: translateY(-6px); }
+    @media (max-width: 640px) {
+      .bar .front .proof { display: none; }
+      .bar .where { font-size: 12px; padding: 0 10px; }
+    }
+    .bar.passed .where { opacity: 0; visibility: hidden; transform: translateY(-6px); }
     .who strong, .who span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     /* The whole role, or on a phone its whole-word short form, as the app's bar cuts it. */
     .who .short { display: none; }

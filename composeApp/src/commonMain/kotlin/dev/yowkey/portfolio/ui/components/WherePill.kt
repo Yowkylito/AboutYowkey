@@ -29,14 +29,18 @@ import dev.yowkey.portfolio.model.Profile
  * nothing invites one, and the accent stays for what can be pressed.
  */
 @Composable
-fun WherePill(profile: Profile, modifier: Modifier = Modifier) {
+fun WherePill(profile: Profile, modifier: Modifier = Modifier, compact: Boolean = false) {
     val forms = remember(profile.location, profile.availability) { whereForms(profile) }
     if (forms.isEmpty()) return
-    val style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Medium, fontSize = 13.sp, letterSpacing = 0.sp)
+    // A phone's bar gets 12 sp and 10 dp ends, as the static page's does, so the whole line fits there in either font.
+    val padding = if (compact) 10.dp else PillPadding
+    val style = MaterialTheme.typography.labelLarge.copy(
+        fontWeight = FontWeight.Medium, fontSize = if (compact) 12.sp else 13.sp, letterSpacing = 0.sp,
+    )
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
     BoxWithConstraints(modifier, contentAlignment = Alignment.CenterStart) {
-        val room = with(density) { (maxWidth - PillPadding * 2).roundToPx() }
+        val room = with(density) { (maxWidth - padding * 2).roundToPx() }
         val text = remember(forms, room, style, density) {
             forms.firstOrNull { measurer.measure(it, style, maxLines = 1, softWrap = false).size.width <= room } ?: forms.last()
         }
@@ -44,7 +48,7 @@ fun WherePill(profile: Profile, modifier: Modifier = Modifier) {
             Modifier
                 .height(PillHeight)
                 .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape)
-                .padding(horizontal = PillPadding)
+                .padding(horizontal = padding)
                 .clearAndSetSemantics { contentDescription = forms.first() },
             contentAlignment = Alignment.Center,
         ) {
