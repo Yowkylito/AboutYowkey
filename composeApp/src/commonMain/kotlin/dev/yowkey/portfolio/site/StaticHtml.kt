@@ -4,6 +4,7 @@ import dev.yowkey.portfolio.model.Engineering
 import dev.yowkey.portfolio.model.FeedbackCopy
 import dev.yowkey.portfolio.model.FeedbackDraft
 import dev.yowkey.portfolio.model.Link
+import dev.yowkey.portfolio.model.LiveStats
 import dev.yowkey.portfolio.model.MessageCopy
 import dev.yowkey.portfolio.model.MessageDraft
 import dev.yowkey.portfolio.model.MessageTopic
@@ -20,6 +21,9 @@ import kotlinx.serialization.json.put
 import dev.yowkey.portfolio.ui.components.initialsOf
 import dev.yowkey.portfolio.ui.components.roleOf
 import dev.yowkey.portfolio.ui.components.shorterForms
+import dev.yowkey.portfolio.ui.components.whereForms
+import dev.yowkey.portfolio.ui.components.contactWhere
+import dev.yowkey.portfolio.ui.sections.CONTACT_LINE
 import dev.yowkey.portfolio.model.Profile
 import dev.yowkey.portfolio.ui.sections.HeroMotion
 import dev.yowkey.portfolio.ui.sections.HeroStage
@@ -52,8 +56,10 @@ object StaticHtml {
             "bar" to bar(portfolio),
             "content" to content(portfolio),
             "toTop" to backToTop(),
-            "heroMotion" to heroMotion(),
+            "heroMotion" to heroMotion(profile),
             "heroStage" to heroStage(profile),
+            "minRatings" to LiveStats.MIN_RATINGS.toString(),
+            "minVisits" to LiveStats.MIN_VISITS.toString(),
             "build" to build,
         )
         val placeholder = Regex("\\{\\{(\\w+)}}")
@@ -125,7 +131,12 @@ object StaticHtml {
                 "<span aria-hidden=\"true\">${escape(initialsOf(p.name))}</span></a>",
         )
         append("<div class=\"brand\">")
-        portfolio.api?.let { proofChip(it) }
+        // Where the owner is, and the chip beside it: one cell, so the two stand together and the name replaces both.
+        val front = buildString {
+            where(p)
+            portfolio.api?.let { proofChip(it) }
+        }
+        if (front.isNotEmpty()) append("<span class=\"front\">$front</span>")
         val role = roleOf(p.headline)
         append("<span class=\"who\"><strong>${escape(p.name)}</strong><span aria-label=\"${escape(role)}\">${fitted(role, ROLE_SHORT)}</span></span>")
         appendLine("</div>")
@@ -157,10 +168,10 @@ object StaticHtml {
      */
     private fun sections(portfolio: Portfolio): List<Section> = listOfNotNull(
         Section.Experience.takeIf { portfolio.experience.isNotEmpty() },
-        Section.Recognition.takeIf { portfolio.recognition.isNotEmpty() },
         Section.Projects.takeIf { portfolio.projects.isNotEmpty() },
         Section.Skills.takeIf { portfolio.skills.isNotEmpty() },
         Section.Services.takeIf { portfolio.services.isNotEmpty() },
+        Section.Recognition.takeIf { portfolio.recognition.isNotEmpty() },
         Section.Contact,
     )
 
@@ -173,6 +184,20 @@ object StaticHtml {
      * show, fades the chip in and counts its numbers up once. Without the script, or until the backend answers, the
      * slot stays empty; with nothing rated and nothing counted, too.
      */
+    /**
+     * Where the owner is and whether they would move, as the app's [WherePill]: the whole line, or on a phone's bar
+     * the next shorter of [whereForms]; it holds the slot until the chip has numbers big enough to show, and needs
+     * no script.
+     */
+    private fun StringBuilder.where(profile: Profile) {
+        val forms = whereForms(profile)
+        if (forms.isEmpty()) return
+        val short = forms.getOrElse(1) { forms[0] }
+        append("<span class=\"where\" aria-label=\"${escape(forms[0])}\">")
+        append("<span class=\"full\" aria-hidden=\"true\">${escape(forms[0])}</span>")
+        append("<span class=\"short\" aria-hidden=\"true\">${escape(short)}</span></span>")
+    }
+
     private fun StringBuilder.proofChip(api: String) {
         append("<a class=\"proof\" href=\"#notes\" data-api=\"${escape(api)}\" hidden>")
         append("<span class=\"rate\"><span class=\"meter\" aria-hidden=\"true\"></span><b class=\"avg\"></b><span class=\"words\"></span></span>")
@@ -223,13 +248,18 @@ object StaticHtml {
      *
      * Only where motion is welcome and the page is scripted (the head's `js` class): otherwise the static page shows
      * the still picture and every word at once, and every animation ends there, whatever loads or fails.
+     *
+     * Without a portrait there is nothing to wait for: the clock starts at [HeroMotion.TEXT_AT_MS], as the app's does
+     * then, so the name reads in from the first paint instead of after a blank 420 ms (a first impression forms in
+     * 50 to 500 ms, Lindgaard et al. 2006), and the app still joins the same clock.
      */
-    fun heroMotion(): String = buildString {
+    fun heroMotion(profile: Profile? = null): String = buildString {
         val m = HeroMotion
+        val skipped = if (profile != null && profile.photoPath == null) m.TEXT_AT_MS else 0
         val slide = "${m.SLIDE_MS}ms $SLIDE_EASE"
         val fade = "${m.TRAIL_FADE_MS}ms ${linearCurve(m.TRAIL_FADE_MS) { 1f - m.trail(m.TRAIL_FADE_AT_MS + it) }}"
         appendLine("@media (prefers-reduced-motion: no-preference) {")
-        appendLine("  .js .hero { animation: hero-intro ${m.END_MS}ms linear both; }")
+        appendLine("  .js .hero { animation: hero-intro ${m.END_MS}ms linear${if (skipped > 0) " -${skipped}ms" else ""} both; }")
         appendLine("  .js .hero .portrait { container-type: inline-size; }")
         appendLine("  .js .hero .portrait .person { animation: hero-dash $slide both; }")
         appendLine(
@@ -238,7 +268,7 @@ object StaticHtml {
         )
         appendLine("  ${STAGED_STEPS.joinToString(", ") { ".js .hero > $it" }} { animation: hero-step ${m.TEXT_MS}ms $EASE_OUT_CUBIC both; }")
         PLAIN_STEPS.forEachIndexed { i, step ->
-            appendLine("  .js .hero > $step { animation-delay: ${m.textAt(i)}ms; }")
+            appendLine("  .js .hero > $step { animation-delay: ${m.textAt(i) - skipped}ms; }")
         }
         appendLine("}")
         appendLine("@keyframes hero-intro { from { --hero-intro: 0; } to { --hero-intro: 1; } }")
@@ -406,12 +436,15 @@ object StaticHtml {
             p.proof.forEach { appendLine("<li><strong>${escape(it.value)}</strong> ${escape(it.label)}</li>") }
             appendLine("</ul>")
         }
-        links(listOfNotNull(p.email?.let { Link("Email me", "mailto:$it") }, Link("See projects", "#projects")))
+        links(
+            listOfNotNull(p.email?.let { Link("Email me", "mailto:$it") }, Link("See projects", "#projects")) + portfolio.links,
+            tracksClicksAt = portfolio.api,
+            quiet = { it in portfolio.links },
+        )
         appendLine("<p>${escape(p.summary)}</p>")
         appendLine("</header>")
 
         experience(portfolio)
-        recognition(portfolio)
 
         if (portfolio.projects.isNotEmpty()) {
             appendLine("<section id=\"projects\"><h2>Projects</h2>")
@@ -442,8 +475,16 @@ object StaticHtml {
             appendLine("</ul></section>")
         }
 
+        recognition(portfolio)
+
         appendLine("<section id=\"contact\"><h2>Contact</h2>")
-        links(listOfNotNull(p.email?.let { Link("Email", "mailto:$it") }) + portfolio.links, tracksClicksAt = portfolio.api)
+        appendLine("<p class=\"pitch\">${escape(CONTACT_LINE)}</p>")
+        contactWhere(p)?.let { appendLine("<p class=\"based\">${escape(it)}</p>") }
+        // The address as text, and a copy button the page's script shows where the clipboard can be written.
+        p.email?.let {
+            appendLine("<p class=\"address\"><span>${escape(it)}</span> <button class=\"copy\" type=\"button\" data-copy=\"${escape(it)}\" hidden>Copy email</button></p>")
+        }
+        links(listOfNotNull(p.email?.let { Link("Email me", "mailto:$it") }) + portfolio.links, tracksClicksAt = portfolio.api)
         // As in the app: the private form first, then everything public (the published notes, the note form).
         portfolio.api?.let {
             messageForm(it)
@@ -515,7 +556,7 @@ object StaticHtml {
         intro = MessageCopy.INTRO,
         open = MessageCopy.OPEN,
         close = MessageCopy.CLOSE,
-        primary = true,
+        primary = false,
     ) {
         appendLine("<form class=\"message\" method=\"post\" action=\"${escape("$api/messages")}\" data-api=\"${escape(api)}\">")
         appendLine("<div class=\"fields\">")
@@ -592,7 +633,7 @@ object StaticHtml {
         )
         append("<div class=\"relations\" role=\"group\" aria-label=\"${escape(SORTER_LABEL)}\">")
         append("<button type=\"button\" data-relation=\"\" aria-pressed=\"true\">${escape(FeedbackCopy.ALL_RELATIONS)}<span class=\"n\"></span></button>")
-        Relation.entries.forEach {
+        Relation.offered.forEach {
             append("<button type=\"button\" data-relation=\"${it.wire}\" aria-pressed=\"false\">${escape(it.plural)}<span class=\"n\"></span></button>")
         }
         appendLine("</div>")
@@ -644,7 +685,7 @@ object StaticHtml {
         )
         appendLine("</div>")
         append("<fieldset class=\"relations\"><legend>${escape(FeedbackCopy.RELATION)} <span class=\"muted\">(optional)</span></legend>")
-        Relation.entries.forEach {
+        Relation.offered.forEach {
             append("<label class=\"relation\"><input type=\"radio\" name=\"relation\" value=\"${it.wire}\"><span>${escape(it.label)}</span></label>")
         }
         appendLine("</fieldset>")
@@ -693,6 +734,8 @@ object StaticHtml {
         if (meta.isNotEmpty()) appendLine("<p class=\"muted\">${meta.joinToString(" ")}</p>")
         project.tagline?.let { appendLine("<p class=\"tagline\">${escape(it)}</p>") }
         appendLine("<p>${escape(project.summary)}</p>")
+        // The proof a reader can check (the code, an APK) right under what the project is, not after everything.
+        links(project.links)
         project.disclaimer?.let { appendLine("<p class=\"disclaimer\">${escape(it)}</p>") }
         if (project.figures.isNotEmpty()) {
             appendLine("<ul class=\"figures\">")
@@ -713,7 +756,6 @@ object StaticHtml {
         if (project.stack.isNotEmpty()) {
             appendLine("<p class=\"muted\">${project.stack.joinToString(" · ") { escape(it) }}</p>")
         }
-        links(project.links)
         appendLine("</article>")
     }
 
@@ -830,14 +872,23 @@ object StaticHtml {
      * With [tracksClicksAt], the backend's address, the links it counts (LinkedIn, GitHub) carry their name as
      * `data-track` and the address as `data-api`, and the page's script sends a beacon when one is opened.
      */
-    private fun StringBuilder.links(links: List<Link>, tracksClicksAt: String? = null) {
+    private fun StringBuilder.links(links: List<Link>, tracksClicksAt: String? = null, quiet: (Link) -> Boolean = { false }) {
         if (links.isEmpty()) return
         appendLine("<p class=\"links\">")
-        links.forEach { link ->
+        fun anchor(link: Link) {
             val tracked = tracksClicksAt?.let { api ->
                 link.trackingKey?.let { " data-track=\"$it\" data-api=\"${escape(api)}\"" }
             }.orEmpty()
-            appendLine("<a href=\"${escape(link.url)}\" rel=\"noopener\"$tracked>${escape(link.label)}</a>")
+            val style = if (quiet(link)) " class=\"quiet\"" else ""
+            appendLine("<a href=\"${escape(link.url)}\" rel=\"noopener\"$style$tracked>${escape(link.label)}</a>")
+        }
+        // The quiet links stay together (as the app's row), so a narrow screen wraps them as one.
+        val (loud, quieter) = links.partition { !quiet(it) }
+        loud.forEach(::anchor)
+        if (quieter.isNotEmpty()) {
+            appendLine("<span class=\"pair\">")
+            quieter.forEach(::anchor)
+            appendLine("</span>")
         }
         appendLine("</p>")
     }
@@ -889,7 +940,7 @@ object StaticHtml {
 
     private fun StringBuilder.recognition(portfolio: Portfolio) {
         if (portfolio.recognition.isNotEmpty()) {
-            appendLine("<section id=\"recognition\"><h2>Recognition</h2>")
+            appendLine("<section id=\"recognition\"><h2>${Section.Recognition.title}</h2>")
             portfolio.recognition.forEach { award ->
                 appendLine("<article><h3>${escape(award.title)}</h3>")
                 award.date?.let { appendLine("<p class=\"muted\">${escape(it)}</p>") }

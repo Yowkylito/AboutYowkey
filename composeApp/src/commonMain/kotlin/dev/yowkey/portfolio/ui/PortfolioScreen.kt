@@ -87,6 +87,7 @@ import dev.yowkey.portfolio.ui.sections.MessageSection
 import dev.yowkey.portfolio.ui.sections.rememberContactForms
 import dev.yowkey.portfolio.ui.sections.MoreNotesButton
 import dev.yowkey.portfolio.ui.sections.NoteCards
+import dev.yowkey.portfolio.ui.sections.CompactProjectRow
 import dev.yowkey.portfolio.ui.sections.ProjectCard
 import dev.yowkey.portfolio.ui.sections.RatingsDashboard
 import dev.yowkey.portfolio.ui.sections.ServiceCard
@@ -454,7 +455,7 @@ fun PortfolioPage(
                         .fillMaxWidth()
                         .graphicsLayer {
                             alpha = progress.value
-                            translationY = (1f - progress.value) * 28.dp.toPx()
+                            translationY = (1f - progress.value) * 8.dp.toPx()
                         },
                     contentAlignment = Alignment.TopCenter,
                 ) {
@@ -466,7 +467,7 @@ fun PortfolioPage(
                             .padding(top = item.topSpacing(layout)),
                     ) {
                         PageRow(
-                            item, layout, platformLabel, numbered.indexOf(item.section) + 1, navigate, onOpenProject, isCoverPlaying,
+                            item, layout, platformLabel, navigate, onOpenProject, isCoverPlaying,
                             forms, onOpenLink, notes, notesControls, heroEntrance,
                         )
                     }
@@ -497,6 +498,9 @@ fun PortfolioPage(
     }
 }
 
+/** The fewest public notes for "Pinned" to show on the pinned one. */
+private const val PINS_FROM = 3
+
 private fun PageItem.topSpacing(layout: PageLayout): Dp = when {
     this is PageItem.Hero -> if (layout.compact) 40.dp else 96.dp
     this is PageItem.Footer -> 96.dp
@@ -504,6 +508,7 @@ private fun PageItem.topSpacing(layout: PageLayout): Dp = when {
     this is PageItem.Message || this is PageItem.Ratings || this is PageItem.Feedback -> if (layout.compact) 48.dp else 64.dp
     this is PageItem.Notes && row == 0 -> 24.dp
     this is PageItem.MoreNotes -> 24.dp
+    this is PageItem.MoreProjects -> if (layout.compact) 32.dp else 40.dp
     showsHeader -> if (layout.compact) 72.dp else 120.dp
     // The second group of a section: clearly apart from the first group's last row, closer than a new section.
     this is PageItem.Projects && showsGroupHeader -> if (layout.compact) 56.dp else 72.dp
@@ -516,7 +521,6 @@ private fun PageRow(
     item: PageItem,
     layout: PageLayout,
     platformLabel: String,
-    number: Int,
     onNavigate: (Section) -> Unit,
     onOpenProject: (String) -> Unit,
     isCoverPlaying: (String) -> Boolean,
@@ -534,13 +538,15 @@ private fun PageRow(
                 wide = layout.wideSections,
                 onSeeProjects = { onNavigate(Section.Projects) },
                 onContact = { onNavigate(Section.Contact) },
+                links = item.links,
+                onOpenLink = onOpenLink,
                 entrance = heroEntrance,
             )
         }
-        is PageItem.Services -> SectionFrame(item, number, layout) {
+        is PageItem.Services -> SectionFrame(item, layout) {
             CardRow(item.columns, item.services.size) { i, m -> ServiceCard(item.services[i], m) }
         }
-        is PageItem.Projects -> SectionFrame(item, number, layout) {
+        is PageItem.Projects -> SectionFrame(item, layout) {
             Column {
                 if (item.showsGroupHeader) GroupHeader(item.group.title, item.note, Modifier.padding(bottom = 24.dp))
                 CardRow(item.columns, item.projects.size) { i, m ->
@@ -558,31 +564,39 @@ private fun PageRow(
                 }
             }
         }
-        is PageItem.Recognition -> SectionFrame(item, number, layout) {
-            AwardList(item.awards, wide = !layout.compact)
+        is PageItem.MoreProjects -> SectionFrame(item, layout) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("More projects", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
+                item.projects.forEach { project -> CompactProjectRow(project, onOpen = { onOpenProject(project.id) }) }
+            }
         }
-        is PageItem.Job -> SectionFrame(item, number, layout) {
-            JobEntry(item.experience, item.isLast, wide = !layout.compact)
+        // Text a recruiter may copy (a job, an award, a skill) selects as on any web page; cards and forms stay taps.
+        is PageItem.Recognition -> SectionFrame(item, layout) {
+            SelectionContainer { AwardList(item.awards, wide = !layout.compact) }
         }
-        is PageItem.Skills -> SectionFrame(item, number, layout) {
-            SkillGroups(item.groups, layout.skillColumns)
+        is PageItem.Job -> SectionFrame(item, layout) {
+            SelectionContainer { JobEntry(item.experience, item.isLast, wide = !layout.compact) }
         }
-        is PageItem.Contact -> SectionFrame(item, number, layout) {
-            ContactBlock(item.email, item.links, onOpenLink = onOpenLink)
+        is PageItem.Skills -> SectionFrame(item, layout) {
+            SelectionContainer { SkillGroups(item.groups, layout.skillColumns) }
         }
-        PageItem.Message -> SectionFrame(item, number, layout) {
+        is PageItem.Contact -> SectionFrame(item, layout) {
+            ContactBlock(item.email, item.links, where = item.where, onOpenLink = onOpenLink)
+        }
+        PageItem.Message -> SectionFrame(item, layout) {
             MessageSection(onOpen = { forms.open(ContactForm.Message) }, opener = forms.opener(ContactForm.Message))
         }
-        PageItem.Ratings -> SectionFrame(item, number, layout) {
+        PageItem.Ratings -> SectionFrame(item, layout) {
             if (notes != null) RatingsDashboard(notes, notesControls.loading, notesControls.onOpenSheet, wide = !layout.compact)
         }
-        is PageItem.Notes -> SectionFrame(item, number, layout) {
-            NoteCards(item.notes, item.columns)
+        is PageItem.Notes -> SectionFrame(item, layout) {
+            // Pinned means something only beside other notes: with one or two it is a label on a lone card.
+            NoteCards(item.notes, item.columns, showsPins = (notes?.total ?: 0) >= PINS_FROM)
         }
-        PageItem.MoreNotes -> SectionFrame(item, number, layout) {
+        PageItem.MoreNotes -> SectionFrame(item, layout) {
             MoreNotesButton(notesControls.loading, notesControls.onMore)
         }
-        PageItem.Feedback -> SectionFrame(item, number, layout) {
+        PageItem.Feedback -> SectionFrame(item, layout) {
             FeedbackSection(onOpen = { forms.open(ContactForm.Feedback) }, opener = forms.opener(ContactForm.Feedback))
         }
         PageItem.Footer -> Footer(platformLabel)
@@ -593,21 +607,20 @@ private fun PageRow(
 @Composable
 private fun SectionFrame(
     item: PageItem,
-    number: Int,
     layout: PageLayout,
     content: @Composable () -> Unit,
 ) {
     if (layout.wideSections) {
         Row(Modifier.fillMaxWidth()) {
             Column(Modifier.width(240.dp).padding(end = 24.dp)) {
-                if (item.showsHeader) SectionHeader(number, item.section.title)
+                if (item.showsHeader) SectionHeader(item.section.title)
             }
             Box(Modifier.weight(1f)) { content() }
         }
     } else {
         Column(Modifier.fillMaxWidth()) {
             if (item.showsHeader) {
-                SectionHeader(number, item.section.title)
+                SectionHeader(item.section.title)
                 Spacer(Modifier.height(28.dp))
             }
             content()

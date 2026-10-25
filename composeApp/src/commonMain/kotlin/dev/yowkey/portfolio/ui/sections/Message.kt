@@ -42,13 +42,13 @@ import dev.yowkey.portfolio.ui.MessageUiState
 /**
  * The message section, first under the Contact block: its title with the "Private" badge, a line saying that only the
  * owner reads a message, against the Feedback section's "Public" further down, and the button that opens the form
- * over the page ([MessageDialog]). Filled, as the page's main way to reach the owner after email.
+ * over the page ([MessageDialog]). Outlined: the one filled button a screen shows is Email me.
  */
 @Composable
 fun MessageSection(onOpen: () -> Unit, modifier: Modifier = Modifier, opener: FocusRequester? = null) {
     FormSection(
         MessageCopy.TITLE, MessageCopy.PRIVATE, MessageCopy.INTRO, MessageCopy.OPEN,
-        primary = true, onOpen = onOpen, opener = opener, modifier = modifier,
+        primary = false, onOpen = onOpen, opener = opener, modifier = modifier,
     )
 }
 

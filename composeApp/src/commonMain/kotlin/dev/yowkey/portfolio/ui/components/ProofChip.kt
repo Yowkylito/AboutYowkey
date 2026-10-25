@@ -1,7 +1,6 @@
 package dev.yowkey.portfolio.ui.components
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -51,10 +50,7 @@ import androidx.compose.ui.unit.sp
 import dev.yowkey.portfolio.model.LiveStats
 import dev.yowkey.portfolio.model.ProofCopy
 import dev.yowkey.portfolio.ui.theme.LocalReducedMotion
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
 
 /**
  * The bar's proof, while the hero's name is on screen: the notes' rating (five small stars lit to the fraction, the
@@ -63,7 +59,7 @@ import kotlin.math.roundToInt
  * to a screen reader, named in full by [ProofCopy.label].
  *
  * A narrow bar drops the muted words first, then four of the stars ([ProofFit]). Nothing is drawn until there is
- * something to say. Then the chip fades in and its numbers count up from 0, once ([reveal]); with only one of the two
+ * something to say. Then the chip fades in, once, its numbers final from the start ([reveal]); with only one of the two
  * answers in, it waits a moment for the other, so the chip does not arrive in two pieces. Hover and focus are only
  * drawn, and the counting only redraws the numbers and the stars, so none of it recomposes.
  */
@@ -136,27 +132,17 @@ class ProofReveal {
         private set
 
     /**
-     * Fades in over [FADE_MS] while the count eases up over [COUNT_MS]; both at once under reduced motion. Cut short
-     * (the chip left mid-count), it carries on from where it stopped the next time the chip shows.
+     * Fades in over [FADE_MS] with its numbers already final; at once under reduced motion. A count from 0 would first
+     * show a low rating that reads as the real one, just when motion draws the eye to it (Abrams & Christ 2003).
      */
     internal suspend fun play(reducedMotion: Boolean) {
         started = true
-        if (reducedMotion) {
-            shown.snapTo(1f)
-            count.snapTo(1f)
-            return
-        }
-        coroutineScope {
-            launch { if (shown.value < 1f) shown.animateTo(1f, tween(FADE_MS)) }
-            if (count.value < 1f) {
-                count.animateTo(1f, tween(((1f - count.value) * COUNT_MS).roundToInt(), easing = EaseOutCubic))
-            }
-        }
+        count.snapTo(1f)
+        if (reducedMotion) shown.snapTo(1f) else if (shown.value < 1f) shown.animateTo(1f, tween(FADE_MS))
     }
 
     companion object {
-        const val FADE_MS = 260
-        const val COUNT_MS = 900
+        const val FADE_MS = 150
 
         /** With one answer in, how long the chip waits for the other before it shows what it has. */
         const val SETTLE_WAIT_MS = 600L
@@ -324,8 +310,6 @@ private fun CountedText(
         softWrap = false,
     )
 }
-
-private val EaseOutCubic = CubicBezierEasing(0.33f, 1f, 0.68f, 1f)
 
 private val ChipHeight = 32.dp
 private val StarSize = 13.dp

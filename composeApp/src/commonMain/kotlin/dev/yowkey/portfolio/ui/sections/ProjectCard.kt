@@ -17,7 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -97,6 +97,28 @@ fun ProjectCard(
 }
 
 /**
+ * A project as one row, under the full cards: its icon, title and badges, its one line, what it is built with in
+ * plain words, and an arrow, the whole row opening its page. Only the cover is left for the page.
+ */
+@Composable
+fun CompactProjectRow(project: Project, onOpen: () -> Unit, modifier: Modifier = Modifier) {
+    OutlinedCard(modifier.fillMaxWidth(), onClick = onOpen, onClickLabel = "View ${project.title}") {
+        Row(Modifier.padding(horizontal = 24.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                ProjectHeading(project, MaterialTheme.typography.titleMedium, maxTitleLines = 1, iconSize = 32.dp)
+                Text(project.cardLine, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                val builtWith = (project.headlineTech + project.engineering?.platforms.orEmpty()).joinToString(" · ")
+                if (builtWith.isNotEmpty()) {
+                    Text(builtWith, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            Spacer(Modifier.width(16.dp))
+            ArrowGlyph(MaterialTheme.colorScheme.primary)
+        }
+    }
+}
+
+/**
  * The app's icon and title, then company · role · period, the repository badge and, for an unofficial concept,
  * its badge. Shared by the cards and the detail screen.
  *
@@ -130,7 +152,7 @@ fun ProjectHeading(
         if (meta.isNotEmpty() || project.visibility != null || project.disclaimer != null) {
             WrapRow(horizontalSpacing = 10.dp, verticalSpacing = 6.dp) {
                 if (meta.isNotEmpty()) {
-                    Text(meta.uppercase(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                    Text(meta.uppercase(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 project.visibility?.let { StatusBadge(it.badge) }
                 if (project.disclaimer != null) StatusBadge(Project.UNOFFICIAL_BADGE)
@@ -168,12 +190,16 @@ private fun AppIcon(path: String, modifier: Modifier = Modifier) {
     }
 }
 
+/**
+ * A text button: the whole card already opens the project, and a filled button on every card made nine calls to
+ * action compete with the hero's one (Android's guidance gives text buttons to "View details" actions).
+ */
 @Composable
 fun ViewProjectButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Button(onClick = onClick, modifier = modifier) {
+    TextButton(onClick = onClick, modifier = modifier) {
         Text("View project")
         Spacer(Modifier.width(8.dp))
-        ArrowGlyph(MaterialTheme.colorScheme.onPrimary)
+        ArrowGlyph(MaterialTheme.colorScheme.primary)
     }
 }
 

@@ -3,6 +3,7 @@ package dev.yowkey.portfolio.site
 import dev.yowkey.portfolio.data.PortfolioParser
 import dev.yowkey.portfolio.model.FeedbackCopy
 import dev.yowkey.portfolio.model.GalleryItem
+import dev.yowkey.portfolio.model.LiveStats
 import dev.yowkey.portfolio.model.MessageCopy
 import dev.yowkey.portfolio.model.Portfolio
 import dev.yowkey.portfolio.model.Profile
@@ -313,7 +314,7 @@ class SiteContentTest {
     @Test
     fun thePageCarriesTheHerosEntrance() {
         val styles = page.substringAfter("<style>").substringBefore("</style>")
-        assertTrue(StaticHtml.heroMotion() in styles, "the entrance is not in the page's styles")
+        assertTrue(StaticHtml.heroMotion(portfolio.profile) in styles, "the entrance is not in the page's styles")
         assertTrue(StaticHtml.heroStage(portfolio.profile) in styles, "the stage's rules are not in the page's styles")
         assertEquals(2, Regex("--on-stage: #[0-9A-F]{6};").findAll(styles).count(), "the stage's ink, light and dark")
     }
@@ -363,8 +364,9 @@ class SiteContentTest {
     /**
      * The chip's script speaks the contract's words, the app's chip's: the average to one decimal and "· 1 rating"
      * (or "· 14 ratings"), the visits grouped ("1,234") and "visits", and the label that puts them together. The
-     * words are read out of the script itself and spelled as it spells them. The numbers count up once, over 900ms,
-     * easing out, and not at all with reduced motion, where nothing in the chip moves.
+     * words are read out of the script itself and spelled as it spells them. The numbers are final from the first
+     * frame (no count from 0), the chip only fades in, and not at all with reduced motion, where nothing in it moves.
+     * Like the app's, it shows only numbers big enough to count as proof (LiveStats' thresholds, filled in).
      */
     @Test
     fun theChipsScriptSpeaksTheContractsWords() {
@@ -381,14 +383,15 @@ class SiteContentTest {
             rated[1] + average + rated[2] + ratings + " " + (if (ratings == 1) rated[3] else rated[4]),
             visits + (if (one) seen[1] else seen[2]),
         ).joinToString(label[1]) + label[2]
-        assertEquals("Rated 5.0 out of 5 from 1 rating, 35 visits. Read the reviews.", labelOf("5.0", 1, "35", one = false))
         assertEquals("Rated 4.6 out of 5 from 14 ratings, 1,234 visits. Read the reviews.", labelOf("4.6", 14, "1,234", one = false))
         assertEquals(listOf("· ", "rating", "ratings"), shownRated.drop(1))
         assertEquals(listOf("visit", "visits"), shownSeen.drop(1))
         assertEquals(listOf(" visit", " visits"), seen.drop(1))
         listOf("average.toFixed(1)", "Math.round(chip.visits * k).toLocaleString(\"en\")")
-            .forEach { assertTrue(it in script, "the count-up's numbers are the label's: $it") }
-        assertTrue("(now - start) / 900" in script && "drawChip(1 - Math.pow(1 - t, 3))" in script, "900ms, easing out")
+            .forEach { assertTrue(it in script, "the chip's numbers are the label's: $it") }
+        assertFalse("requestAnimationFrame(frame)" in script || "countUp" in script, "no count from 0")
+        assertTrue("Number(ratings.count) >= MIN_RATINGS" in script && "Number(visits.total) >= MIN_VISITS" in script, "only big enough numbers")
+        assertTrue("var MIN_RATINGS = ${LiveStats.MIN_RATINGS}, MIN_VISITS = ${LiveStats.MIN_VISITS};" in page, "the app's thresholds")
         assertTrue("window.matchMedia(\"(prefers-reduced-motion: reduce)\").matches" in script)
         assertTrue("if (chip.started || stillness()) { chip.started = true; proof.classList.add(\"on\"); return; }" in script, "once, and never with reduced motion")
         val css = page.substringAfter("<style>").substringBefore("</style>")
@@ -500,8 +503,8 @@ class SiteContentTest {
      */
     @Test
     fun everyCoverClipLeadsItsProjectAndPlays() {
+        // Covers are in-app stills today (a looping splash said nothing and never stopped), so this may check none.
         val withClip = portfolio.projects.filter { it.coverClip != null }
-        assertTrue(withClip.isNotEmpty(), "no project has an animated cover")
         val reparsed = PortfolioParser.parse(Json.encodeToString(Portfolio.serializer(), portfolio))
         val html = StaticHtml.content(reparsed)
         withClip.forEach { project ->

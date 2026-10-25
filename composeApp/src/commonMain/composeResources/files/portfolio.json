@@ -3,37 +3,18 @@
   "api": "https://aboutyowkey-api.aboutyowkey-api.workers.dev",
   "profile": {
     "name": "Rodelito Tangonan",
-    "headline": "Android Developer at DigiPlus · Kotlin, Jetpack Compose, Kotlin Multiplatform",
-    "summary": "At DigiPlus I led ArenaPlus's move from a hybrid WebView app to native Android and built its payment flows: deposits, withdrawals and bank-linking. Outside work I build Android, Compose Multiplatform and AI apps end to end, this site included.",
+    "headline": "Android Developer at DigiPlus since 2024 · Kotlin, Jetpack Compose, Kotlin Multiplatform",
+    "summary": "At DigiPlus I led ArenaPlus's move from a hybrid web app to fully native Android and built its payment flows: deposits, withdrawals and bank-linking. On my own time I build Android and multiplatform apps end to end; three are open source on GitHub, this site included.",
     "location": "Quezon City, Philippines",
     "email": "yukstangonan@gmail.com",
-    "availability": "Open to relocation to any Country",
+    "availability": "Open to relocation",
     "proof": [
-      { "value": "53%", "label": "of ArenaPlus V2's code, the largest share on the team, co-built from its first commit" },
-      { "value": "30 days", "label": "from first commit to launch: Arena Social's Android app, built alone" },
-      { "value": "Top 9", "label": "Ranked #2 of 9 awardees hand-picked by executive leadership for engineering, Sep 2026" }
+      { "value": "53%", "label": "of ArenaPlus's native Android app's code, the most on its team, co-built from day one" },
+      { "value": "30 days", "label": "to build and launch Arena Social's Android app on my own, from first commit to release" },
+      { "value": "#2 of 9", "label": "Top 9 Awardees, hand-picked by DigiPlus executive leadership for engineering, Sep 2026" }
     ]
   },
-  "services": [
-    {
-      "title": "Native Android development",
-      "description": "Kotlin and Jetpack Compose apps from first commit to Play Store, on Clean Architecture and multi-module Gradle builds."
-    },
-    { "title": "Hybrid to native migration", "description": "Moving a WebView app to native Android module by module, without pausing releases." },
-    {
-      "title": "Payments, wallets and integrations",
-      "description": "Deposit, withdrawal and bank-linking flows, identity verification, payment gateways and attribution, built to handle money carefully."
-    },
-    {
-      "title": "Performance and Play compliance",
-      "description": "Memory and layout tuning under heavy real-time traffic, APK size, skeleton loading and 16 KB page-size readiness."
-    },
-    {
-      "title": "AI features in mobile apps",
-      "description": "LLM features with model routing, cooldowns and on-device fallback, so the app keeps working when a service fails."
-    },
-    { "title": "IoT and embedded prototyping", "description": "Microcontroller prototypes (Arduino, ESP8266) connected to the apps that drive them." }
-  ],
+  "services": [],
   "projects": [
     {
       "id": "arenaplus",
@@ -42,20 +23,20 @@
       "role": "Android Developer",
       "period": "Sep 2024 – Present",
       "title": "ArenaPlus",
-      "tagline": "Led ArenaPlus's move from a WebView app to native Android, with no pause in releases",
+      "tagline": "Sports entertainment app: led its move to native Android and built its payment flows",
       "summary": "ArenaPlus is DigiPlus's sports entertainment app. I led its Android app's move from a hybrid WebView shell to native-only, without pausing releases. I co-built the native app from its first commit as its largest contributor (53% of the code) and designed and built its deposit, withdrawal and bank-linking flows end to end.",
       "figures": [
-        { "value": "53%", "label": "of ArenaPlus V2's code, written by me" },
+        { "value": "53%", "label": "of the native app's code, written by me" },
         { "value": "0", "label": "release pauses during the WebView-to-native migration" }
       ],
       "impact": [
-        "Moved ArenaPlus from a hybrid WebView app to a native-only Android app, without pausing releases",
+        "Moved ArenaPlus from a hybrid WebView app to a native-only Android app",
         "Gave the native app its payment flows: deposits, withdrawals and automated bank-linking, designed and built end to end"
       ],
       "highlights": [
         "Led the incremental WebView-to-native migration, checking every flow against its web version on a device",
         "Designed and built deposits, withdrawals and automated bank-linking end to end",
-        "Set up V2's architecture, UI foundations and navigation on day one, then wrote 53% of its code as its largest contributor"
+        "Set up the native app's architecture, UI foundations and navigation on day one, then wrote 53% of its code as its largest contributor"
       ],
       "optimizations": [
         "Cut cold-start work: moved SDK setup off the main thread, removed unused SDKs and pre-warmed the network stack behind the splash, then added startup benchmarks and Baseline Profiles",
@@ -94,7 +75,7 @@
       "role": "Android Developer, solo",
       "period": "Jun – Jul 2026",
       "title": "Arena Social",
-      "tagline": "Built alone and launched in 30 days: a native Android app around a web-only fan product",
+      "tagline": "Fan community app, built alone: native Android from first commit to launch in 30 days",
       "summary": "Arena Social is a fan community app in the ArenaPlus family, where fans make picks and predictions and watch video, and it lived only on the web. I built its Android app alone, from the first commit to launch in 30 days. Fans now get native navigation, loading and a pinned video player around the web content.",
       "figures": [
         { "value": "30 days", "label": "from first commit to launch, built alone" },
@@ -135,10 +116,15 @@
       "id": "bubuprotect",
       "icon": "bubuprotect.webp",
       "visibility": "public",
-      "cover": { "file": "bubuprotect-cover.webp", "caption": "BubuProtect's launch screen with the Bubu mascot", "width": 740, "height": 1600 },
+      "cover": {
+        "file": "bubuprotect-vault.webp",
+        "caption": "The vault: five demo entries across logins, a payment card, a secure note and Wi-Fi",
+        "width": 739,
+        "height": 1600
+      },
       "title": "BubuProtect",
       "tagline": "On-device Android password vault: two encryption layers, keys wiped the moment it locks",
-      "summary": "A password vault is only as safe as its weakest path: a copied database file, a memory dump, a look-alike app asking for autofill. I built an Android vault for logins, cards, notes, IDs and Wi-Fi keys with a defense for each, everything kept on the device and one network call: a breach check that never sends the password.",
+      "summary": "An Android password vault for logins, cards, notes, IDs and Wi-Fi keys, with a defense for each weak path: a copied database file, a memory dump, a look-alike app asking for autofill. Everything stays on the device, with one network call: a breach check that never sends the password.",
       "period": "Jan 2026 – Aug 2026",
       "highlights": [
         "Encrypted every secret twice: SQLCipher over the database file, then AES-GCM per field, bound to its entry and column so copied or swapped ciphertext fails as tampering",
@@ -249,12 +235,6 @@
       ],
       "screenshots": [
         {
-          "file": "bubuprotect-vault.webp",
-          "caption": "The vault: five demo entries across logins, a payment card, a secure note and Wi-Fi",
-          "width": 739,
-          "height": 1600
-        },
-        {
           "file": "bubuprotect-totp.webp",
           "caption": "A demo login: live two-factor code, breach-check card and fields masked until revealed",
           "width": 739,
@@ -271,6 +251,12 @@
           "caption": "Device check: 10 on-device probes, here flagging USB debugging and no screen lock on the test emulator",
           "width": 739,
           "height": 1600
+        },
+        {
+          "file": "bubuprotect-cover.webp",
+          "caption": "BubuProtect's launch screen with the Bubu mascot",
+          "width": 740,
+          "height": 1600
         }
       ]
     },
@@ -278,11 +264,15 @@
       "id": "vistago",
       "icon": "vistago.webp",
       "visibility": "private",
-      "cover": { "file": "vistago-cover.webp", "caption": "Vistago's splash: \"Travel, beautifully planned\"", "width": 740, "height": 1600 },
-      "coverClip": { "file": "vistago-splash.webp", "caption": "Vistago's launch: the compass, wordmark and tagline animate in", "width": 332, "height": 720, "video": true },
+      "cover": {
+        "file": "vistago-memory-map.webp",
+        "caption": "The memory map: photo-hunt pins across Kansai, each with walking directions from where you are",
+        "width": 739,
+        "height": 1600
+      },
       "title": "Vistago",
       "tagline": "Android travel app with on-device sign translation and AI that reroutes when a model fails",
-      "summary": "A travel app is needed most where it works worst: abroad, offline, in front of a sign you can't read. Vistago plans trips, translates signs live through the camera and keeps trip memories, with Room as the source of truth and on-device fallbacks for planning and translation. Its AI runs on free models picked at call time, so a retired or rate-limited model reroutes instead of failing.",
+      "summary": "Vistago is an Android travel app that plans trips, translates signs live through the camera and keeps trip memories, and it works offline: Room is the source of truth, with on-device fallbacks for planning and translation. Its AI runs on free models picked at call time, so a retired or rate-limited model reroutes instead of failing.",
       "period": "Aug – Sep 2026",
       "highlights": [
         "Ran live camera translation on device with ML Kit across five script families, tracking lines frame to frame so labels hold still instead of flickering",
@@ -367,261 +357,39 @@
         ]
       },
       "stack": ["Kotlin", "Jetpack Compose", "Clean Architecture", "Room", "Koin", "WorkManager", "CameraX", "MapLibre", "OpenRouter"],
+      "clips": [
+        {
+          "file": "vistago-splash.webp",
+          "caption": "Vistago's launch: the compass, wordmark and tagline animate in",
+          "width": 332,
+          "height": 720,
+          "video": true
+        }
+      ],
       "screenshots": [
         {
-          "file": "vistago-memory-map.webp",
-          "caption": "The memory map: photo-hunt pins across Kansai, each with walking directions from where you are",
+          "file": "vistago-ask.webp",
+          "caption": "Ask Vistago: photo spots near you, sign translation and travel questions",
           "width": 739,
           "height": 1600
         },
-        { "file": "vistago-ask.webp", "caption": "Ask Vistago: photo spots near you, sign translation and travel questions", "width": 739, "height": 1600 },
-        { "file": "vistago-trip.webp", "caption": "A planned trip with its countdown, nights, travelers and budget", "width": 739, "height": 1600 },
-        { "file": "vistago-smart-budget.webp", "caption": "Smart Budget splits the total by travel style, offline", "width": 739, "height": 1600 }
-      ]
-    },
-    {
-      "id": "seventhj",
-      "icon": "seventhj.webp",
-      "visibility": "private",
-      "cover": { "file": "seventhj-cover.webp", "caption": "Seventh J's splash: the SJ mark and wordmark over a starry night sky", "width": 720, "height": 1600 },
-      "coverClip": {
-        "file": "seventhj-splash.webp",
-        "caption": "Seventh J's splash: brush strokes spiral in over a starry night sky and settle into the SJ mark",
-        "width": 252,
-        "height": 560,
-        "video": true
-      },
-      "title": "Seventh J",
-      "tagline": "Gallery app for Android, iOS and web, with a 3D sculpture renderer in shared Kotlin",
-      "summary": "An inventory and dealer-floor app for a Makati art gallery, built once in Compose Multiplatform for Android, iOS and the web. Instead of a 3D engine per platform for one turntable, I wrote a small software renderer in common Kotlin, and every screen shares one codebase with no Android imports. It runs on sample data while the data layer is built.",
-      "disclaimer": "A concept build: I used a real Makati art gallery to show what I can develop. It isn't their official app as of now, and their name and brand belong to them.",
-      "period": "Aug 2026",
-      "highlights": [
-        "Wrote a software 3D renderer in common Kotlin (rotate, project, cull, depth-sort, shade, fill) that turns about 1,000 faces per sculpture with zero allocation per frame",
-        "Painted a Starry Night splash from 960 strokes in one flow field: 420 short sky dashes and 540 long threads that spiral into the pixels of the gallery's mark",
-        "Shared every screen across Android, iOS and the web: 78 common files, zero android.* imports, platform needs behind expect/actual",
-        "Kept the back stack restorable on iOS and Wasm, where reflection is unavailable, with serializable Navigation 3 destinations and explicit polymorphic serializers",
-        "Budgeted the animation per platform: the splash plays once on Android and iOS, and is skipped on the web, on warm start and under reduced motion",
-        "Covered UI state, inventory, sales and the sculpture meshes with 35 shared tests; CI builds the release APK and compiles for Wasm on every push"
-      ],
-      "engineering": {
-        "builtWith": ["Kotlin Multiplatform", "Compose Multiplatform", "Kotlin/Wasm", "Navigation 3"],
-        "platforms": ["Android", "iOS", "Web"],
-        "architecture": "A KMP library, :shared, holds every screen in commonMain; :androidApp, :webApp (Wasm and JS) and an Xcode iosApp are thin entry points. Each screen splits into a stateless Content composable, a thin Screen wrapper and a multiplatform ViewModel exposing StateFlow of a sealed UiState. Platform differences go through expect/actual. Data is sample and in-memory for now; DI and a database are planned, not built.",
-        "decisions": [
-          {
-            "title": "One UI codebase, no Android leaks",
-            "detail": "commonMain has zero android.* imports. Platform needs such as reduced motion are expect/actual with Android, iOS, JS and Wasm implementations, so all three apps run the same UI code."
-          },
-          {
-            "title": "Reflection-free navigation",
-            "detail": "Destinations are a @Serializable sealed interface on Navigation 3 with explicit polymorphic serializers, because reflection is unavailable on iOS and Wasm and the back stack must still restore there."
-          },
-          {
-            "title": "Animation budgeted per platform",
-            "detail": "The 960-stroke Starry Night splash plays once per process on Android and iOS only. It is skipped on the web, on warm start and under reduced motion, because that many canvas strokes would stall a browser tab."
-          },
-          {
-            "title": "One software renderer, not three engines",
-            "detail": "Filament on Android, SceneKit on iOS and three.js on the web would be three engines and three sets of bugs for one turntable, so one painter's-algorithm pass over about 1,000 quads runs in common Kotlin."
-          }
-        ],
-        "modules": [
-          {
-            "name": ":shared",
-            "role": "KMP library with all Compose UI and expect/actual",
-            "dependsOn": []
-          },
-          {
-            "name": ":androidApp",
-            "role": "Android entry point, MainActivity only",
-            "dependsOn": [":shared"]
-          },
-          {
-            "name": ":webApp",
-            "role": "Browser entry for Kotlin/Wasm and Kotlin/JS",
-            "dependsOn": [":shared"]
-          },
-          {
-            "name": "iosApp",
-            "role": "Xcode project wrapping ComposeUIViewController in SwiftUI",
-            "dependsOn": [":shared"]
-          }
-        ],
-        "quality": [
-          "35 shared unit tests: UI state, inventory, sales, meshes",
-          "CI on every push: release APK and a Wasm compile",
-          "Shared UI with no Android imports in commonMain",
-          "Versions pinned in a Gradle version catalog"
-        ]
-      },
-      "stack": ["Kotlin", "Compose Multiplatform", "Kotlin/Wasm", "Navigation 3", "Coroutines", "kotlinx.serialization"],
-      "clips": [
         {
-          "file": "seventhj-splash-home.webp",
-          "caption": "First launch: strokes spiral in over a starry night sky, settle into the SJ mark, then hand off to Home",
-          "width": 324,
-          "height": 720,
-          "video": true
-        }
-      ],
-      "screenshots": [
-        {
-          "file": "seventhj-home.webp",
-          "caption": "Home: the stock's value, the requests that need you and the watchlist (sample data)",
-          "width": 720,
+          "file": "vistago-trip.webp",
+          "caption": "A planned trip with its countdown, nights, travelers and budget",
+          "width": 739,
           "height": 1600
         },
         {
-          "file": "seventhj-easel.webp",
-          "caption": "Works: a painting on the easel, laid stroke by stroke in code, with its artist, medium and price (sample data)",
-          "width": 720,
+          "file": "vistago-smart-budget.webp",
+          "caption": "Smart Budget splits the total by travel style, offline",
+          "width": 739,
           "height": 1600
         },
         {
-          "file": "seventhj-sculpture.webp",
-          "caption": "The sculpture room: a piece from the software 3D renderer that you drag to turn (sample data)",
-          "width": 720,
+          "file": "vistago-cover.webp",
+          "caption": "Vistago's splash: \"Travel, beautifully planned\"",
+          "width": 740,
           "height": 1600
-        },
-        {
-          "file": "seventhj-sale.webp",
-          "caption": "A sale in a sheet: its steps from approval to delivery, then the price, discount and commission (sample data)",
-          "width": 720,
-          "height": 1600
-        }
-      ]
-    },
-    {
-      "id": "calm-escape",
-      "icon": "calm-escape.webp",
-      "visibility": "private",
-      "cover": {
-        "file": "calm-escape-cover.webp",
-        "caption": "Calm Escape Premier's Android splash: a gold lotus seal on deep green",
-        "width": 740,
-        "height": 1600
-      },
-      "coverClip": {
-        "file": "calm-escape-launch.webp",
-        "caption": "Calm Escape's launch: the lotus seal on deep green, then the in-app reveal",
-        "width": 332,
-        "height": 720,
-        "video": true
-      },
-      "title": "Calm Escape Premier",
-      "tagline": "Multi-tenant spa booking where the database itself makes double bookings impossible",
-      "summary": "Each spa gets its own booking site and staff back office, customers book from iOS and Android apps, and all of them share one schedule. With Kotlin apps, a TypeScript website and customers booking at the same moment, I put the rules in one place: Postgres enforces tenant isolation, availability and double-booking prevention, covered by 184 database tests.",
-      "disclaimer": "A concept build: I used a real spa business to show what I can develop. It isn't their official app as of now, and their name and brand belong to them.",
-      "period": "Oct 2026",
-      "highlights": [
-        "Made double booking impossible at the database: exclusion constraints stop a therapist or room being booked twice, even when two requests race",
-        "Isolated every spa's data with Row Level Security on all 19 tables (58 policies) and composite tenant keys, so a booking can't point at another spa's therapist or room",
-        "Wrote the booking, availability, cancellation and voucher rules once, as Postgres functions that both the Kotlin apps and the TypeScript web call, so they can't disagree",
-        "Served every spa from one Next.js codebase on its own subdomain or custom domain, server-rendered and cached, in one of three designs",
-        "Gave staff a back office with monthly sales, a menu and membership editor, and promo bundles with a live phone and web preview",
-        "Tested it at three layers: 184 pgTAP database tests, 346 Vitest tests and 42 Kotlin tests, with CI checking migrations, SQL lint and that the generated types match the schema"
-      ],
-      "engineering": {
-        "builtWith": ["Kotlin Multiplatform", "Compose Multiplatform", "Next.js 16", "Supabase (Postgres)"],
-        "platforms": ["Android", "iOS", "Web"],
-        "architecture": "Two thin front ends over one database. Tenant isolation (Row Level Security), double-booking prevention (exclusion constraints), slot availability and booking and voucher RPCs live once in Postgres, so Kotlin and TypeScript cannot disagree. mobile/shared holds models, supabase-kt repositories, ViewModels with StateFlow and the Compose UI for Android and iOS. Next.js routes by host and server-renders cached spa pages. Dependencies are passed by constructor; no DI framework.",
-        "decisions": [
-          {
-            "title": "Business rules live in Postgres",
-            "detail": "Mobile is Kotlin and web is TypeScript, so availability, booking, cancellation and voucher rules are SQL functions over RPC and access is RLS. Both clients only render and call the same functions, with stable error hints."
-          },
-          {
-            "title": "Double-booking impossible, even under races",
-            "detail": "EXCLUDE USING gist constraints on bookings stop a therapist or room being booked twice at the database. Voucher claim limits are enforced inside a claim_voucher RPC; customers cannot write claims directly."
-          },
-          {
-            "title": "Tenant-safe foreign keys",
-            "detail": "Every spa-owned row carries tenant_id, and child rows reference parents by composite (id, tenant_id) keys, so a booking cannot point at another spa's service, therapist, room or location."
-          },
-          {
-            "title": "KMP for apps, server-rendered web",
-            "detail": "The team knows Kotlin, so apps are KMP + Compose Multiplatform. Flutter and Compose for web draw to a canvas with weak SEO, so spa sites are server-rendered Next.js (ADR 0001)."
-          }
-        ],
-        "modules": [
-          {
-            "name": "supabase",
-            "role": "Schema, RLS, booking RPCs, pg_cron jobs, pgTAP tests",
-            "dependsOn": []
-          },
-          {
-            "name": "web",
-            "role": "Next.js public spa sites and staff dashboard",
-            "dependsOn": ["supabase"]
-          },
-          {
-            "name": ":shared",
-            "role": "KMP models, repositories, ViewModels and Compose UI",
-            "dependsOn": ["supabase"]
-          },
-          {
-            "name": ":androidApp",
-            "role": "Thin Android entry point, injects Supabase config",
-            "dependsOn": [":shared"]
-          },
-          {
-            "name": "iosApp",
-            "role": "Thin Xcode entry point for the shared framework",
-            "dependsOn": [":shared"]
-          }
-        ],
-        "quality": [
-          "184 pgTAP database tests and 346 Vitest tests passing",
-          "42 Kotlin tests on the shared module",
-          "CI on pull requests: migrations, SQL lint, type drift, web, Android",
-          "Database deploys reach staging first; production only by hand"
-        ]
-      },
-      "stack": [
-        "Supabase (Postgres, RLS)",
-        "pgTAP",
-        "Next.js 16",
-        "React 19",
-        "TypeScript",
-        "Tailwind CSS 4",
-        "Kotlin Multiplatform",
-        "Compose Multiplatform",
-        "supabase-kt"
-      ],
-      "clips": [
-        {
-          "file": "calm-escape-booking.webp",
-          "caption": "From a spa's page to the booking review in a few taps: today's first opening, then live times (demo data)",
-          "width": 324,
-          "height": 720,
-          "video": true
-        }
-      ],
-      "screenshots": [
-        {
-          "file": "calm-escape-spa-site.webp",
-          "caption": "A spa's own booking site on a phone: pick a day, see today's first opening and live promo bundles (demo data)",
-          "width": 720,
-          "height": 1600
-        },
-        {
-          "file": "calm-escape-live-times.webp",
-          "caption": "Live open times per therapist, computed in Postgres; booked stretches plus turnover simply don't appear",
-          "width": 720,
-          "height": 1600
-        },
-        {
-          "file": "calm-escape-dashboard.webp",
-          "caption": "The staff back office: every spa you own, with sales this month against the same days last month (demo data)",
-          "width": 1440,
-          "height": 900
-        },
-        {
-          "file": "calm-escape-bundle-preview.webp",
-          "caption": "Editing a promo bundle with a live iPhone, Android and web preview of what customers will see",
-          "width": 1440,
-          "height": 900
         }
       ]
     },
@@ -629,17 +397,15 @@
       "id": "eagles-watch",
       "icon": "eagles-watch.webp",
       "visibility": "public",
-      "cover": { "file": "eagles-watch-cover.webp", "caption": "The Eagle's Watch web app's boot screen on night jade", "width": 720, "height": 1600 },
-      "coverClip": {
-        "file": "eagles-watch-boot.webp",
-        "caption": "The web app's boot screen pulses while the Kotlin/Wasm bundle loads, then hands off to Explore",
-        "width": 324,
-        "height": 720,
-        "video": true
+      "cover": {
+        "file": "eagles-explore.webp",
+        "caption": "Explore: contract value, status filters and every project at a glance",
+        "width": 720,
+        "height": 1560
       },
       "title": "The Eagle's Watch",
       "tagline": "Civic app that labels where every public-works figure came from, on Android and the web",
-      "summary": "A progress figure with no source can't be checked. The Eagle's Watch lists Philippine public works with their contracts, schedules, progress and documents, and labels every figure with how it was established. It is a design preview on ten fictional records, built so a live government source plugs in behind one interface without changing a screen.",
+      "summary": "The Eagle's Watch lists Philippine public works with their contracts, schedules, progress and documents, and labels every figure with how it was established, because a figure with no source can't be checked. It is a design preview on ten fictional records, built so a live government source plugs in behind one interface without changing a screen.",
       "highlights": [
         "Made provenance part of the data model: every figure carries one of four labels (Verified, Agency-reported, Community-reported, Not available), and a missing value reads \"Not on file\" instead of a guess",
         "Kept reported progress, independently checked progress, funds disbursed and contract time as separate meters, so one is never passed off as another",
@@ -712,123 +478,40 @@
       "links": [
         { "label": "Source on GitHub", "url": "https://github.com/Yowkylito/The-Eagle-s-Watch" }
       ],
-      "screenshots": [
-        { "file": "eagles-explore.webp", "caption": "Explore: contract value, status filters and every project at a glance", "width": 720, "height": 1560 },
-        { "file": "eagles-project.webp", "caption": "A project page: money, work done and time used, each with its source", "width": 720, "height": 1560 },
-        { "file": "eagles-filters.webp", "caption": "Filters by type, level of government and province, with live counts", "width": 720, "height": 1560 },
-        { "file": "eagles-report.webp", "caption": "Reporting a problem, in six mostly-tap steps", "width": 720, "height": 1560 }
-      ]
-    },
-    {
-      "id": "pawffice",
-      "icon": "pawffice.webp",
-      "visibility": "private",
-      "cover": {
-        "file": "pawffice-cover.webp",
-        "caption": "Pawffice's loading screen: \"Reading your staff record…\" over the town",
-        "width": 1600,
-        "height": 900
-      },
-      "coverClip": {
-        "file": "pawffice-boot.webp",
-        "caption": "Clocking in to Pawffice: the badge is stamped, the office wakes up, the town appears",
-        "width": 683,
-        "height": 351,
-        "video": true
-      },
-      "title": "Pawffice",
-      "tagline": "Multiplayer 3D town on Mac and Android from one engine, with an AI crew that edits code",
-      "summary": "A shared 3D town where, on the Mac, a crew of AI cats takes your prompts and reads or edits the folders you connect. The hard parts were one three.js engine in both a Tauri desktop app and an Android app, NPCs synced without a game server and an agent working on real code with no shell while your API token never reaches the page.",
-      "period": "Aug 2026 – Present",
-      "highlights": [
-        "Shipped one three.js engine to a Tauri Mac app and an Expo Android app by swapping a single IPC module; the phone build fails if desktop-only code slips in",
-        "Let the AI crew touch only the folders you connect: the page sends a project id, Rust resolves the path, no shell is ever offered and a cloned repo's hooks and MCP config are never loaded",
-        "Kept the Claude token out of the web page: Rust seals it with AES-256-GCM under an Argon2id key (64 MiB, 3 passes) and zeroizes it on sign-out",
-        "Synced shared NPCs between players with no game server: clients elect a host from Supabase Realtime presence, and it sends 4 delta frames a second to stay inside the free-plan message quota",
-        "Cut phone frame time from about 44 to 36 ms and triangles per frame from 1.57M to 0.77M with a measured quality tier (8 fur shells instead of 16, a 1024² shadow map), leaving desktop unchanged",
-        "Backed it with 730 automated tests (666 JavaScript, 64 Rust), 6 CI jobs with clippy warnings as errors and 30 architecture decision records"
-      ],
-      "engineering": {
-        "builtWith": ["three.js (WebGL)", "Tauri 2 + Rust", "React Native (Expo) + WebView", "Supabase"],
-        "platforms": ["Android", "macOS"],
-        "architecture": "Dependencies point one way: phone, then desktop page, then engine. packages/cattown is a three.js engine whose rules (steering, physics, driving, network smoothing) sit in pure, unit-tested modules. The Pawffice page, plain JavaScript, mounts it and reaches its host through one ipc module: Tauri commands into Rust on the Mac, a swapped shim on the phone, where an Expo shell runs the page in a WebView. Supabase provides accounts and Realtime.",
-        "decisions": [
-          {
-            "title": "One engine, never a second",
-            "detail": "The phone is an Expo/React Native shell around a WebView running the desktop page, rebuilt with esbuild and one swapped ipc module. A native 3D rewrite needs a new ADR; the build fails if Tauri code leaks in."
-          },
-          {
-            "title": "The API token never reaches the page",
-            "detail": "Rust seals the Claude token with AES-256-GCM under an Argon2id key (64 MiB, 3 passes). It lives only in the Rust process, zeroized on sign-out; the web page gets back name and role only."
-          },
-          {
-            "title": "Shared NPCs with no game server",
-            "detail": "Clients elect one NPC host from Realtime presence (oldest join wins), so every device agrees without a server. The host sends 4 delta frames a second to stay under Supabase's free-plan message quota; lockstep was rejected."
-          },
-          {
-            "title": "An AI crew with no shell",
-            "detail": "The crew gets read tools, or read and edit tools in Edit mode, and never a shell, so it cannot run commands, install packages or push. Paths are looked up in Rust, never taken from the page."
-          }
-        ],
-        "modules": [
-          {
-            "name": "packages/cattown",
-            "role": "Shared three.js 3D engine: cats, city, offices, physics",
-            "dependsOn": []
-          },
-          {
-            "name": "apps/desktop/src-tauri",
-            "role": "Rust shell: token vault, Claude CLI, git projects",
-            "dependsOn": []
-          },
-          {
-            "name": "supabase",
-            "role": "Versioned migrations, RLS policy tests, schema drift check",
-            "dependsOn": []
-          },
-          {
-            "name": "apps/desktop",
-            "role": "Pawffice page: sign-in, crew chat, shop, online town",
-            "dependsOn": ["packages/cattown", "apps/desktop/src-tauri", "supabase"]
-          },
-          {
-            "name": "apps/mobile",
-            "role": "Expo/React Native shell hosting the page in a WebView",
-            "dependsOn": ["apps/desktop", "packages/cattown"]
-          },
-          {
-            "name": ".github/scripts",
-            "role": "Release guard, signing-key and schema checks",
-            "dependsOn": ["supabase"]
-          }
-        ],
-        "quality": [
-          "730 automated tests: 666 JavaScript and 64 Rust",
-          "6 CI jobs on every pull request, with clippy -D warnings",
-          "Guarded releases: branch, version and signing-key checks",
-          "30 architecture decision records"
-        ]
-      },
-      "stack": ["three.js", "JavaScript", "Rust", "Tauri 2", "React Native (Expo)", "TypeScript", "Supabase"],
       "clips": [
         {
-          "file": "pawffice-ride.webp",
-          "caption": "The crew rides along in your car while Pumpkin and Earl Whiskers answer in the crew thread",
-          "width": 480,
-          "height": 271,
+          "file": "eagles-watch-boot.webp",
+          "caption": "The web app's boot screen pulses while the Kotlin/Wasm bundle loads, then hands off to Explore",
+          "width": 324,
+          "height": 720,
           "video": true
         }
       ],
       "screenshots": [
         {
-          "file": "pawffice-town.webp",
-          "caption": "The town: walk your cat around while the crew thread on the right takes prompts",
-          "width": 1600,
-          "height": 900
+          "file": "eagles-project.webp",
+          "caption": "A project page: money, work done and time used, each with its source",
+          "width": 720,
+          "height": 1560
         },
-        { "file": "pawffice-crew-answer.webp", "caption": "Crew members answer in the thread, each in their own role", "width": 1600, "height": 900 },
-        { "file": "pawffice-hiring.webp", "caption": "Onboarding: the CEO cat \"hires\" you with four questions", "width": 1600, "height": 900 },
-        { "file": "pawffice-wardrobe.webp", "caption": "The wardrobe: breed, coat and outfit for your cat", "width": 1600, "height": 900 }
+        {
+          "file": "eagles-filters.webp",
+          "caption": "Filters by type, level of government and province, with live counts",
+          "width": 720,
+          "height": 1560
+        },
+        {
+          "file": "eagles-report.webp",
+          "caption": "Reporting a problem, in six mostly-tap steps",
+          "width": 720,
+          "height": 1560
+        },
+        {
+          "file": "eagles-watch-cover.webp",
+          "caption": "The Eagle's Watch web app's boot screen on night jade",
+          "width": 720,
+          "height": 1600
+        }
       ]
     },
     {
@@ -919,7 +602,385 @@
       ],
       "screenshots": [
         { "file": "portfolio-hero.webp", "caption": "The page you are on, rendered by Compose from WebAssembly", "width": 800, "height": 600 },
-        { "file": "portfolio-projects.webp", "caption": "Project cards with screenshot grids that open a full-screen viewer", "width": 800, "height": 600 }
+        { "file": "portfolio-projects.webp", "caption": "Project cards that lead with a real screen of each app and open its own page", "width": 800, "height": 600 }
+      ]
+    },
+    {
+      "id": "seventhj",
+      "icon": "seventhj.webp",
+      "visibility": "private",
+      "cover": {
+        "file": "seventhj-home.webp",
+        "caption": "Home: the stock's value, the requests that need you and the watchlist (sample data)",
+        "width": 720,
+        "height": 1600
+      },
+      "title": "Seventh J",
+      "tagline": "Art-gallery inventory and sales app for Android, iOS and web from one Kotlin codebase",
+      "summary": "An inventory and dealer-floor app for a Makati art gallery, built once in Compose Multiplatform for Android, iOS and the web. Instead of a 3D engine per platform for one turntable, I wrote a small software renderer in common Kotlin, and every screen shares one codebase with no Android imports. It runs on sample data while the data layer is built.",
+      "disclaimer": "An unofficial concept, not made for or endorsed by the gallery: I used a real Makati gallery to show what I can build. Its name and brand belong to it.",
+      "period": "Aug 2026",
+      "highlights": [
+        "Wrote a software 3D renderer in common Kotlin (rotate, project, cull, depth-sort, shade, fill) that turns about 1,000 faces per sculpture with zero allocation per frame",
+        "Painted a Starry Night splash from 960 strokes in one flow field: 420 short sky dashes and 540 long threads that spiral into the pixels of the gallery's mark",
+        "Shared every screen across Android, iOS and the web: 78 common files, zero android.* imports, platform needs behind expect/actual",
+        "Kept the back stack restorable on iOS and Wasm, where reflection is unavailable, with serializable Navigation 3 destinations and explicit polymorphic serializers",
+        "Budgeted the animation per platform: the splash plays once on Android and iOS, and is skipped on the web, on warm start and under reduced motion",
+        "Covered UI state, inventory, sales and the sculpture meshes with 35 shared tests; CI builds the release APK and compiles for Wasm on every push"
+      ],
+      "engineering": {
+        "builtWith": ["Kotlin Multiplatform", "Compose Multiplatform", "Kotlin/Wasm", "Navigation 3"],
+        "platforms": ["Android", "iOS", "Web"],
+        "architecture": "A KMP library, :shared, holds every screen in commonMain; :androidApp, :webApp (Wasm and JS) and an Xcode iosApp are thin entry points. Each screen splits into a stateless Content composable, a thin Screen wrapper and a multiplatform ViewModel exposing StateFlow of a sealed UiState. Platform differences go through expect/actual. Data is sample and in-memory for now; DI and a database are planned, not built.",
+        "decisions": [
+          {
+            "title": "One UI codebase, no Android leaks",
+            "detail": "commonMain has zero android.* imports. Platform needs such as reduced motion are expect/actual with Android, iOS, JS and Wasm implementations, so all three apps run the same UI code."
+          },
+          {
+            "title": "Reflection-free navigation",
+            "detail": "Destinations are a @Serializable sealed interface on Navigation 3 with explicit polymorphic serializers, because reflection is unavailable on iOS and Wasm and the back stack must still restore there."
+          },
+          {
+            "title": "Animation budgeted per platform",
+            "detail": "The 960-stroke Starry Night splash plays once per process on Android and iOS only. It is skipped on the web, on warm start and under reduced motion, because that many canvas strokes would stall a browser tab."
+          },
+          {
+            "title": "One software renderer, not three engines",
+            "detail": "Filament on Android, SceneKit on iOS and three.js on the web would be three engines and three sets of bugs for one turntable, so one painter's-algorithm pass over about 1,000 quads runs in common Kotlin."
+          }
+        ],
+        "modules": [
+          {
+            "name": ":shared",
+            "role": "KMP library with all Compose UI and expect/actual",
+            "dependsOn": []
+          },
+          {
+            "name": ":androidApp",
+            "role": "Android entry point, MainActivity only",
+            "dependsOn": [":shared"]
+          },
+          {
+            "name": ":webApp",
+            "role": "Browser entry for Kotlin/Wasm and Kotlin/JS",
+            "dependsOn": [":shared"]
+          },
+          {
+            "name": "iosApp",
+            "role": "Xcode project wrapping ComposeUIViewController in SwiftUI",
+            "dependsOn": [":shared"]
+          }
+        ],
+        "quality": [
+          "35 shared unit tests: UI state, inventory, sales, meshes",
+          "CI on every push: release APK and a Wasm compile",
+          "Shared UI with no Android imports in commonMain",
+          "Versions pinned in a Gradle version catalog"
+        ]
+      },
+      "stack": ["Kotlin", "Compose Multiplatform", "Kotlin/Wasm", "Navigation 3", "Coroutines", "kotlinx.serialization"],
+      "clips": [
+        {
+          "file": "seventhj-splash.webp",
+          "caption": "Seventh J's splash: brush strokes spiral in over a starry night sky and settle into the SJ mark",
+          "width": 252,
+          "height": 560,
+          "video": true
+        },
+        {
+          "file": "seventhj-splash-home.webp",
+          "caption": "First launch: strokes spiral in over a starry night sky, settle into the SJ mark, then hand off to Home",
+          "width": 324,
+          "height": 720,
+          "video": true
+        }
+      ],
+      "screenshots": [
+        {
+          "file": "seventhj-easel.webp",
+          "caption": "Works: a painting on the easel, laid stroke by stroke in code, with its artist, medium and price (sample data)",
+          "width": 720,
+          "height": 1600
+        },
+        {
+          "file": "seventhj-sculpture.webp",
+          "caption": "The sculpture room: a piece from the software 3D renderer that you drag to turn (sample data)",
+          "width": 720,
+          "height": 1600
+        },
+        {
+          "file": "seventhj-sale.webp",
+          "caption": "A sale in a sheet: its steps from approval to delivery, then the price, discount and commission (sample data)",
+          "width": 720,
+          "height": 1600
+        },
+        {
+          "file": "seventhj-cover.webp",
+          "caption": "Seventh J's splash: the SJ mark and wordmark over a starry night sky",
+          "width": 720,
+          "height": 1600
+        }
+      ]
+    },
+    {
+      "id": "calm-escape",
+      "icon": "calm-escape.webp",
+      "visibility": "private",
+      "cover": {
+        "file": "calm-escape-live-times.webp",
+        "caption": "Live open times per therapist, computed in Postgres; booked stretches plus turnover simply don't appear",
+        "width": 720,
+        "height": 1600
+      },
+      "title": "Calm Escape Premier",
+      "tagline": "Multi-tenant spa booking where the database itself makes double bookings impossible",
+      "summary": "Each spa gets its own booking site and staff back office, customers book from iOS and Android apps, and all of them share one schedule. With Kotlin apps, a TypeScript website and customers booking at the same moment, I put the rules in one place: Postgres enforces tenant isolation, availability and double-booking prevention, covered by 184 database tests.",
+      "disclaimer": "An unofficial concept, not made for or endorsed by the spa: I used a real spa business to show what I can build. Its name and brand belong to it.",
+      "period": "Oct 2026",
+      "highlights": [
+        "Made double booking impossible at the database: exclusion constraints stop a therapist or room being booked twice, even when two requests race",
+        "Isolated every spa's data with Row Level Security on all 19 tables (58 policies) and composite tenant keys, so a booking can't point at another spa's therapist or room",
+        "Wrote the booking, availability, cancellation and voucher rules once, as Postgres functions that both the Kotlin apps and the TypeScript web call, so they can't disagree",
+        "Served every spa from one Next.js codebase on its own subdomain or custom domain, server-rendered and cached, in one of three designs",
+        "Gave staff a back office with monthly sales, a menu and membership editor, and promo bundles with a live phone and web preview",
+        "Tested it at three layers: 184 pgTAP database tests, 346 Vitest tests and 42 Kotlin tests, with CI checking migrations, SQL lint and that the generated types match the schema"
+      ],
+      "engineering": {
+        "builtWith": ["Kotlin Multiplatform", "Compose Multiplatform", "Next.js 16", "Supabase (Postgres)"],
+        "platforms": ["Android", "iOS", "Web"],
+        "architecture": "Two thin front ends over one database. Tenant isolation (Row Level Security), double-booking prevention (exclusion constraints), slot availability and booking and voucher RPCs live once in Postgres, so Kotlin and TypeScript cannot disagree. mobile/shared holds models, supabase-kt repositories, ViewModels with StateFlow and the Compose UI for Android and iOS. Next.js routes by host and server-renders cached spa pages. Dependencies are passed by constructor; no DI framework.",
+        "decisions": [
+          {
+            "title": "Business rules live in Postgres",
+            "detail": "Mobile is Kotlin and web is TypeScript, so availability, booking, cancellation and voucher rules are SQL functions over RPC and access is RLS. Both clients only render and call the same functions, with stable error hints."
+          },
+          {
+            "title": "Double-booking impossible, even under races",
+            "detail": "EXCLUDE USING gist constraints on bookings stop a therapist or room being booked twice at the database. Voucher claim limits are enforced inside a claim_voucher RPC; customers cannot write claims directly."
+          },
+          {
+            "title": "Tenant-safe foreign keys",
+            "detail": "Every spa-owned row carries tenant_id, and child rows reference parents by composite (id, tenant_id) keys, so a booking cannot point at another spa's service, therapist, room or location."
+          },
+          {
+            "title": "KMP for apps, server-rendered web",
+            "detail": "Kotlin is my strongest language, so the apps are KMP + Compose Multiplatform. Flutter and Compose for web draw to a canvas with weak SEO, so spa sites are server-rendered Next.js (ADR 0001)."
+          }
+        ],
+        "modules": [
+          {
+            "name": "supabase",
+            "role": "Schema, RLS, booking RPCs, pg_cron jobs, pgTAP tests",
+            "dependsOn": []
+          },
+          {
+            "name": "web",
+            "role": "Next.js public spa sites and staff dashboard",
+            "dependsOn": ["supabase"]
+          },
+          {
+            "name": ":shared",
+            "role": "KMP models, repositories, ViewModels and Compose UI",
+            "dependsOn": ["supabase"]
+          },
+          {
+            "name": ":androidApp",
+            "role": "Thin Android entry point, injects Supabase config",
+            "dependsOn": [":shared"]
+          },
+          {
+            "name": "iosApp",
+            "role": "Thin Xcode entry point for the shared framework",
+            "dependsOn": [":shared"]
+          }
+        ],
+        "quality": [
+          "184 pgTAP database tests and 346 Vitest tests passing",
+          "42 Kotlin tests on the shared module",
+          "CI on pull requests: migrations, SQL lint, type drift, web, Android",
+          "Database deploys reach staging first; production only by hand"
+        ]
+      },
+      "stack": [
+        "Supabase (Postgres, RLS)",
+        "pgTAP",
+        "Next.js 16",
+        "React 19",
+        "TypeScript",
+        "Tailwind CSS 4",
+        "Kotlin Multiplatform",
+        "Compose Multiplatform",
+        "supabase-kt"
+      ],
+      "clips": [
+        {
+          "file": "calm-escape-launch.webp",
+          "caption": "Calm Escape's launch: the lotus seal on deep green, then the in-app reveal",
+          "width": 332,
+          "height": 720,
+          "video": true
+        },
+        {
+          "file": "calm-escape-booking.webp",
+          "caption": "From a spa's page to the booking review in a few taps: today's first opening, then live times (demo data)",
+          "width": 324,
+          "height": 720,
+          "video": true
+        }
+      ],
+      "screenshots": [
+        {
+          "file": "calm-escape-spa-site.webp",
+          "caption": "A spa's own booking site on a phone: pick a day, see today's first opening and live promo bundles (demo data)",
+          "width": 720,
+          "height": 1600
+        },
+        {
+          "file": "calm-escape-dashboard.webp",
+          "caption": "The staff back office: every spa you own, with sales this month against the same days last month (demo data)",
+          "width": 1440,
+          "height": 900
+        },
+        {
+          "file": "calm-escape-bundle-preview.webp",
+          "caption": "Editing a promo bundle with a live iPhone, Android and web preview of what customers will see",
+          "width": 1440,
+          "height": 900
+        },
+        {
+          "file": "calm-escape-cover.webp",
+          "caption": "Calm Escape Premier's Android splash: a gold lotus seal on deep green",
+          "width": 740,
+          "height": 1600
+        }
+      ]
+    },
+    {
+      "id": "pawffice",
+      "icon": "pawffice.webp",
+      "visibility": "private",
+      "cover": {
+        "file": "pawffice-town.webp",
+        "caption": "The town: walk your cat around while the crew thread on the right takes prompts",
+        "width": 1600,
+        "height": 900
+      },
+      "title": "Pawffice",
+      "tagline": "Multiplayer 3D town on Mac and Android from one engine, with an AI crew that edits code",
+      "summary": "A shared 3D town where, on the Mac, a crew of AI cats takes your prompts and reads or edits the folders you connect. The hard parts were one three.js engine in both a Tauri desktop app and an Android app, NPCs synced without a game server and an agent working on real code with no shell while your API token never reaches the page.",
+      "period": "Aug 2026 – Present",
+      "highlights": [
+        "Shipped one three.js engine to a Tauri Mac app and an Expo Android app by swapping a single IPC module; the phone build fails if desktop-only code slips in",
+        "Let the AI crew touch only the folders you connect: the page sends a project id, Rust resolves the path, no shell is ever offered and a cloned repo's hooks and MCP config are never loaded",
+        "Kept the Claude token out of the web page: Rust seals it with AES-256-GCM under an Argon2id key (64 MiB, 3 passes) and zeroizes it on sign-out",
+        "Synced shared NPCs between players with no game server: clients elect a host from Supabase Realtime presence, and it sends 4 delta frames a second to stay inside the free-plan message quota",
+        "Cut phone frame time from about 44 to 36 ms and triangles per frame from 1.57M to 0.77M with a measured quality tier (8 fur shells instead of 16, a 1024² shadow map), leaving desktop unchanged",
+        "Backed it with 730 automated tests (666 JavaScript, 64 Rust), 6 CI jobs with clippy warnings as errors and 30 architecture decision records"
+      ],
+      "engineering": {
+        "builtWith": ["three.js (WebGL)", "Tauri 2 + Rust", "React Native (Expo) + WebView", "Supabase"],
+        "platforms": ["Android", "macOS"],
+        "architecture": "Dependencies point one way: phone, then desktop page, then engine. packages/cattown is a three.js engine whose rules (steering, physics, driving, network smoothing) sit in pure, unit-tested modules. The Pawffice page, plain JavaScript, mounts it and reaches its host through one ipc module: Tauri commands into Rust on the Mac, a swapped shim on the phone, where an Expo shell runs the page in a WebView. Supabase provides accounts and Realtime.",
+        "decisions": [
+          {
+            "title": "One engine, never a second",
+            "detail": "The phone is an Expo/React Native shell around a WebView running the desktop page, rebuilt with esbuild and one swapped ipc module. A native 3D rewrite needs a new ADR; the build fails if Tauri code leaks in."
+          },
+          {
+            "title": "The API token never reaches the page",
+            "detail": "Rust seals the Claude token with AES-256-GCM under an Argon2id key (64 MiB, 3 passes). It lives only in the Rust process, zeroized on sign-out; the web page gets back name and role only."
+          },
+          {
+            "title": "Shared NPCs with no game server",
+            "detail": "Clients elect one NPC host from Realtime presence (oldest join wins), so every device agrees without a server. The host sends 4 delta frames a second to stay under Supabase's free-plan message quota; lockstep was rejected."
+          },
+          {
+            "title": "An AI crew with no shell",
+            "detail": "The crew gets read tools, or read and edit tools in Edit mode, and never a shell, so it cannot run commands, install packages or push. Paths are looked up in Rust, never taken from the page."
+          }
+        ],
+        "modules": [
+          {
+            "name": "packages/cattown",
+            "role": "Shared three.js 3D engine: cats, city, offices, physics",
+            "dependsOn": []
+          },
+          {
+            "name": "apps/desktop/src-tauri",
+            "role": "Rust shell: token vault, Claude CLI, git projects",
+            "dependsOn": []
+          },
+          {
+            "name": "supabase",
+            "role": "Versioned migrations, RLS policy tests, schema drift check",
+            "dependsOn": []
+          },
+          {
+            "name": "apps/desktop",
+            "role": "Pawffice page: sign-in, crew chat, shop, online town",
+            "dependsOn": ["packages/cattown", "apps/desktop/src-tauri", "supabase"]
+          },
+          {
+            "name": "apps/mobile",
+            "role": "Expo/React Native shell hosting the page in a WebView",
+            "dependsOn": ["apps/desktop", "packages/cattown"]
+          },
+          {
+            "name": ".github/scripts",
+            "role": "Release guard, signing-key and schema checks",
+            "dependsOn": ["supabase"]
+          }
+        ],
+        "quality": [
+          "730 automated tests: 666 JavaScript and 64 Rust",
+          "6 CI jobs on every pull request, with clippy -D warnings",
+          "Guarded releases: branch, version and signing-key checks",
+          "30 architecture decision records"
+        ]
+      },
+      "stack": ["three.js", "JavaScript", "Rust", "Tauri 2", "React Native (Expo)", "TypeScript", "Supabase"],
+      "clips": [
+        {
+          "file": "pawffice-boot.webp",
+          "caption": "Clocking in to Pawffice: the badge is stamped, the office wakes up, the town appears",
+          "width": 683,
+          "height": 351,
+          "video": true
+        },
+        {
+          "file": "pawffice-ride.webp",
+          "caption": "The crew rides along in your car while Pumpkin and Earl Whiskers answer in the crew thread",
+          "width": 480,
+          "height": 271,
+          "video": true
+        }
+      ],
+      "screenshots": [
+        {
+          "file": "pawffice-crew-answer.webp",
+          "caption": "Crew members answer in the thread, each in their own role",
+          "width": 1600,
+          "height": 900
+        },
+        {
+          "file": "pawffice-hiring.webp",
+          "caption": "Onboarding: the CEO cat \"hires\" you with four questions",
+          "width": 1600,
+          "height": 900
+        },
+        {
+          "file": "pawffice-wardrobe.webp",
+          "caption": "The wardrobe: breed, coat and outfit for your cat",
+          "width": 1600,
+          "height": 900
+        },
+        {
+          "file": "pawffice-cover.webp",
+          "caption": "Pawffice's loading screen: \"Reading your staff record…\" over the town",
+          "width": 1600,
+          "height": 900
+        }
       ]
     }
   ],
@@ -927,21 +988,21 @@
     {
       "role": "Android Developer",
       "company": "AB Leisure Exponent, Inc. (DigiPlus)",
-      "period": "2024 – Present",
+      "period": "Sep 2024 – Present",
       "location": "Taguig, Philippines",
       "highlights": [
-        "Led the move from a hybrid WebView app to a native-only app, without pausing releases",
-        "Wrote 53% of ArenaPlus V2's code, co-building it from day one: architecture, UI foundations, navigation",
-        "Shipped Arena Social solo in 30 days: native navigation and video around a web-only product",
-        "Built the payment flows end to end: deposits, withdrawals and bank-linking",
-        "Optimized startup, memory use and Compose recomposition, with startup benchmarks and Baseline Profiles",
-        "Fixed bugs and optimized the GameZone Android app"
+        "Led ArenaPlus's move from a hybrid WebView app to native-only Android, without pausing releases",
+        "Co-built ArenaPlus's native app from the first commit and wrote 53% of its code, the most on the team: architecture, UI foundations and navigation",
+        "Built and launched Arena Social's Android app alone in 30 days: native navigation and a pinned video player around a web-only product",
+        "Designed and built ArenaPlus's deposit, withdrawal and bank-linking flows end to end, and integrated identity verification",
+        "Optimized ArenaPlus's startup and memory use under heavy real-time traffic, with startup benchmarks and Baseline Profiles, and readied it for Google Play's 16 KB pages",
+        "Optimized and fixed bugs in the GameZone Android app"
       ]
     },
     {
       "role": "Technical Support Engineer Intern",
       "company": "Infocom Technologies, Inc.",
-      "period": "2024 · 720 hours",
+      "period": "2024 · 720-hour internship",
       "location": "Quezon City, Philippines",
       "highlights": [
         "Troubleshot hardware, software and networking issues",
@@ -950,38 +1011,42 @@
     }
   ],
   "recognition": [
-    { "title": "Rank #2, Top 9 Awardee", "detail": "Hand-picked by executive leadership for exceptional engineering contributions.", "date": "Sep 2026" },
-    { "title": "Rockstar of the Month", "detail": "Awarded by the ArenaPlus team for cross-functional project execution.", "date": "Feb 2026" },
+    { "title": "Top 9 Awardee, ranked #2 of 9", "detail": "Hand-picked by DigiPlus executive leadership for engineering contributions.", "date": "Sep 2026" },
+    { "title": "Rockstar of the Month", "detail": "Monthly award from the ArenaPlus team at DigiPlus for cross-functional project execution.", "date": "Feb 2026" },
     {
-      "title": "Cum Laude, Technological University of the Philippines",
-      "detail": "Bachelor of Engineering Technology, major in Computer Engineering Technology. Thesis: an IoT-based medicine scheduling system.",
+      "title": "Bachelor of Engineering Technology, Cum Laude",
+      "detail": "Technological University of the Philippines, major in Computer Engineering Technology. Thesis: an IoT-based medicine scheduling system.",
       "date": "2020 – 2024"
     }
   ],
   "skills": [
     {
       "name": "Android",
-      "items": ["Kotlin", "Jetpack Compose", "Android SDK", "Java", "Material 3", "Kotlin Multiplatform", "Compose Multiplatform", "Android Studio"]
+      "items": ["Kotlin", "Jetpack Compose", "Coroutines and Flow", "Android SDK", "Java", "Material 3", "Kotlin Multiplatform", "Compose Multiplatform"]
     },
     {
       "name": "Architecture",
-      "items": ["Clean Architecture", "MVVM", "MVI", "Multi-module", "Repository pattern", "Hilt", "Koin"]
+      "items": ["Clean Architecture", "MVVM", "MVI", "Multi-module Gradle", "Repository pattern", "Hilt", "Koin"]
     },
     {
       "name": "Networking and data",
-      "items": ["Retrofit", "OkHttp", "Ktor", "WebSockets", "REST", "Server-Sent Events", "Room"]
+      "items": ["Retrofit", "OkHttp", "Ktor", "REST", "WebSockets", "Server-Sent Events", "Room", "SQLCipher"]
     },
     {
-      "name": "Security and integrations",
-      "items": ["eKYC SDKs", "Payment gateways", "Wallets and bank-linking", "Attribution SDKs", "Vulnerability scanning"]
+      "name": "Payments and security",
+      "items": ["Payment gateways", "Wallets and bank-linking", "Identity verification (eKYC) SDKs", "Attribution SDKs", "Android Keystore", "Biometric sign-in", "Vulnerability scanning"]
     },
     {
       "name": "Performance",
-      "items": ["Memory optimization", "16 KB page sizes", "Lazy layout tuning", "APK size reduction", "Profiling"]
+      "items": ["Baseline Profiles", "Macrobenchmark", "Memory optimization", "Lazy layout tuning", "APK size reduction", "Google Play 16 KB pages", "Profiling"]
+    },
+    {
+      "name": "Testing and tools",
+      "items": ["JUnit unit tests", "Instrumented tests", "GitHub Actions CI", "Git", "Gradle", "Android Studio"]
     },
     {
       "name": "Embedded and IoT",
-      "items": ["Arduino", "ESP8266", "Embedded systems", "Serial communication", "Digital electronics"]
+      "items": ["Arduino", "ESP8266", "Serial communication", "Digital electronics"]
     }
   ],
   "links": [

@@ -15,6 +15,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -64,6 +65,7 @@ import dev.yowkey.portfolio.ui.components.BrandName
 import dev.yowkey.portfolio.ui.components.MenuGlyph
 import dev.yowkey.portfolio.ui.components.Monogram
 import dev.yowkey.portfolio.ui.components.ProofChip
+import dev.yowkey.portfolio.ui.components.WherePill
 import dev.yowkey.portfolio.ui.components.ProofReveal
 import dev.yowkey.portfolio.ui.components.ThemeToggle
 import dev.yowkey.portfolio.ui.components.rememberProofReveal
@@ -75,7 +77,9 @@ import kotlinx.coroutines.launch
 /**
  * The sticky navigation bar. The hero already says the name in huge type, so the bar starts with a monogram (the
  * Home button) and, while the hero's name is on screen, the proof: the notes' rating and the visits ([stats], see
- * [ProofChip]), which [onOpenNotes] takes the visitor to; once [heroPassed], the proof gives way to the name and
+ * [ProofChip]), which [onOpenNotes] takes the visitor to, once they are big enough to show and the bar is wide, after
+ * where the owner is and whether they would move ([WherePill]), which is always there; once [heroPassed], both give way
+ * to the name and
  * role. Wide windows list the sections with an accent line that slides to the [active] one; compact ones put them in
  * a menu. The theme switch sits at the end. [proofReveal] holds the proof's entrance, so a caller that outlives the
  * bar keeps it from playing twice.
@@ -137,7 +141,7 @@ fun TopBar(
             Monogram(profile.name, onClick = { onNavigate(Section.Home) })
             Spacer(Modifier.width(6.dp))
             // Its end padding keeps the proof or a long role from running into what follows.
-            BrandSlot(profile, heroPassed, stats, proofReveal, onOpenNotes, Modifier.weight(1f).padding(end = 8.dp))
+            BrandSlot(profile, heroPassed, stats, proofReveal, onOpenNotes, compact, Modifier.weight(1f).padding(end = 8.dp))
             if (compact) {
                 ThemeToggle()
                 CompactMenu(sections, active, onNavigate)
@@ -184,6 +188,7 @@ private fun BrandSlot(
     stats: LiveStats,
     proofReveal: ProofReveal,
     onOpenNotes: () -> Unit,
+    compact: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val reducedMotion = LocalReducedMotion.current
@@ -208,7 +213,12 @@ private fun BrandSlot(
             if (passed) {
                 BrandName(profile.name, role)
             } else {
-                ProofChip(stats, proofReveal, onClick = onOpenNotes)
+                // Location stays: recruiters screen on it first, so earned proof joins it rather than replacing it,
+                // and only where the bar has room for both.
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    WherePill(profile, Modifier.weight(1f, fill = false), compact = compact)
+                    if (!stats.isEmpty && !compact) ProofChip(stats, proofReveal, onClick = onOpenNotes)
+                }
             }
         }
     }

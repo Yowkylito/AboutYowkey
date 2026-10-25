@@ -240,7 +240,7 @@ private fun RelationChips(relation: String, onPick: (Relation) -> Unit, enabled:
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Relation.entries.forEach { choice ->
+            Relation.offered.forEach { choice ->
                 FilterChip(
                     selected = choice.wire == relation,
                     onClick = { onPick(choice) },

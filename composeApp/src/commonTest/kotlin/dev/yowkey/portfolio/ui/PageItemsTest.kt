@@ -34,9 +34,13 @@ class PageItemsTest {
 
     @Test
     fun gridsAreChunkedIntoRowsWithOneHeader() {
-        val projects = buildPageItems(portfolio, serviceColumns = 2, projectColumns = 2).filterIsInstance<PageItem.Projects>()
-        assertEquals(listOf(2, 2, 1), projects.map { it.projects.size })
-        assertEquals(listOf(true, false, false), projects.map { it.showsHeader })
+        val items = buildPageItems(portfolio, serviceColumns = 2, projectColumns = 2)
+        val projects = items.filterIsInstance<PageItem.Projects>()
+        assertEquals(listOf(2, 2), projects.map { it.projects.size }, "the first $FULL_PERSONAL_CARDS personal projects as cards")
+        assertEquals(listOf(true, false), projects.map { it.showsHeader })
+        val more = items.filterIsInstance<PageItem.MoreProjects>().single()
+        assertEquals(portfolio.projects.drop(FULL_PERSONAL_CARDS).map { it.id }, more.projects.map { it.id }, "the rest as rows")
+        assertEquals(items.indexOf(projects.last()) + 1, items.indexOf(more), "right under the cards")
     }
 
     @Test
@@ -55,13 +59,13 @@ class PageItemsTest {
         assertEquals(0, starts[Section.Home])
     }
 
-    /** Evidence before claims: the job, its awards, then work, keywords, and the focus areas last. */
+    /** What hiring managers weigh first: the job, then work, keywords, the focus areas, and the degree and awards last. */
     @Test
     fun sectionsFollowTheHiringReadOrder() {
         val full = portfolio.copy(recognition = listOf(Award("A", "D")), skills = listOf(SkillGroup("G", listOf("K"))))
         val expected = listOf(
-            Section.Home, Section.Experience, Section.Recognition, Section.Projects,
-            Section.Skills, Section.Services, Section.Contact,
+            Section.Home, Section.Experience, Section.Projects, Section.Skills,
+            Section.Services, Section.Recognition, Section.Contact,
         )
         for (columns in 1..2) assertEquals(expected, sectionStarts(buildPageItems(full, columns, columns)).keys.toList())
         assertEquals(expected, Section.entries, "the enum is the page order; keep them in step")

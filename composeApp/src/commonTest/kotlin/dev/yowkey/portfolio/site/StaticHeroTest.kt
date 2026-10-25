@@ -43,6 +43,6 @@ class StaticHeroTest {
         )
         val html = StaticHtml.content(full)
         val ids = Regex("""<section id="(\w+)"""").findAll(html).map { it.groupValues[1] }.toList()
-        assertEquals(listOf("experience", "recognition", "projects", "skills", "services", "contact"), ids)
+        assertEquals(listOf("experience", "projects", "skills", "services", "recognition", "contact"), ids)
     }
 }
