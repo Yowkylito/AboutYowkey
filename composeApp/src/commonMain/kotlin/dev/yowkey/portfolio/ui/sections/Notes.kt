@@ -31,8 +31,8 @@ import dev.yowkey.portfolio.ui.components.WrapRow
  * title), pinned ones first as the backend orders them.
  */
 @Composable
-fun NoteCards(notes: List<PublicNote>, columns: Int, modifier: Modifier = Modifier) {
-    CardRow(columns, notes.size, modifier) { index, cardModifier -> NoteCard(notes[index], cardModifier) }
+fun NoteCards(notes: List<PublicNote>, columns: Int, modifier: Modifier = Modifier, showsPins: Boolean = true) {
+    CardRow(columns, notes.size, modifier) { index, cardModifier -> NoteCard(notes[index], cardModifier, showsPins) }
 }
 
 /**
@@ -42,7 +42,7 @@ fun NoteCards(notes: List<PublicNote>, columns: Int, modifier: Modifier = Modifi
  * row's equal-height measurement counts them.
  */
 @Composable
-internal fun NoteCard(note: PublicNote, modifier: Modifier = Modifier) {
+internal fun NoteCard(note: PublicNote, modifier: Modifier = Modifier, showsPins: Boolean = true) {
     val colors = MaterialTheme.colorScheme
     OutlinedCard(modifier) {
         Column(Modifier.semantics(mergeDescendants = true) {}.padding(20.dp)) {
@@ -59,7 +59,8 @@ internal fun NoteCard(note: PublicNote, modifier: Modifier = Modifier) {
             }
             val badge = note.badge
             val dateLine = note.dateLine
-            if (dateLine != null || note.pinned || badge != null) {
+            val pinned = note.pinned && showsPins
+            if (dateLine != null || pinned || badge != null) {
                 Spacer(Modifier.height(6.dp))
                 WrapRow(horizontalSpacing = 8.dp, verticalSpacing = 6.dp) {
                     dateLine?.let {
@@ -69,7 +70,7 @@ internal fun NoteCard(note: PublicNote, modifier: Modifier = Modifier) {
                             color = colors.onSurfaceVariant,
                         )
                     }
-                    if (note.pinned) PinnedBadge()
+                    if (pinned) PinnedBadge()
                     badge?.let { RelationBadge(it.label) }
                 }
             }

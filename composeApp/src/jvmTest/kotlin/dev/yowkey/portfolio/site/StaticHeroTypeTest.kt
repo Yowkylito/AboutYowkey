@@ -32,7 +32,7 @@ class StaticHeroTypeTest {
         assertSetAs(type.displayMedium, rule("    .hero h1 {"), "the name on a phone")
         assertSetAs(type.displayLarge, rule("@media (min-width: ${medium}px) { .hero h1 {"), "the name from ${medium}px", inheritsWeight = true)
         assertSetAs(type.headlineSmall, rule("    .hero .headline {"), "the headline")
-        assertSetAs(type.headlineMedium, rule("    .hero .proof strong {"), "a proof point's figure")
+        assertSetAs(type.headlineMedium.copy(fontWeight = FontWeight.Bold), rule("    .hero .proof strong {"), "a proof point's figure, in bold")
         assertSetAs(type.bodyMedium, rule("    .hero .proof li {"), "a proof point's sentence")
         assertSetAs(type.labelLarge, rule("    .hero .links a {"), "a button")
         assertSetAs(type.bodyLarge, rule("    .hero > .links + p {"), "the summary")

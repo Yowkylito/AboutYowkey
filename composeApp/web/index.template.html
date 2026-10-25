@@ -38,7 +38,7 @@
       var dark = theme === "dark";
       document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
       var meta = document.querySelector('meta[name="theme-color"]');
-      if (meta) meta.setAttribute("content", dark ? "#0C0E13" : "#FAFAFA");
+      if (meta) meta.setAttribute("content", dark ? "#101216" : "#FAFAFA");
     };
     try { window.applyTheme(localStorage.getItem("theme")); } catch (e) { window.applyTheme("light"); }
     // Marks the page as scripted before the first paint too, so the bar's parts that only the script can work (the
@@ -62,7 +62,7 @@
     }
     :root[data-theme="dark"] {
       color-scheme: dark;
-      --bg: #0C0E13; --surface: #15181F; --ink: #F4F4F5; --muted: #A1A1AA; --line: #27272A; --line-strong: #3F3F46;
+      --bg: #101216; --surface: #181B21; --ink: #E8E8EA; --muted: #A1A1AA; --line: #2C3038; --line-strong: #3F3F46;
       --accent: #60A5FA; --on-accent: #0B1D3F;
       --accent-deep: #3B82F6;
       --stage: #1E3A8A; --on-stage: #BFDBFE;
@@ -115,7 +115,7 @@
       color: var(--on-accent); font-size: 13px; font-weight: 600; letter-spacing: -.02em; line-height: 1; text-decoration: none;
       box-shadow: inset 0 1px 0 rgb(255 255 255 / .2), 0 1px 2px rgb(0 0 0 / .15);
     }
-    /* The brand slot: the proof chip, and the name over the role, share one cell and cross-fade. */
+    /* The brand slot: where the owner is, the proof chip, and the name over the role, share one cell and cross-fade. */
     .brand { flex: 1 1 auto; min-width: 0; display: grid; align-items: center; }
     .brand > * { grid-area: 1 / 1; min-width: 0; transition: opacity .22s ease, transform .22s ease, visibility .22s; }
     /*
@@ -152,6 +152,21 @@
     /* The last resort, on the narrowest phones: the same, closer together. */
     .bar .proof.tight { gap: 7px; padding: 0 9px 0 8px; }
     .proof.tight .rate, .proof.tight .seen { gap: 4px; }
+    /*
+      Where the owner is (StaticHtml.where), as the app's WherePill: muted words on a hairline pill, no accent, as it
+      is not a link. It holds the slot without the script, and gives way to the chip once the chip has enough to show.
+    */
+    .bar .where {
+      justify-self: start; display: inline-flex; align-items: center; max-width: 100%; height: 32px; padding: 0 12px;
+      overflow: hidden; white-space: nowrap; color: var(--muted); font-size: 13px; font-weight: 500; line-height: 1;
+      border: 1px solid var(--line); border-radius: 999px;
+    }
+    .where .short { display: none; }
+    @media (max-width: 640px) {
+      .where .full { display: none; }
+      .where .short { display: inline; }
+    }
+    .brand:has(.proof.on) .where, .bar.passed .where { opacity: 0; visibility: hidden; transform: translateY(-6px); }
     .who strong, .who span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     /* The whole role, or on a phone its whole-word short form, as the app's bar cuts it. */
     .who .short { display: none; }
@@ -294,9 +309,11 @@
     .hero .role { display: none; }
     .hero h1 { font-size: 48px; line-height: 52px; letter-spacing: -1.2px; font-weight: 700; margin: 0 0 16px; text-wrap: wrap; }
     @media (min-width: 600px) { .hero h1 { font-size: 72px; line-height: 76px; letter-spacing: -2px; } }
-    .hero .headline { font-size: 24px; line-height: 34px; margin: 0 0 20px; max-width: 680px; text-wrap: wrap; }
+    .hero .headline { font-size: 24px; line-height: 34px; margin: 0 0 20px; max-width: 680px; text-wrap: wrap; color: var(--muted); }
+    /* The role in near-black and medium weight, the stack after it muted, as the app's headline. */
+    .hero .headline .lead, .hero hgroup.whole + .headline { color: var(--ink); font-weight: 500; }
     .hero .proof { list-style: none; padding: 0; margin: 4px 0 24px; display: grid; gap: 18px; }
-    .hero .proof strong { display: block; margin-bottom: 2px; color: var(--accent); font-size: 28px; line-height: 36px; font-weight: 600; letter-spacing: -.5px; }
+    .hero .proof strong { display: block; margin-bottom: 2px; color: var(--ink); font-size: 28px; line-height: 36px; font-weight: 700; letter-spacing: -.5px; }
     .hero .proof li { max-width: none; color: var(--muted); font-size: 15px; line-height: 24px; letter-spacing: .2px; text-wrap: wrap; }
     .hero .links { display: flex; flex-wrap: wrap; gap: 12px; max-width: none; margin: 0 0 20px; }
     .hero .links a {
@@ -305,6 +322,9 @@
       font-size: 14px; line-height: 20px; letter-spacing: .1px; font-weight: 600; text-decoration: none;
     }
     .hero .links a[href^="mailto:"] { border-color: transparent; background: var(--accent); color: var(--on-accent); }
+    /* LinkedIn and GitHub, as the app's text buttons: after the two main actions, lighter than both. */
+    .hero .links a.quiet { border-color: transparent; padding: 0 12px; }
+    .hero .links .pair { display: inline-flex; gap: 4px; }
     .hero > .links + p { max-width: 680px; margin: 0; color: var(--muted); font-size: 18px; line-height: 29px; letter-spacing: .5px; text-wrap: wrap; }
     /*
       From 840px, with proof, the app's wide layout: the intro in a column three fifths as wide, the proof in a card
@@ -350,6 +370,15 @@
     .note { color: var(--muted); max-width: 640px; margin: -8px 0 24px; }
     .badge { display: inline-block; font-size: 13px; font-weight: 600; line-height: 1.4; padding: 1px 8px; border: 1px solid var(--line-strong); border-radius: 6px; color: var(--muted); white-space: nowrap; }
     .links a { display: inline-block; margin: 0 16px 8px 0; padding: 12px 0; }
+    /* Contact, as the app's: the line, where the owner is, then the address with its copy button. */
+    #contact .pitch { font-size: 24px; line-height: 34px; margin: 0 0 20px; }
+    #contact .based { color: var(--muted); }
+    #contact .address { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    #contact .copy {
+      height: 40px; padding: 0 12px; border: 0; border-radius: 20px; background: none; color: var(--accent);
+      font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+    }
+    #contact .copy:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); }
     .tagline { font-size: 19px; line-height: 1.45; margin: 8px 0 4px; }
     .disclaimer { color: var(--muted); font-size: 15px; border: 1px solid var(--line-strong); border-radius: 10px; padding: 10px 14px; }
     /* The message form and the note form (and the bar's proof chip): only rendered when portfolio.json names an "api". */
@@ -464,13 +493,9 @@
     .bars .label i { font-style: normal; font-size: 12px; color: var(--accent); }
     .bars .track { height: 10px; border-radius: 5px; background: var(--line); overflow: hidden; }
     .bars .fill {
-      display: block; height: 100%; width: 0; border-radius: 5px; transition: width .7s cubic-bezier(.4, 0, .2, 1);
+      display: block; height: 100%; width: 0; border-radius: 5px; transition: width .4s cubic-bezier(.4, 0, .2, 1);
       background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 72%, transparent), var(--accent));
     }
-    .bars li:nth-child(2) .fill { transition-delay: 70ms; }
-    .bars li:nth-child(3) .fill { transition-delay: 140ms; }
-    .bars li:nth-child(4) .fill { transition-delay: 210ms; }
-    .bars li:nth-child(5) .fill { transition-delay: 280ms; }
     .bars .n { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
     .bars .pct { text-align: right; color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
     .kept-private { color: var(--muted); font-size: 14px; margin: 0 0 12px; }
@@ -578,7 +603,7 @@
     .decisions dt { font-weight: 600; margin-top: 10px; }
     .decisions dd { margin: 2px 0 0; color: var(--muted); }
     .quality { padding-left: 20px; }
-    #app { position: fixed; inset: 0; opacity: 0; pointer-events: none; transition: opacity .25s ease; }
+    #app { position: fixed; inset: 0; opacity: 0; pointer-events: none; transition: opacity .12s ease-out; }
     /* Above #static-scroll, so the static page's bar never covers it. */
     .loading-bar {
       position: fixed; top: 0; left: 0; z-index: 1; height: 3px; width: 40%; background: var(--accent);
@@ -876,7 +901,7 @@
           time.setAttribute("datetime", note.date);
           meta.appendChild(time);
         }
-        if (note.pinned) meta.appendChild(element("span", "badge pinned", "Pinned"));
+        if (note.pinned && showsPins) meta.appendChild(element("span", "badge pinned", "Pinned"));
         if (badge) meta.appendChild(element("span", "badge", badge));
         if (meta.childNodes.length) item.appendChild(meta);
         item.appendChild(element("p", "words", note.message));
@@ -894,11 +919,13 @@
         if (!more.hidden) return more.focus();
         if (first) { first.tabIndex = -1; first.focus(); }
       }
-      var siteRatings = null;
+      var siteRatings = null, showsPins = false;
+      // The thresholds the app keeps (LiveStats): an average and its breakdown from 5 ratings, visits from 1,000.
+      var MIN_RATINGS = {{minRatings}}, MIN_VISITS = {{minVisits}};
       function showRatings(r) {
         var board = notesBox.querySelector(".ratings");
         siteRatings = r || null;
-        if (!r || !r.count || r.average == null) { board.hidden = true; return; }
+        if (!r || !(r.count >= MIN_RATINGS) || r.average == null) { board.hidden = true; return; }
         var average = Number(r.average).toFixed(1);
         board.querySelector(".score strong").textContent = average;
         var meter = board.querySelector(".meter");
@@ -940,6 +967,8 @@
       }
       function showNotes(data) {
         if (!notesBox || !data || !data.notes) return;
+        // As the app's: "Pinned" only beside other notes, from three.
+        showsPins = (data.total || 0) >= 3;
         showRatings(data.ratings);
         showList(data, false);
         notesBox.hidden = false;
@@ -1118,12 +1147,12 @@
           if (document.body.classList.contains("app-ready")) closeSheet();
         }).observe(document.body, { attributes: true, attributeFilter: ["class"] });
       }
-      // The bar's proof chip (StaticHtml.proofChip), in the app's words: the notes' rating ("5.0", "· 1 rating") and
-      // the visit count ("1,234", "visits"), each only once there is one; with neither, no chip. It fades in once the
-      // backend has answered, and its numbers count up from 0 once, the first time it is the slot's (the reader may
-      // be down the page already), over 900ms, easing out; at once with reduced motion. A later answer (after a note
-      // is sent from this page) only sets the new numbers. Where the bar cannot fit all of it, the muted words go
-      // first, then four of the stars, then some of the room between its parts.
+      // The bar's proof chip (StaticHtml.proofChip), in the app's words: the notes' rating ("4.8", "· 14 ratings") and
+      // the visit count ("1,234", "visits"), each only once it is big enough to count as proof (LiveStats: 5 ratings,
+      // 1,000 visits); with neither, no chip, and the slot keeps saying where the owner is. It fades in once the
+      // backend has answered, its numbers final from the first frame; at once with reduced motion. A later answer
+      // (after a note is sent from this page) only sets the new numbers. Where the bar cannot fit all of it, the muted
+      // words go first, then four of the stars, then some of the room between its parts.
       var proof = document.querySelector(".bar .proof[data-api]");
       var chip = { visits: 0, average: 0, started: false }, visitsAnswer = null;
       function stillness() { return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches); }
@@ -1142,35 +1171,11 @@
           proof.classList.add(step);
         });
       }
-      function countUp() {
-        var visits = proof.querySelector(".visits"), start = null;
-        // The total keeps its final width while its digits grow, so the chip never does.
-        drawChip(1);
-        visits.style.minWidth = visits.getBoundingClientRect().width + "px";
-        drawChip(0);
-        requestAnimationFrame(function frame(now) {
-          if (start === null) start = now;
-          var t = Math.min(1, (now - start) / 900);
-          drawChip(1 - Math.pow(1 - t, 3));
-          if (t < 1) requestAnimationFrame(frame); else visits.style.minWidth = "";
-        });
-      }
-      // [then] once the slot shows the chip rather than the name, which it does while the hero's name is on screen.
-      function whenInSlot(then) {
-        var bar = proof.closest(".bar");
-        if (!bar || !bar.classList.contains("passed") || !window.MutationObserver) return then();
-        var watcher = new MutationObserver(function () {
-          if (bar.classList.contains("passed")) return;
-          watcher.disconnect();
-          then();
-        });
-        watcher.observe(bar, { attributes: true, attributeFilter: ["class"] });
-      }
       function showProof(visits, ratings) {
         if (!proof) return;
-        var count = ratings && Number(ratings.count) > 0 && ratings.average != null ? Number(ratings.count) : 0;
+        var count = ratings && Number(ratings.count) >= MIN_RATINGS && ratings.average != null ? Number(ratings.count) : 0;
         chip.average = count ? Number(ratings.average) : 0;
-        chip.visits = visits && Number(visits.total) > 0 ? Math.floor(Number(visits.total)) : 0;
+        chip.visits = visits && Number(visits.total) >= MIN_VISITS ? Math.floor(Number(visits.total)) : 0;
         var parts = [];
         if (count) parts.push("Rated " + chip.average.toFixed(1) + " out of 5 from " + plural(count, "rating", "ratings"));
         if (chip.visits) parts.push(chip.visits.toLocaleString("en") + (chip.visits === 1 ? " visit" : " visits"));
@@ -1188,7 +1193,6 @@
         chip.started = true;
         // From its first frame at 0 opacity, so it fades in.
         requestAnimationFrame(function () { requestAnimationFrame(function () { proof.classList.add("on"); }); });
-        whenInSlot(countUp);
       }
       if (proof) {
         if (window.ResizeObserver) new ResizeObserver(fitChip).observe(proof.parentNode);
@@ -1236,6 +1240,19 @@
     })();
   </script>
   <script>
+    // "Copy email" (StaticHtml.content): shown only where the page can write to the clipboard; "Copied" for two seconds.
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      Array.prototype.forEach.call(document.querySelectorAll("#contact .copy[data-copy]"), function (button) {
+        button.hidden = false;
+        button.setAttribute("aria-live", "polite");
+        button.addEventListener("click", function () {
+          navigator.clipboard.writeText(button.dataset.copy).then(function () {
+            button.textContent = "Copied";
+            setTimeout(function () { button.textContent = "Copy email"; }, 2000);
+          }, function () {});
+        });
+      });
+    }
     // The LinkedIn and GitHub links (data-track) count their clicks, middle clicks included: a beacon, which the browser
     // delivers even as the link takes the tab away, at most once per link per page load; the backend counts a visitor
     // once a day per link anyway. The private message form posts like the note form. Both only exist with an "api".

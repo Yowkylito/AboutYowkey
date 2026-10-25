@@ -82,8 +82,8 @@ class StaticHtmlTest {
         assertTrue(bar.startsWith("<div id=\"top\"></div>\n<header class=\"bar\">"), bar.take(80))
         listOf(
             "<a class=\"mark\" href=\"#top\" aria-label=\"Ada &lt;King&gt;  Lovelace, back to top\"><span aria-hidden=\"true\">AL</span></a>",
-            "<div class=\"brand\">" +
-                "<span class=\"who\"><strong>Ada &lt;King&gt;  Lovelace</strong><span aria-label=\"Engineer at &quot;Acme&quot;\">" +
+            "<div class=\"brand\"><span class=\"where\" aria-label=\"Open to &lt;work&gt;\">",
+            "</span></span><span class=\"who\"><strong>Ada &lt;King&gt;  Lovelace</strong><span aria-label=\"Engineer at &quot;Acme&quot;\">" +
                 "<span class=\"full\" aria-hidden=\"true\">Engineer at &quot;Acme&quot;</span><span class=\"short\" aria-hidden=\"true\">Engineer at &quot;Acme&quot;</span></span></span></div>",
             "<nav class=\"sections\" id=\"sections\" aria-label=\"Sections\"><ul>",
             "<button class=\"theme\" type=\"button\" role=\"switch\" aria-checked=\"false\" aria-label=\"Dark theme\"><span class=\"knob\"></span><svg class=\"sun\"",
@@ -110,19 +110,27 @@ class StaticHtmlTest {
     }
 
     /**
-     * The location and the availability stay in the content file but show on neither the bar nor the hero: the bar
-     * has no pill and the hero no eyebrow, with a backend or without.
+     * Where the owner is shows in the bar's slot (the country and the availability, the availability alone on a phone)
+     * and in Contact (the whole location), but not in the hero, which keeps its words for the work; with a backend or
+     * without.
      */
     @Test
-    fun theLocationAndTheAvailabilityShowOnNeitherTheBarNorTheHero() {
+    fun whereTheOwnerIsShowsInTheBarAndContactButNotTheHero() {
         val owner = everySection.copy(
-            profile = everySection.profile.copy(location = "Quezon City, Philippines", availability = "Open to relocation to any Country"),
+            profile = everySection.profile.copy(location = "Quezon City, Philippines", availability = "Open to relocation"),
         )
         listOf(owner, owner.copy(api = "https://api.example")).forEach {
             val bar = StaticHtml.bar(it)
-            assertFalse("class=\"pill\"" in bar || "class=\"dot\"" in bar || "Open to relocation" in bar, bar)
-            val hero = StaticHtml.content(it).substringBefore("</header>")
-            assertFalse("class=\"eyebrow\"" in hero || "Open to relocation" in hero || "Quezon City" in hero, hero)
+            assertTrue(
+                "<span class=\"where\" aria-label=\"Philippines · Open to relocation\"><span class=\"full\" aria-hidden=\"true\">" +
+                    "Philippines · Open to relocation</span><span class=\"short\" aria-hidden=\"true\">Open to relocation</span></span>" in bar,
+                bar,
+            )
+            val content = StaticHtml.content(it)
+            val hero = content.substringBefore("</header>")
+            assertFalse("Open to relocation" in hero || "Quezon City" in hero, hero)
+            val contact = content.substringAfter("<section id=\"contact\">")
+            assertTrue("<p class=\"based\">Based in Quezon City, Philippines · Open to relocation</p>" in contact, contact)
         }
     }
 
@@ -150,7 +158,13 @@ class StaticHtmlTest {
         assertFalse(Regex("hero-(shake|split|burst|smear|thin|back)|filter|drop-shadow").containsMatchIn(css), "nothing shakes, splits or bursts")
         assertFalse(Regex("\\d[eE][-+]?\\d").containsMatchIn(css), "a number CSS cannot read")
         val page = StaticHtml.page(portfolio, "<style>{{heroMotion}}</style>{{content}}", "b")
-        assertTrue("<style>$css</style>" in page, "the template's styles carry it")
+        assertTrue("<style>${StaticHtml.heroMotion(portfolio.profile)}</style>" in page, "the template's styles carry it")
+
+        // With no portrait there is nothing to wait for: the clock starts where the words do, as the app's does.
+        val bare = StaticHtml.heroMotion(portfolio.profile.copy(photo = null))
+        val skip = HeroMotion.TEXT_AT_MS
+        assertTrue("  .js .hero { animation: hero-intro ${HeroMotion.END_MS}ms linear -${skip}ms both; }" in bare, bare)
+        assertTrue("  .js .hero > hgroup > h1 { animation-delay: 0ms; }" in bare, "the name reads in from the first paint")
         assertFalse("class=\"shout\"" in page || "class=\"melt\"" in page, "no sound lines, no melting filters")
     }
 
@@ -226,7 +240,7 @@ class StaticHtmlTest {
 
         val all = linked(everySection)
         assertEquals(sectionIds(everySection), all.map { it.first }, "every section, in page order")
-        assertEquals((Section.entries - Section.Home).map { it.title }, all.map { it.second }, "the app's names")
+        assertEquals((Section.entries - Section.Home).map { StaticHtml.escape(it.title) }, all.map { it.second }, "the app's names")
         assertEquals(listOf("projects" to "Projects", "contact" to "Contact"), linked(portfolio), "only the sections there are")
         assertEquals(sectionIds(portfolio), linked(portfolio).map { it.first })
     }
@@ -259,9 +273,11 @@ class StaticHtmlTest {
      * script gives the link its whole label.
      */
     @Test
-    fun withABackendTheSlotLeadsWithTheProofChipForTheScriptToFill() {
+    fun withABackendTheSlotHoldsWhereThenTheProofChipForTheScriptToFill() {
         val owner = everySection.copy(api = "https://api.example/\"x")
-        val brand = StaticHtml.bar(owner).substringAfter("<div class=\"brand\">").substringBefore("</div>")
+        val slot = StaticHtml.bar(owner).substringAfter("<div class=\"brand\">").substringBefore("</div>")
+        assertTrue(slot.startsWith("<span class=\"where\""), slot)
+        val brand = slot.substring(slot.indexOf("<a class=\"proof\""))
         assertTrue(
             brand.startsWith(
                 "<a class=\"proof\" href=\"#notes\" data-api=\"https://api.example/&quot;x\" hidden>" +
@@ -493,11 +509,11 @@ class StaticHtmlTest {
         assertTrue(positions.none { it < 0 } && positions == positions.sorted(), "order ${order.zip(positions)}")
         val chips = sheet.substringAfter("<div class=\"relations\"").substringBefore("</div>")
         assertEquals(
-            listOf("", "colleague", "friend", "special", "other"),
+            listOf("", "colleague", "friend", "other"),
             Regex("data-relation=\"([a-z]*)\"").findAll(chips).map { it.groupValues[1] }.toList(),
-            "All, then every relation in the model's order",
+            "All, then every relation the page offers, in the model's order",
         )
-        Relation.entries.forEach {
+        Relation.offered.forEach {
             assertTrue(
                 "<button type=\"button\" data-relation=\"${it.wire}\" aria-pressed=\"false\">${StaticHtml.escape(it.plural)}<span class=\"n\"></span></button>" in chips,
                 "the ${it.wire} chip, with a slot for its count",
@@ -514,13 +530,14 @@ class StaticHtmlTest {
         val fieldset = form.substringAfter("<fieldset class=\"relations\">", missingDelimiterValue = "").substringBefore("</fieldset>")
         assertTrue(fieldset.startsWith("<legend>${StaticHtml.escape(FeedbackCopy.RELATION)} <span class=\"muted\">(optional)</span></legend>"), fieldset)
         assertEquals(
-            Relation.entries.joinToString("") {
+            Relation.offered.joinToString("") {
                 "<label class=\"relation\"><input type=\"radio\" name=\"relation\" value=\"${it.wire}\"><span>${StaticHtml.escape(it.label)}</span></label>"
             },
             fieldset.substringAfter("</legend>"),
-            "colleague, friend, special and other, none picked",
+            "colleague, friend and other, none picked",
         )
-        assertEquals(listOf("colleague", "friend", "special", "other"), Relation.entries.map { it.wire })
+        assertEquals(listOf("colleague", "friend", "special", "other"), Relation.entries.map { it.wire }, "special still reads, for old notes")
+        assertEquals(listOf("colleague", "friend", "other"), Relation.offered.map { it.wire })
         assertFalse("checked" in fieldset || "required" in fieldset, "not saying is fine")
         assertTrue(form.indexOf("name=\"contact\"") < form.indexOf("<fieldset") && form.indexOf("<fieldset") < form.indexOf("name=\"rating\""))
     }
@@ -603,7 +620,7 @@ class StaticHtmlTest {
                     "<h3 id=\"$id\">$title <span class=\"badge\">$audience</span></h3>\n" +
                     "<p class=\"note\">$intro</p>\n" +
                     // Filled for the private form, outlined for the public one, as the app's.
-                    "<button class=\"open-form${if (id == "message") "" else " outlined"}\" type=\"button\" aria-haspopup=\"dialog\" aria-controls=\"$id-dialog\" " +
+                    "<button class=\"open-form outlined\" type=\"button\" aria-haspopup=\"dialog\" aria-controls=\"$id-dialog\" " +
                     "commandfor=\"$id-dialog\" command=\"show-modal\">$open</button>\n",
                 entry.section,
             )
@@ -695,7 +712,9 @@ class StaticHtmlTest {
         )
         assertTrue("<a href=\"https://github.com/ada\" rel=\"noopener\" data-track=\"github\" data-api=\"https://api.example\">GitHub</a>" in contact)
         assertTrue("<a href=\"https://ada.dev\" rel=\"noopener\">Blog</a>" in contact, "a link the backend does not count")
-        assertEquals(2, Regex("data-track=").findAll(html).count(), "only the profile's two, not a project's source link")
+        val hero = html.substringBefore("</header>")
+        assertTrue("<a href=\"https://github.com/ada\" rel=\"noopener\" class=\"quiet\" data-track=\"github\" data-api=\"https://api.example\">GitHub</a>" in hero, hero)
+        assertEquals(4, Regex("data-track=").findAll(html).count(), "the profile's two, in the hero and in Contact, not a project's source link")
     }
 
     @Test

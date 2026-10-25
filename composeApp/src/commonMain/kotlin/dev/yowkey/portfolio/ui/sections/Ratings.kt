@@ -50,6 +50,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.yowkey.portfolio.model.FeedbackCopy
+import dev.yowkey.portfolio.model.LiveStats
 import dev.yowkey.portfolio.model.RatingSummary
 import dev.yowkey.portfolio.model.SiteNotes
 import dev.yowkey.portfolio.model.oneDecimal
@@ -82,7 +83,7 @@ fun RatingsDashboard(
             color = MaterialTheme.colorScheme.onBackground,
             modifier = Modifier.semantics { heading() },
         )
-        if (ratings.count > 0 && average != null) {
+        if (ratings.count >= LiveStats.MIN_RATINGS && average != null) {
             DashboardCard(wide) {
                 if (wide) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -178,7 +179,7 @@ private fun StarBars(ratings: RatingSummary, onOpenSheet: (Int) -> Unit, modifie
                 count = ratings.countOf(stars),
                 share = ratings.shareOf(stars),
                 percent = ratings.percentOf(stars),
-                delayMillis = index * 70,
+                delayMillis = 0,
                 onClick = { onOpenSheet(stars) },
             )
         }
@@ -204,7 +205,7 @@ private fun StarBar(
     val fill = remember { Animatable(if (reducedMotion) share else 0f) }
     LaunchedEffect(share, reducedMotion) {
         if (reducedMotion) fill.snapTo(share)
-        else fill.animateTo(share, tween(durationMillis = 700, delayMillis = delayMillis, easing = FastOutSlowInEasing))
+        else fill.animateTo(share, tween(durationMillis = 400, delayMillis = delayMillis, easing = FastOutSlowInEasing))
     }
     val colors = MaterialTheme.colorScheme
     val interaction = remember { MutableInteractionSource() }

@@ -26,6 +26,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -56,6 +57,7 @@ import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.TextUnit
@@ -66,10 +68,12 @@ import dev.yowkey.portfolio.ui.theme.LocalReducedMotion
 import dev.yowkey.portfolio.ui.theme.LocalThemeSwitch
 
 private val EaseOutCubic = CubicBezierEasing(0.33f, 1f, 0.68f, 1f)
+private val EmphasizedDecelerate = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f)
 
 /**
  * A 0→1 entrance progress for the lazy row keyed [key]. Read it inside `graphicsLayer {}` so the animation only
  * re-runs the layer phase, never composition. Rows already seen (in [seen]) or under reduced motion start at 1.
+ * 200 ms on Material's emphasized deceleration: readable at once, settled before the eye lands (NN/g: 100 to 500 ms).
  */
 @Composable
 fun rememberRevealProgress(key: Any, seen: MutableSet<Any>, reducedMotion: Boolean): Animatable<Float, *> {
@@ -77,27 +81,21 @@ fun rememberRevealProgress(key: Any, seen: MutableSet<Any>, reducedMotion: Boole
     LaunchedEffect(key) {
         if (progress.value < 1f) {
             seen += key
-            progress.animateTo(1f, tween(durationMillis = 520, easing = EaseOutCubic))
+            progress.animateTo(1f, tween(durationMillis = 200, easing = EmphasizedDecelerate))
         }
     }
     return progress
 }
 
+/** A section's title. No number over it: "01" carried no information, in the accent kept for what can be pressed. */
 @Composable
-fun SectionHeader(number: Int, title: String, modifier: Modifier = Modifier) {
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(
-            text = number.toString().padStart(2, '0'),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.primary,
-        )
-        Text(
-            text = title,
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.semantics { heading() },
-        )
-    }
+fun SectionHeader(title: String, modifier: Modifier = Modifier) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.headlineMedium,
+        color = MaterialTheme.colorScheme.onBackground,
+        modifier = modifier.semantics { heading() },
+    )
 }
 
 /**
@@ -237,13 +235,20 @@ fun Bullet(text: String, modifier: Modifier = Modifier) {
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Box(
             Modifier
-                .padding(top = markTop(middle = 11.5.sp, size = BulletDot))
+                .padding(top = markTop(middle = 13.sp, size = BulletDot))
                 .size(BulletDot)
                 .background(MaterialTheme.colorScheme.primary, CircleShape),
         )
-        Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(text, style = BulletStyle, color = MaterialTheme.colorScheme.onSurface.copy(alpha = BulletInk))
     }
 }
+
+/**
+ * A bullet is what a reader came for (what was done, what it changed), so it reads at 16/26 in near-black rather than
+ * in the grey of the dates beside it: larger text read faster and was understood better in Rello et al. 2016.
+ */
+private val BulletStyle = TextStyle(fontSize = 16.sp, lineHeight = 26.sp, letterSpacing = 0.25.sp)
+private const val BulletInk = 0.84f
 
 /**
  * How far down a line of text to put a mark [size] tall so that its middle is [middle] down the line. [middle] is in
@@ -257,16 +262,22 @@ fun markTop(middle: TextUnit, size: Dp): Dp = with(LocalDensity.current) { middl
  * and only then, [onOpened] hears of it (to count the click), so nothing it does can hold up or stop the link.
  */
 @Composable
-fun LinkButton(link: Link, modifier: Modifier = Modifier, primary: Boolean = false, onOpened: () -> Unit = {}) {
+fun LinkButton(
+    link: Link,
+    modifier: Modifier = Modifier,
+    primary: Boolean = false,
+    quiet: Boolean = false,
+    onOpened: () -> Unit = {},
+) {
     val uriHandler = LocalUriHandler.current
     val open = {
         uriHandler.openUri(link.url)
         onOpened()
     }
-    if (primary) {
-        Button(onClick = open, modifier = modifier) { Text(link.label) }
-    } else {
-        OutlinedButton(onClick = open, modifier = modifier) { Text(link.label) }
+    when {
+        primary -> Button(onClick = open, modifier = modifier) { Text(link.label) }
+        quiet -> TextButton(onClick = open, modifier = modifier) { Text(link.label) }
+        else -> OutlinedButton(onClick = open, modifier = modifier) { Text(link.label) }
     }
 }
 

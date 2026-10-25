@@ -120,13 +120,18 @@ data class SiteNotes(
 }
 
 /**
- * The page bar's proof: the notes' rating and the visit count, each only once it exists. Either is null until the
- * backend answers (or when it never does), and an answer can still hold nothing: no rated note, no visit counted.
+ * The page bar's proof: the notes' rating and the visit count, each only once it is big enough to count as proof.
+ * Either is null until the backend answers (or when it never does), and an answer can still hold too little to show.
+ *
+ * A small number on the first screen works against the page: a single 5.0 reads as too good to be true (Spiegel
+ * Research Center: purchase likelihood falls as averages near 5.0, and the first five reviews matter most), and a
+ * low count tells the reader that few others came (Cialdini's negative social proof). So the rating shows from
+ * [MIN_RATINGS] ratings and the visits from [MIN_VISITS]; until then the bar says where the owner is instead.
  */
 @Immutable
 data class LiveStats(val visits: VisitCount? = null, val ratings: RatingSummary? = null) {
-    /** The average to show, once a note carries a rating; null before. */
-    val average: Double? get() = ratings?.takeIf { it.count > 0 }?.average
+    /** The average to show, once [MIN_RATINGS] notes carry a rating; null before. */
+    val average: Double? get() = ratings?.takeIf { it.count >= MIN_RATINGS }?.average
 
     /** How many rated; 0 while there is no [average]. */
     val ratingCount: Int get() = if (average == null) 0 else ratings?.count ?: 0
@@ -135,17 +140,25 @@ data class LiveStats(val visits: VisitCount? = null, val ratings: RatingSummary?
     val visitTotal: Long get() = visits?.total?.coerceAtLeast(0) ?: 0
 
     val hasRating: Boolean get() = average != null
-    val hasVisits: Boolean get() = visitTotal > 0
+    val hasVisits: Boolean get() = visitTotal >= MIN_VISITS
     val isEmpty: Boolean get() = !hasRating && !hasVisits
 
     /** Both answers are in, whatever they hold: nothing more is coming that would change what can be shown. */
     val settled: Boolean get() = visits != null && ratings != null
+
+    companion object {
+        /** The fewest ratings the bar shows an average for. */
+        const val MIN_RATINGS = 5
+
+        /** The fewest visits the bar shows. */
+        const val MIN_VISITS = 1000L
+    }
 }
 
 /**
  * The words and numbers of the bar's proof chip, shared by the app and the static page so both say the same: the
- * average and the visits in bold, each with its muted word, and one sentence for a screen reader. The numbers count up
- * from 0 as the chip first shows, so each can be written at a [progress] of the way there (0..1, already eased).
+ * average and the visits in bold, each with its muted word, and one sentence for a screen reader. Each can be written
+ * at a [progress] of the way up from 0 (0..1), though the chip itself shows them final from its first frame.
  */
 object ProofCopy {
     /** The average to one decimal, [progress] of the way up from 0.0: 4.8 at 1, "2.4" halfway. */
@@ -225,6 +238,13 @@ enum class Relation(val wire: String, val label: String, val plural: String) {
     ;
 
     companion object {
+        /**
+         * The relations the note form and the sorter offer. "Special someone" is no longer one: on a page for
+         * recruiters it invites notes that read as unprofessional (Stanford web credibility: suit the site's
+         * purpose). A note that already says it still shows its badge.
+         */
+        val offered: List<Relation> get() = entries - Special
+
         /** The relation [wire] names, whatever its case and spaces; null for none, or for anything else. */
         fun of(wire: String?): Relation? = wire?.trim()?.lowercase()?.let { value -> entries.firstOrNull { it.wire == value } }
     }
@@ -303,7 +323,7 @@ object FeedbackCopy {
     const val SENDING = "Sending…"
     const val THANKS = "Thanks, your note is up."
     const val ANOTHER = "Write another"
-    const val NOTES_TITLE = "Notes from visitors"
+    const val NOTES_TITLE = "Notes from colleagues and visitors"
     const val NO_NOTES = "No notes yet. Be the first to leave one below."
     const val MORE = "Show more notes"
     const val LOADING_MORE = "Loading…"

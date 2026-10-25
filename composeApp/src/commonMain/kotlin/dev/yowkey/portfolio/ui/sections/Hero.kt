@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.text.selection.DisableSelection
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -29,7 +30,11 @@ import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -77,6 +82,8 @@ fun Hero(
     onSeeProjects: () -> Unit,
     onContact: () -> Unit,
     modifier: Modifier = Modifier,
+    links: List<Link> = emptyList(),
+    onOpenLink: (Link) -> Unit = {},
     entrance: HeroEntrance = rememberHeroEntrance(),
 ) {
     val photo = profile.photoPath
@@ -87,7 +94,7 @@ fun Hero(
         Row(modifier.fillMaxWidth().onPlaced(ruler::placeHero), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1.5f), verticalArrangement = Arrangement.spacedBy(20.dp)) {
                 HeroIntro(profile, compact, entrance, ruler)
-                HeroActions(profile.email, onSeeProjects, onContact, Modifier.introStep(entrance, IntroStep.ACTIONS))
+                HeroActions(profile.email, links, onSeeProjects, onContact, onOpenLink, Modifier.introStep(entrance, IntroStep.ACTIONS))
                 HeroSummary(profile.summary, Modifier.introStep(entrance, IntroStep.SUMMARY))
             }
             Spacer(Modifier.width(48.dp))
@@ -115,7 +122,7 @@ fun Hero(
                 if (profile.proof.isNotEmpty()) {
                     ProofPoints(profile.proof, Modifier.padding(vertical = 4.dp).introStep(entrance, IntroStep.PROOF, staged))
                 }
-                HeroActions(profile.email, onSeeProjects, onContact, Modifier.introStep(entrance, IntroStep.ACTIONS, staged))
+                HeroActions(profile.email, links, onSeeProjects, onContact, onOpenLink, Modifier.introStep(entrance, IntroStep.ACTIONS, staged))
                 HeroSummary(profile.summary, Modifier.introStep(entrance, IntroStep.SUMMARY, staged))
             }
         }
@@ -206,24 +213,67 @@ private fun HeroIntro(profile: Profile, compact: Boolean, entrance: HeroEntrance
             modifier = Modifier.semantics { heading() }.onGloballyPositioned(ruler::placeName).introStep(entrance, IntroStep.NAME),
         )
         Text(
-            text = profile.headline,
+            text = headlineText(profile.headline),
             style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.onBackground,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.readingMeasure(MaterialTheme.typography.headlineSmall).introStep(entrance, IntroStep.HEADLINE),
         )
     }
 }
 
+/**
+ * Email me, See projects, then the profile's [links] as text buttons: what a hiring manager checks next (the code, the
+ * history) is on the first screen, while the two main actions keep the weight. Outside the hero's text selection, so
+ * the pointer over a button is a button's.
+ */
+/**
+ * The headline with its role (up to the first " · ") in near-black and medium weight and the stack after it in the
+ * muted grey: the title a recruiter looks for first stands apart from the keywords (Gestalt similarity).
+ */
+@Composable
+private fun headlineText(headline: String): AnnotatedString {
+    val ink = MaterialTheme.colorScheme.onBackground
+    return remember(headline, ink) {
+        val cut = headline.indexOf('·')
+        buildAnnotatedString {
+            if (cut < 0) {
+                withStyle(SpanStyle(color = ink, fontWeight = FontWeight.Medium)) { append(headline) }
+            } else {
+                withStyle(SpanStyle(color = ink, fontWeight = FontWeight.Medium)) { append(headline.substring(0, cut)) }
+                append(headline.substring(cut))
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun HeroActions(email: String?, onSeeProjects: () -> Unit, onContact: () -> Unit, modifier: Modifier = Modifier) {
-    FlowRow(modifier, horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+private fun HeroActions(
+    email: String?,
+    links: List<Link>,
+    onSeeProjects: () -> Unit,
+    onContact: () -> Unit,
+    onOpenLink: (Link) -> Unit,
+    modifier: Modifier = Modifier,
+) = DisableSelection {
+    FlowRow(
+        modifier,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        itemVerticalAlignment = Alignment.CenterVertically,
+    ) {
         if (email != null) {
             LinkButton(Link("Email me", "mailto:$email"), primary = true)
         } else {
             Button(onClick = onContact) { Text("Get in touch") }
         }
         OutlinedButton(onClick = onSeeProjects) { Text("See projects") }
+        // Together, so a narrow screen moves both to the next line rather than leaving one there alone.
+        if (links.isNotEmpty()) {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                links.forEach { link -> LinkButton(link, quiet = true, onOpened = { onOpenLink(link) }) }
+            }
+        }
     }
 }
 
@@ -237,18 +287,24 @@ private fun HeroSummary(summary: String, modifier: Modifier = Modifier) {
     )
 }
 
-/** Each point is one merged node, so a screen reader says the figure and its sentence together. */
+/**
+ * Each point is one merged node, so a screen reader says the figure and its sentence together. The figure stands out by
+ * size and weight in near-black, not in the accent, which on this page means "press me".
+ */
 @Composable
 fun ProofPoints(points: List<ProofPoint>, modifier: Modifier = Modifier) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(18.dp)) {
         points.forEach { point ->
             Column(Modifier.semantics(mergeDescendants = true) {}, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(point.value, style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)
+                Text(point.value, style = ProofValueStyle(), color = MaterialTheme.colorScheme.onBackground)
                 Text(point.label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
 }
+
+@Composable
+private fun ProofValueStyle() = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold)
 
 private val previewProfile = Profile(
     name = "Ada Lovelace",

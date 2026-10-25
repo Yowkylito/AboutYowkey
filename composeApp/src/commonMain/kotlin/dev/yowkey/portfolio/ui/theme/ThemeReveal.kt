@@ -165,7 +165,7 @@ internal fun coverRadius(origin: Offset, size: Size): Float {
     return hypot(dx, dy)
 }
 
-private const val SpreadMillis = 720
+private const val SpreadMillis = 500
 private const val FadeMillis = 260
 // A tap is down for a tenth of a second or so; a frame older than this is stale by the release, so it is taken again.
 private val EarlyFor = 400.milliseconds

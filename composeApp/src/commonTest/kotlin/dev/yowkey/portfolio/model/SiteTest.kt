@@ -107,20 +107,31 @@ class SiteTest {
         assertTrue(LiveStats(VisitCount(0), RatingSummary()).isEmpty, "answers with nothing in them")
         assertTrue(LiveStats(VisitCount(0), RatingSummary(count = 2, average = null)).isEmpty, "a count without an average is no rating")
 
-        val both = LiveStats(VisitCount(12, since = "2026-10-23"), RatingSummary(3, 4.7))
+        val both = LiveStats(VisitCount(1200, since = "2026-10-23"), RatingSummary(6, 4.7))
         assertEquals(4.7, both.average)
-        assertEquals(3, both.ratingCount)
-        assertEquals(12L, both.visitTotal)
+        assertEquals(6, both.ratingCount)
+        assertEquals(1200L, both.visitTotal)
         assertTrue(both.hasRating && both.hasVisits && !both.isEmpty)
 
-        val visitsOnly = LiveStats(VisitCount(12), RatingSummary())
+        val visitsOnly = LiveStats(VisitCount(1200), RatingSummary())
         assertNull(visitsOnly.average)
         assertEquals(0, visitsOnly.ratingCount)
         assertTrue(visitsOnly.hasVisits && !visitsOnly.hasRating)
 
-        val ratingOnly = LiveStats(VisitCount(0), RatingSummary(1, 5.0))
+        val ratingOnly = LiveStats(VisitCount(0), RatingSummary(5, 5.0))
         assertTrue(ratingOnly.hasRating && !ratingOnly.hasVisits)
         assertEquals(0L, LiveStats(VisitCount(-3)).visitTotal, "never fewer than none")
+    }
+
+    /** Too few to count as proof shows nothing: one 5.0 or 73 visits would argue against the page. */
+    @Test
+    fun theProofWaitsUntilItsNumbersAreBigEnough() {
+        val early = LiveStats(VisitCount(LiveStats.MIN_VISITS - 1), RatingSummary(LiveStats.MIN_RATINGS - 1, 5.0))
+        assertTrue(early.isEmpty, "4 ratings and 999 visits: the bar says where the owner is instead")
+        assertNull(early.average)
+        assertEquals(0, early.ratingCount)
+        val enough = LiveStats(VisitCount(LiveStats.MIN_VISITS), RatingSummary(LiveStats.MIN_RATINGS, 4.6))
+        assertTrue(enough.hasRating && enough.hasVisits)
     }
 
     @Test
@@ -158,15 +169,12 @@ class SiteTest {
     @Test
     fun theProofIsReadAsOneSentence() {
         assertEquals(
-            "Rated 5.0 out of 5 from 1 rating, 35 visits. Read the reviews.",
-            ProofCopy.label(LiveStats(VisitCount(35), RatingSummary(1, 5.0))),
-        )
-        assertEquals(
             "Rated 4.8 out of 5 from 14 ratings, 1,234 visits. Read the reviews.",
             ProofCopy.label(LiveStats(VisitCount(1234), RatingSummary(14, 4.75))),
         )
-        assertEquals("Rated 4.0 out of 5 from 2 ratings. Read the reviews.", ProofCopy.label(LiveStats(VisitCount(0), RatingSummary(2, 4.0))))
-        assertEquals("1 visit. See the notes.", ProofCopy.label(LiveStats(VisitCount(1), RatingSummary())))
+        assertEquals("Rated 4.0 out of 5 from 6 ratings. Read the reviews.", ProofCopy.label(LiveStats(VisitCount(35), RatingSummary(6, 4.0))))
+        assertEquals("1,001 visits. See the notes.", ProofCopy.label(LiveStats(VisitCount(1001), RatingSummary(1, 5.0))))
+        assertNull(ProofCopy.label(LiveStats(VisitCount(35), RatingSummary(1, 5.0))), "too little to say")
         assertNull(ProofCopy.label(LiveStats(VisitCount(0), RatingSummary())))
         assertNull(ProofCopy.label(LiveStats()))
     }

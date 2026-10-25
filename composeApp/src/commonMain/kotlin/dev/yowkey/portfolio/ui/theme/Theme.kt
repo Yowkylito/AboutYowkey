@@ -37,19 +37,21 @@ private val LightColors = lightColorScheme(
 )
 
 // The same scale inverted, for visitors who ask for it: the accent lightens so it keeps its contrast on the dark page.
+// Off-white ink on a lifted near-black (15.3:1, under pure white's glare), and card edges a step brighter so cards
+// still read as cards: Material's dark-theme guidance.
 private val DarkColors = darkColorScheme(
     primary = Color(0xFF60A5FA),
     onPrimary = Color(0xFF0B1D3F),
     primaryContainer = Color(0xFF1E3A8A),
     onPrimaryContainer = Color(0xFFBFDBFE),
-    background = Color(0xFF0C0E13),
-    onBackground = Color(0xFFF4F4F5),
-    surface = Color(0xFF15181F),
-    onSurface = Color(0xFFF4F4F5),
+    background = Color(0xFF101216),
+    onBackground = Color(0xFFE8E8EA),
+    surface = Color(0xFF181B21),
+    onSurface = Color(0xFFE8E8EA),
     surfaceVariant = Color(0xFF1E2229),
     onSurfaceVariant = Color(0xFFA1A1AA),
     outline = Color(0xFF3F3F46),
-    outlineVariant = Color(0xFF27272A),
+    outlineVariant = Color(0xFF2C3038),
     error = Color(0xFFF2B8B5),
     surfaceContainerLowest = Color(0xFF070809),
     surfaceContainerLow = Color(0xFF101318),

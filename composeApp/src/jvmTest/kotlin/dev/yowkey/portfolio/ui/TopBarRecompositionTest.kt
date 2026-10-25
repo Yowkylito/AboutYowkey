@@ -29,7 +29,7 @@ import kotlin.test.assertTrue
 /**
  * The bar sits over every scroll frame, so it must not recompose on them: the brand slot (the only part that reads
  * `heroPassed`) recomposes once when the hero passes, and the reading line is only ever drawn. The proof in the slot
- * counts up in the draw phase too: only new numbers recompose it, and nothing plays its entrance twice.
+ * fades in in the draw phase too, its numbers final: only new numbers recompose it, and nothing plays its entrance twice.
  */
 class TopBarRecompositionTest {
 
@@ -54,18 +54,18 @@ class TopBarRecompositionTest {
     }
 
     @Test
-    fun theProofCountsUpOnceWithoutRecomposing() {
+    fun theProofFadesInOnceWithItsNumbersFinal() {
         val bar = Bar(proof)
         bar.scene().use { scene ->
             val clock = Clock(scene)
             clock.frame()
-            repeat(5) { clock.frame() }
-            val count = bar.reveal.count.value
-            assertTrue(count > 0f && count < 1f, "counting up: $count")
-            repeat(70) { clock.frame() }
-            assertEquals(1f, bar.reveal.count.value, "counted up within ${ProofReveal.COUNT_MS} ms")
-            assertEquals(1f, bar.reveal.shown.value, "and faded in")
-            assertEquals(1, bar.brandReads, "the whole count was drawn, never composed")
+            repeat(3) { clock.frame() }
+            assertEquals(1f, bar.reveal.count.value, "no count from 0: the first frame says the real numbers")
+            val shown = bar.reveal.shown.value
+            assertTrue(shown > 0f && shown < 1f, "fading in: $shown")
+            repeat(20) { clock.frame() }
+            assertEquals(1f, bar.reveal.shown.value, "faded in within ${ProofReveal.FADE_MS} ms")
+            assertEquals(1, bar.brandReads, "the whole fade was drawn, never composed")
 
             bar.stats.value = LiveStats(VisitCount(1235), RatingSummary(15, 4.8))
             clock.frame()
@@ -87,8 +87,8 @@ class TopBarRecompositionTest {
     }
 
     @Test
-    fun withNothingToShowTheProofWaitsAndNeverCounts() {
-        val bar = Bar(LiveStats(VisitCount(0), RatingSummary()))
+    fun tooLittleToShowLeavesTheSlotToWhereTheOwnerIs() {
+        val bar = Bar(LiveStats(VisitCount(73), RatingSummary(1, 5.0)))
         bar.scene().use { scene ->
             val clock = Clock(scene)
             repeat(60) { clock.frame() }
@@ -98,26 +98,25 @@ class TopBarRecompositionTest {
             bar.stats.value = proof
             clock.frame()
             repeat(5) { clock.frame() }
-            assertTrue(bar.reveal.shown.value > 0f, "it fades in as the numbers arrive")
-            val count = bar.reveal.count.value
-            assertTrue(count > 0f && count < 1f, "and counts up from 0: $count")
+            assertTrue(bar.reveal.shown.value > 0f, "it fades in as enough numbers arrive")
+            assertEquals(1f, bar.reveal.count.value, "already final")
         }
     }
 
     @Test
     fun withOneAnswerInTheProofWaitsForTheOther() {
-        val bar = Bar(LiveStats(visits = VisitCount(35)))
+        val bar = Bar(LiveStats(visits = VisitCount(1234)))
         bar.scene().use { scene ->
             val clock = Clock(scene)
             repeat(10) { clock.frame() }
             assertEquals(0f, bar.reveal.shown.value, "the visits alone: a moment for the rating")
 
-            bar.stats.value = LiveStats(VisitCount(35), RatingSummary(1, 5.0))
+            bar.stats.value = LiveStats(VisitCount(1234), RatingSummary(14, 4.8))
             clock.frame()
             repeat(5) { clock.frame() }
             assertTrue(bar.reveal.shown.value > 0f, "the rating came: no more waiting")
         }
-        val alone = Bar(LiveStats(visits = VisitCount(35)))
+        val alone = Bar(LiveStats(visits = VisitCount(1234)))
         alone.scene().use { scene ->
             val clock = Clock(scene)
             clock.frame()

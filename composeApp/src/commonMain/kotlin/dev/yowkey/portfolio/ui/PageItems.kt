@@ -11,19 +11,21 @@ import dev.yowkey.portfolio.model.ProjectGroup
 import dev.yowkey.portfolio.model.PublicNote
 import dev.yowkey.portfolio.model.Service
 import dev.yowkey.portfolio.model.SkillGroup
+import dev.yowkey.portfolio.ui.components.contactWhere
 
 /**
- * The page's sections, in page order: evidence before claims. A recruiter's skim is answered by the hero; a hiring
- * manager then reads the current job, the awards that back it, the work they can open, the keywords, and only then
- * the focus areas, which summarise rather than prove.
+ * The page's sections, in page order: what hiring managers weigh first comes first. A recruiter's skim is answered by
+ * the hero; a hiring manager then reads the current job, the work they can open, the keywords, the focus areas when
+ * there are any, and then the degree and the awards, which credential surveys rank last but a recruiter still looks
+ * for, so they keep their place in the bar.
  */
 enum class Section(val title: String) {
     Home("Home"),
     Experience("Experience"),
-    Recognition("Recognition"),
     Projects("Projects"),
     Skills("Skills"),
     Services("Focus areas"),
+    Recognition("Education & awards"),
     Contact("Contact"),
 }
 
@@ -36,7 +38,8 @@ sealed interface PageItem {
     /** The first row of a section carries its header. */
     val showsHeader: Boolean get() = false
 
-    data class Hero(val profile: Profile) : PageItem {
+    /** The first screen; [links] are the profile's (LinkedIn, GitHub), beside its buttons. */
+    data class Hero(val profile: Profile, val links: List<Link> = emptyList()) : PageItem {
         override val key = "hero"
         override val section = Section.Home
     }
@@ -62,6 +65,16 @@ sealed interface PageItem {
         override val section = Section.Projects
     }
 
+    /**
+     * The personal projects past the first [FULL_PERSONAL_CARDS], one compact row each under the cards: every project
+     * keeps its page, and the page ends sooner (the benchmark's strongest portfolios run about 3.5 screens, and the
+     * hiring managers NN/g asked want 3 to 5 projects in depth).
+     */
+    data class MoreProjects(val projects: List<Project>) : PageItem {
+        override val key = "more-projects"
+        override val section = Section.Projects
+    }
+
     data class Job(val experience: Experience, val index: Int, val isLast: Boolean) : PageItem {
         override val key = "job-$index"
         override val section = Section.Experience
@@ -80,7 +93,7 @@ sealed interface PageItem {
         override val showsHeader = true
     }
 
-    data class Contact(val email: String?, val links: List<Link>) : PageItem {
+    data class Contact(val email: String?, val links: List<Link>, val where: String? = null) : PageItem {
         override val key = "contact"
         override val section = Section.Contact
         override val showsHeader = true
@@ -146,22 +159,24 @@ fun buildPageItems(
     notesLoaded: Boolean = notes.isNotEmpty(),
     moreNotes: Boolean = false,
 ): List<PageItem> = buildList {
-    add(PageItem.Hero(portfolio.profile))
+    add(PageItem.Hero(portfolio.profile, portfolio.links))
     portfolio.experience.forEachIndexed { index, job ->
         add(PageItem.Job(job, index, isLast = index == portfolio.experience.lastIndex))
     }
-    if (portfolio.recognition.isNotEmpty()) add(PageItem.Recognition(portfolio.recognition))
     portfolio.projectGroups.forEachIndexed { index, (group, members) ->
         val note = group.note(members)
-        members.chunked(projectColumns).forEachIndexed { row, chunk ->
+        val shown = if (group == ProjectGroup.Personal) FULL_PERSONAL_CARDS else members.size
+        members.take(shown).chunked(projectColumns).forEachIndexed { row, chunk ->
             add(PageItem.Projects(chunk, projectColumns, showsHeader = index == 0 && row == 0, group, showsGroupHeader = row == 0, note))
         }
+        members.drop(shown).takeIf { it.isNotEmpty() }?.let { add(PageItem.MoreProjects(it)) }
     }
     if (portfolio.skills.isNotEmpty()) add(PageItem.Skills(portfolio.skills))
     portfolio.services.chunked(serviceColumns).forEachIndexed { row, chunk ->
         add(PageItem.Services(chunk, serviceColumns, showsHeader = row == 0, row = row))
     }
-    add(PageItem.Contact(portfolio.profile.email, portfolio.links))
+    if (portfolio.recognition.isNotEmpty()) add(PageItem.Recognition(portfolio.recognition))
+    add(PageItem.Contact(portfolio.profile.email, portfolio.links, contactWhere(portfolio.profile)))
     if (portfolio.api != null) {
         add(PageItem.Message)
         if (notesLoaded) add(PageItem.Ratings)
@@ -171,6 +186,9 @@ fun buildPageItems(
     }
     add(PageItem.Footer)
 }
+
+/** How many personal projects show as full cards; the rest are [PageItem.MoreProjects] rows. */
+const val FULL_PERSONAL_CARDS = 4
 
 /** The sections that actually have rows, in page order, with the index of their first row. */
 fun sectionStarts(items: List<PageItem>): Map<Section, Int> = buildMap {

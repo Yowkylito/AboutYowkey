@@ -159,7 +159,7 @@ private fun SheetHeader(sheet: StarSheet, title: String, ratings: RatingSummary?
 @Composable
 private fun RelationSorter(sheet: StarSheet, onPick: (Relation?) -> Unit) {
     val colors = MaterialTheme.colorScheme
-    val choices = remember { listOf<Relation?>(null) + Relation.entries }
+    val choices = remember { listOf<Relation?>(null) + Relation.offered }
     Row(
         Modifier
             .fillMaxWidth()

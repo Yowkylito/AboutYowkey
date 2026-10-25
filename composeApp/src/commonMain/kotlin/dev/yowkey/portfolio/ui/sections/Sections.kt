@@ -13,7 +13,17 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import kotlinx.coroutines.delay
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -45,6 +55,7 @@ import dev.yowkey.portfolio.ui.components.LinkButton
 import dev.yowkey.portfolio.ui.components.OutlinedCard
 import dev.yowkey.portfolio.ui.components.PlayGlyph
 import dev.yowkey.portfolio.ui.components.Tag
+import dev.yowkey.portfolio.ui.components.rememberTextCopier
 
 /** Lays out one row of an equal-height card grid; short rows keep their column width. */
 @Composable
@@ -253,19 +264,41 @@ fun SkillGroups(groups: List<SkillGroup>, columns: Int, modifier: Modifier = Mod
     }
 }
 
-/** The email and the profile's links; [onOpenLink] hears of each link once it has opened, to count LinkedIn and GitHub. */
+/** The Contact section's first line, the app's and the static page's. */
+const val CONTACT_LINE = "Hiring for Android, or have a project in mind? Let's talk."
+
+/**
+ * The email and the profile's links, after one line on where the owner is and whether they would move ([where]):
+ * recruiters screen on location and work authorisation first, and an overseas one needs it before writing. The
+ * address can be selected, and "Copy email" copies it and says "Copied" for two seconds, since a mailto link does
+ * nothing where no mail app is set up. [onOpenLink] hears of each link once it has opened, to count LinkedIn and GitHub.
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun ContactBlock(email: String?, links: List<Link>, modifier: Modifier = Modifier, onOpenLink: (Link) -> Unit = {}) {
+fun ContactBlock(
+    email: String?,
+    links: List<Link>,
+    modifier: Modifier = Modifier,
+    where: String? = null,
+    onOpenLink: (Link) -> Unit = {},
+) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(20.dp)) {
         Text(
-            "Hiring for Android, or have a project in mind? Let's talk.",
+            CONTACT_LINE,
             style = MaterialTheme.typography.headlineSmall,
             color = MaterialTheme.colorScheme.onBackground,
             modifier = Modifier.readingMeasure(MaterialTheme.typography.headlineSmall),
         )
-        email?.let {
+        where?.let {
             Text(it, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        email?.let { address ->
+            FlowRow(itemVerticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SelectionContainer {
+                    Text(address, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground)
+                }
+                CopyButton(address)
+            }
         }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             email?.let { LinkButton(Link("Email me", "mailto:$it"), primary = true) }
@@ -273,6 +306,22 @@ fun ContactBlock(email: String?, links: List<Link>, modifier: Modifier = Modifie
                 LinkButton(link, primary = email == null && index == 0, onOpened = { onOpenLink(link) })
             }
         }
+    }
+}
+
+/** "Copy email", then "Copied" for two seconds; a polite live region, so a screen reader hears that it worked. */
+@Composable
+private fun CopyButton(text: String) {
+    val copy = rememberTextCopier()
+    var copied by remember { mutableStateOf(false) }
+    LaunchedEffect(copied) {
+        if (copied) {
+            delay(2_000)
+            copied = false
+        }
+    }
+    TextButton(onClick = { copy(text); copied = true }) {
+        Text(if (copied) "Copied" else "Copy email", Modifier.semantics { liveRegion = LiveRegionMode.Polite })
     }
 }
 

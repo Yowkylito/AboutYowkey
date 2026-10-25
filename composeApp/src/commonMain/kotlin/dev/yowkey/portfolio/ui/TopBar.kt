@@ -64,6 +64,7 @@ import dev.yowkey.portfolio.ui.components.BrandName
 import dev.yowkey.portfolio.ui.components.MenuGlyph
 import dev.yowkey.portfolio.ui.components.Monogram
 import dev.yowkey.portfolio.ui.components.ProofChip
+import dev.yowkey.portfolio.ui.components.WherePill
 import dev.yowkey.portfolio.ui.components.ProofReveal
 import dev.yowkey.portfolio.ui.components.ThemeToggle
 import dev.yowkey.portfolio.ui.components.rememberProofReveal
@@ -75,7 +76,8 @@ import kotlinx.coroutines.launch
 /**
  * The sticky navigation bar. The hero already says the name in huge type, so the bar starts with a monogram (the
  * Home button) and, while the hero's name is on screen, the proof: the notes' rating and the visits ([stats], see
- * [ProofChip]), which [onOpenNotes] takes the visitor to; once [heroPassed], the proof gives way to the name and
+ * [ProofChip]), which [onOpenNotes] takes the visitor to, or until they are big enough to show, where the owner is
+ * and whether they would move ([WherePill]); once [heroPassed], either gives way to the name and
  * role. Wide windows list the sections with an accent line that slides to the [active] one; compact ones put them in
  * a menu. The theme switch sits at the end. [proofReveal] holds the proof's entrance, so a caller that outlives the
  * bar keeps it from playing twice.
@@ -205,10 +207,10 @@ private fun BrandSlot(
         label = "brand",
     ) { passed ->
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterStart) {
-            if (passed) {
-                BrandName(profile.name, role)
-            } else {
-                ProofChip(stats, proofReveal, onClick = onOpenNotes)
+            when {
+                passed -> BrandName(profile.name, role)
+                stats.isEmpty -> WherePill(profile)
+                else -> ProofChip(stats, proofReveal, onClick = onOpenNotes)
             }
         }
     }
