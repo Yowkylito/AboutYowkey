@@ -54,7 +54,9 @@ jobs:
 
   # The owner's Android app (androidApp/). Built from a clean checkout, so with no Firebase config: the APK it uploads
   # has push off and the 15-minute backup check on, which is the build CI must keep green. ubuntu-latest has the
-  # Android SDK; AGP fetches a missing platform itself.
+  # Android SDK; AGP fetches a missing platform itself. Its unit tests (the admin view's rules, the debug stand-in)
+  # run first, and the release variant is built too, unsigned, so a change R8 cannot shrink fails here and not on
+  # the owner's machine.
   android:
     name: Build the Android app
     runs-on: ubuntu-latest
@@ -70,8 +72,14 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
 
+      - name: Run the app's unit tests
+        run: ./gradlew :androidApp:testDebugUnitTest --stacktrace
+
       - name: Build the debug APK
         run: ./gradlew :androidApp:assembleDebug --stacktrace
+
+      - name: Build the release APK, unsigned
+        run: ./gradlew :androidApp:assembleRelease --stacktrace
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

@@ -1,6 +1,7 @@
 # Production readiness
 
-A static site with no backend, no accounts and no stored user data. Most of the server-side checklist does not
+A static site, one small worker of its own behind it (visits, notes, messages, the owner's alerts) and the owner's
+Android app. No visitor accounts; the only sign-in is the owner's. Much of the server-side checklist does not
 apply; what does is below. `[x]` done, `[ ]` open, `N/A` with the reason.
 
 ## 1. Architecture
@@ -15,10 +16,14 @@ apply; what does is below. `[x]` done, `[ ]` open, `N/A` with the reason.
 
 - [x] The one server-side piece is the site's own worker (`worker/`): the visit count and the note inbox. Its owner
   routes (`GET /feedback`, `/inbox`) take `ADMIN_TOKEN` only, compared in constant time, and stay closed while the
-  token is unset; a visitor may leave 5 notes a day, and one every 5 minutes (by a daily hash; the address is never
-  stored); every field has
-  a type and length limit and the body a size limit; a browser's origin is checked against an allow-list; a hidden
-  form field catches bots; the inbox escapes everything it shows; the inbox's buttons (hide, unhide, delete) act
+  token is unset; an address gets 10 wrong passwords per 15 minutes, a try turned away past that is not kept (so
+  the owner's own requests, sent at once, cannot lock the owner out), and a database that cannot count the tries
+  lets nobody in; a visitor may leave 5 notes a day, and one every 5 minutes (by a daily hash; the address is never
+  stored), and the whole site takes 40 notes and 40 messages a day, however many networks send them; every field
+  has a type and length limit and the body a size limit, which a body that does not say its size is read only as
+  far as; a browser's origin is checked against an allow-list; a hidden
+  form field catches bots; the inbox escapes everything it shows, and percent-encodes a contact it links as a
+  mail address; the inbox's buttons (hide, unhide, delete) act
   only on a post from the worker's own origin, since the browser would send the saved Basic credentials with a
   form from any site. All of it tested in Node against SQLite
 - [x] A note is public as it arrives, as the form says, with the name, the stars and the words; the contact never
@@ -29,13 +34,20 @@ apply; what does is below. `[x]` done, `[ ]` open, `N/A` with the reason.
 - [x] The owner pins the notes that should come first (inbox or app); only a note on the site can be pinned, and
   hiding one unpins it. A note may say how its writer knows the owner, which each star's sheet sorts by
 - [x] Link clicks and countries keep nothing about a person: a click is counted once per visitor per day per link
-  by the same daily hash as a visit (the hashes deleted with the next day's first click), only for the links in
+  by the same daily hash as a visit (the hashes deleted with the next day's first click, or by that day's 23:59
+  cron if nobody comes; the cron drops the senders' ids on notes and messages the same way), only for the links in
   `TRACKED_LINKS`, never for a bot; a country is Cloudflare's guess from the address, stored only as a count per
-  country per day. Neither is ever next to a visitor id
+  country per day. Neither is ever next to a visitor id. One network adds at most 30 browsers to a day's visits
+  and to a link's clicks, since a browser's name is whatever its sender says
 - [x] Messages are private: never on the site, 3 per visitor per day, the same limits and trap field as notes. The
   owner's app reads them, the notes and the counts over `/admin/` with the same `ADMIN_TOKEN` as a Bearer token,
   answered `no-store`; the phones' push tokens are dropped when FCM says they are dead. A push carries a visitor's
-  contact only for a message (who to write back to), and only to the owner's phone
+  contact only for a message (who to write back to), and only to the owner's phone. Deleting a message or a note
+  deletes its alert record too, which quotes it
+- [x] The app keeps the owner's token sealed (AES-256-GCM under an Android Keystore key), out of backups and
+  transfers; signing out forgets it before the worker is told, so a dead network cannot leave it on the phone.
+  The debug build's local stand-in for the worker is set only over adb (a receiver behind
+  `android.permission.DUMP`), never by another app on the phone
 - [x] No secrets in the repo or the bundle: the worker's (the Firebase service-account key included) are set with
   `wrangler secret put`, and its local `.dev.vars` is gitignored. CI runs gitleaks over the full history
 - [x] Links limited to `https://` and `mailto:` by the parser (blocks `javascript:` URLs in content)
@@ -92,10 +104,10 @@ apply; what does is below. `[x]` done, `[ ]` open, `N/A` with the reason.
 | Detail routing | [x] open, browser Back (scroll kept), Escape, the bar's arrow after a deep link, `#/projects/<id>` on first load, an unknown id |
 | Safari / Firefox | [ ] not yet run. Trigger: before sharing the link |
 | Throttled 3G | [ ] static HTML covers first paint; measure time-to-app. Trigger: before sharing the link |
-| Screen reader on the Compose canvas | [ ] Compose web accessibility is limited; the static HTML is the accessible version. Trigger: before sharing the link |
+| Screen reader on the Compose canvas | [ ] not yet run. Compose web accessibility is limited, and at hand-off the static HTML leaves the accessibility tree; the page's first link ("Read this page as plain HTML", `?plain`) keeps the HTML instead, and stays reachable after the hand-off (checked in Chrome: first in the tab order, above the canvas, in the accessibility tree). CI's Lighthouse still scores accessibility below its 0.9 target (0.75 on the last deploy before this), a warning, not a failure. Trigger: before sharing the link |
 
 Automated: Lighthouse CI on every deploy (SEO and best practices ≥ 0.9 fail the job; accessibility and
-performance warn).
+performance warn). Every CI run also runs the Android app's unit tests and builds its debug and release variants.
 
 ## 6. After launch
 
@@ -115,9 +127,11 @@ performance warn).
 - Swipe-back gesture on touch screens: the detail screen leaves by Back, Escape or its buttons. Trigger: phone analytics show it is missed
 - A per-clip decode budget enforced by the build: cover clips are held to the clip limits, not to a measured decode time (which needs a browser). Trigger: a cover clip that janks
 
-- Android / iOS targets. Trigger: when an app-store demo is wanted
+- An iOS target. Trigger: when an app-store demo is wanted
 - Custom font. The default font is used; bundling Inter (as in The Eagle's Watch) is a small follow-up
-- `og:image` for link previews. Trigger: when there is artwork for it
 - Editing a note's words (a typo the visitor made, say): today it is shown as is, or hidden. Trigger: the first such note
 - Holding back notes with links or abuse until the owner has looked: today every note is up at once and the owner
-  hides what should not be. Trigger: the first spam note that gets through the daily limit and the bot trap
+  hides what should not be. The limits bound how many (5 a day from one network, 40 a day in all), not what they
+  say. Trigger: the first spam note that gets through the limits and the bot trap
+- A licence. The three public repositories have their source on GitHub with no `LICENSE` file, so the site says
+  "public", not "open source". Trigger: choosing one
