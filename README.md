@@ -18,7 +18,8 @@ browser, as a desktop window and as an app on my phone.
 Each section is placed by what a hiring manager wants to know next. From the top:
 
 1. **The first screen.** My name, my role and since when, my stack, and three numbers that prove them, each with
-   the sentence behind it. Then **Email me** and **See projects**, with LinkedIn and GitHub beside them. The bar says
+   the sentence behind it. Then **Email me** and **See projects**, with LinkedIn, GitHub and my résumé (a PDF)
+   beside them. The bar says
    where I am and that I am open to relocation. Nothing that matters sits below the fold, and the summary comes
    after the buttons so it can never push them down.
 2. **Experience.** My roles, newest first, with what I did and what it changed.
@@ -47,9 +48,13 @@ Each section is placed by what a hiring manager wants to know next. From the top
   the stars spread once there are enough of them. Visits are counted without storing anyone's address.
 - **A private line.** The message form reaches only me, and my phone app tells me about each message, each note and
   the day's numbers.
-- **Readable by everyone.** A plain HTML copy of the page shows first, so search engines, link previews, screen
-  readers and older browsers get all of it. There are light and dark themes, the motion follows the system's
-  "reduce motion" setting, text contrast meets WCAG AA, and lines stay at a comfortable reading length.
+- **Readable by everyone.** A plain HTML copy of the page shows first, so search engines, link previews and older
+  browsers get all of it. The app that then takes over draws on a canvas, which serves a screen reader, find in
+  page and translation less well than real text does, so the first link on the page, "Read this page as plain
+  HTML", keeps the HTML instead. There are light and dark themes, the motion follows the system's "reduce motion"
+  setting, text contrast meets WCAG AA, and lines stay at a comfortable reading length.
+- **A link that previews, and a résumé to pass on.** A shared link shows the first screen as its picture, and the
+  résumé is one page, written from the same file as the site's own words.
 
 ## What I think matters in a portfolio
 
@@ -76,6 +81,8 @@ These ideas shaped every choice above:
 
 Kotlin and Compose Multiplatform (WebAssembly in the browser, the JVM on the desktop, Android on the phone), a small
 Cloudflare Worker for the visits, notes and messages, and GitHub Pages.
+
+I built it with Claude Code, an AI coding agent, which the commit history credits as co-author.
 
 For developers: [editing the content, running, deploying, the backend and the phone app](docs/DEVELOPMENT.md),
 [how the code is laid out](docs/ARCHITECTURE.md), and [what has been checked for production](docs/READINESS.md).

@@ -1,7 +1,7 @@
 name: Worker
 
 # The site's backend (worker/). Its tests run on every change; the deploy runs on main once the Cloudflare secrets
-# exist (README.md, "Visits and feedback"), and is a no-op until then.
+# exist (docs/DEVELOPMENT.md, "Visits and feedback"), and is a no-op until then.
 on:
   push:
     branches: [main]
@@ -52,7 +52,7 @@ jobs:
       - name: Explain the skip until the secrets exist
         if: env.HAS_CLOUDFLARE_TOKEN != 'true'
         run: |
-          echo "Not deployed: the CLOUDFLARE_API_TOKEN secret is not set. See README.md, Visits and feedback." >> "$GITHUB_STEP_SUMMARY"
+          echo "Not deployed: the CLOUDFLARE_API_TOKEN secret is not set. See docs/DEVELOPMENT.md, Visits and feedback." >> "$GITHUB_STEP_SUMMARY"
       - name: Install wrangler
         if: env.HAS_CLOUDFLARE_TOKEN == 'true'
         run: npm ci

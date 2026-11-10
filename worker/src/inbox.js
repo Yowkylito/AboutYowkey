@@ -174,11 +174,17 @@ function stars(rating) {
   return `<span title="${n} of 5">${"★".repeat(n)}<span class="dim">${"★".repeat(5 - n)}</span></span>`;
 }
 
-/** The contact as a mail link when it reads as an address, else as text. */
+/**
+ * The contact as a mail link when it reads as an address, else as text. The link's address is percent-encoded (all
+ * but its "@"), so a contact written as `a@b.c?bcc=…&body=…` opens a draft to that odd address, never one with the
+ * visitor's choice of extra recipients or words.
+ */
 function contactLine(contact) {
   if (!contact) return "";
   const safe = escape(contact);
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact) ? `<br><a href="mailto:${safe}">${safe}</a>` : `<br>${safe}`;
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact)) return `<br>${safe}`;
+  const address = escape(encodeURIComponent(contact).replace(/%40/g, "@"));
+  return `<br><a href="mailto:${address}">${safe}</a>`;
 }
 
 /** "2026-10-24T10:05:33.000Z" → "2026-10-24 10:05 UTC". */

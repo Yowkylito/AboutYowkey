@@ -4,7 +4,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
-/** The debug build's stand-in: any app can send the extra, so only a local worker is ever taken (and gets the token). */
+/** The debug build's stand-in: only adb can name it (DebugApiReceiver), and even then only a local worker is taken (and gets the token). */
 class DebugApiTest {
 
     @Test

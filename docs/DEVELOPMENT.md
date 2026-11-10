@@ -43,6 +43,27 @@ Use the largest original there is: the wide layout draws the figure 224dp tall, 
 a 2x screen. Tests fail if the file is missing, over 48 KB, not transparent at its top corners, or not the only file
 in `files/profile/`.
 
+### The link preview and the résumé
+
+Two files ship at the site's root, beside `index.html`, from `composeApp/src/wasmJsMain/resources/`:
+
+```bash
+python3 scripts/make_og_image.py   # og.png, from docs/images/hero.webp
+python3 scripts/make_resume.py     # the PDF that portfolio.json's "Résumé" link names
+```
+
+- **`og.png`** is the picture a shared link shows (LinkedIn, Slack, a chat): the README's screenshot of the first
+  screen, `docs/images/hero.webp`, cut to 1200 × 630 without the summary paragraph, which is unreadable at a
+  preview's size and travels with the link as text anyway. Retake `hero.webp` (1600 px wide, the desktop layout)
+  when the first screen changes, then run the script. Tests fail if `og.png` is missing, not a 1200 × 630 PNG, or
+  over 300 KB, or if the page does not name it.
+- **The résumé** is one page made from `portfolio.json`: the profile, the experience, the personal projects' titles
+  and taglines, the skills and the education and awards, with no phone number, as on the site. Run the script after
+  editing the content; it needs Chrome or Chromium to print the page (`CHROME=/path/to/chrome` if it is not found).
+  It is the `"Résumé"` entry in `links`, whose address is the site's own (`<siteUrl><file>.pdf`); the script writes
+  the file that address names. To ship a résumé written by hand, save it over that file. Tests fail if a link to
+  one of the site's own files names a file that is not there, or a PDF that is not one or is over 512 KB.
+
 ### Adding screenshots to a project
 
 ```bash
@@ -197,6 +218,12 @@ Browsers without WasmGC, or a failed download, just keep the HTML version. It ca
 screens do, one `<article id="project-<id>">` per project, and a `#/projects/<id>` link scrolls to that article
 there too.
 
+So does anyone who asks. At the swap the HTML leaves the accessibility tree and the focus order (it stays drawn
+under the canvas), and what a canvas offers a screen reader, find in page or translation is less than real text.
+The page's first link, "Read this page as plain HTML", is ahead of the scrolling page, so it is still reachable
+after the swap; it is off the top edge until the keyboard reaches it. It reloads the page with `?plain`, and the
+boot script then never loads the app.
+
 With an `api` in `portfolio.json` (see below), both versions also count clicks on the profile's LinkedIn and GitHub
 links, and carry a private **Message me** form. A click leaves as a beacon (`navigator.sendBeacon`), which the browser
 delivers even as the link takes the tab away; the page sends it at most once per link per page load and never makes
@@ -282,9 +309,12 @@ keyPassword=…
 Without the file the release APK is unsigned and Android will not install it; use the debug one. A debug install
 must be uninstalled before a release one goes on (they are signed with different keys).
 
-**Trying it against a local worker** (debug builds only): with `npx wrangler dev` running in `worker/`,
-`adb shell am start -n dev.yowkey.portfolio/.app.MainActivity --es debug_api http://10.0.2.2:8787` sends the
-app's requests there instead (the emulator reaches the computer at 10.0.2.2), and `--es debug_api ""` undoes it.
+**Trying it against a local worker** (debug builds only): with `npx wrangler dev` running in `worker/`, and the
+app opened once since it was installed,
+`adb shell am broadcast -n dev.yowkey.portfolio/.app.DebugApiReceiver --es debug_api http://10.0.2.2:8787` sends
+the app's requests there instead (the emulator reaches the computer at 10.0.2.2), and `--es debug_api ""` undoes
+it. Only adb can say so: the receiver sits behind `android.permission.DUMP`, which the shell has and an installed
+app cannot get, because the owner's token goes wherever the requests go.
 
 ## Visits and feedback
 
@@ -297,11 +327,15 @@ it never sleeps.
 What it keeps, and nothing more:
 
 - **Visits**: one count per day. A visitor is counted once a day, told apart by a hash of the day, their address,
-  their browser and a secret salt; the address itself is never stored, and the hashes are deleted the next day.
-  Crawlers, link previews and CI's Lighthouse run read the count but are not counted.
+  their browser and a secret salt; the address itself is never stored, and the hashes are deleted the next day
+  (by the next day's first visit, or by the 23:59 cron). One network adds at most 30 browsers to a day's count,
+  since a browser's name is whatever its sender says. Crawlers, link previews and CI's Lighthouse run read the
+  count but are not counted.
 - **Notes**: what the form says (name, email and how they know me are optional), the rating, the time, and the
   day's hash for a limit of 5 notes per visitor per day, and one every 5 minutes (`NOTE_GAP_MINUTES` in
-  `worker/wrangler.toml`). A hidden field catches bots that fill every field. The form says a note is public,
+  `worker/wrangler.toml`). The whole site takes 40 notes a day, whoever sends them (`LIMITS.notesPerDayAll` in
+  `worker/src/handler.js`), so a sender with many addresses cannot fill the page. A hidden field catches bots that
+  fill every field. The form says a note is public,
   and it is: it shows on the page as soon as it is sent.
 - **What the page shows**: every note, pinned ones first, then newest, a page at a time. A card has the name (or "A
   visitor") and the stars on top, the date with any badge under them (Pinned; Colleague, Friend or Special someone),
@@ -381,7 +415,8 @@ Cloudflare Workers" template, with D1 edit added). Without them the workflow onl
 
 - **Messages**: what the contact form sends privately (the contact is required, so there is someone to write back
   to; the topic is job, freelance, collaboration or other). A message is never on the site. A visitor may send 3
-  a day, and the same hidden field catches bots.
+  a day, the whole site takes 40 a day, and the same hidden field catches bots. Deleting a message, or a note,
+  deletes the alert that quoted it too.
 - **Link clicks**: how many visitors clicked the links named in `TRACKED_LINKS` (`worker/wrangler.toml`: LinkedIn
   and GitHub), once per visitor per day per link, told apart by the same daily hash as visits and deleted the
   same way. Bots are not counted.

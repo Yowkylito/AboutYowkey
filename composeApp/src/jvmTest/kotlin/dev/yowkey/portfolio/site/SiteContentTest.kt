@@ -37,6 +37,8 @@ class SiteContentTest {
     private val portfolio = PortfolioParser.parse(File(resources, "files/portfolio.json").readText())
     private val build = "949ee26"
     private val page = StaticHtml.page(portfolio, File("web/index.template.html").readText(), build)
+    /** The site's own files, which ship beside index.html at the site's root. */
+    private val siteFiles = File("src/wasmJsMain/resources")
     private val gallery = portfolio.projects.flatMap { it.gallery }
     private val stills = gallery.filterNot { it.isClip }
     private val clips = gallery.filter { it.isClip }
@@ -166,6 +168,69 @@ class SiteContentTest {
         assertFalse("{{" in page)
         listOf("<title>", "name=\"description\"", "property=\"og:title\"", "rel=\"canonical\"", "application/ld+json")
             .forEach { assertTrue(it in page, "index.html lacks $it") }
+    }
+
+    /**
+     * A shared link gets a large preview: og.png at the site's root (scripts/make_og_image.py), a PNG of 1200 x 630,
+     * the shape LinkedIn, Slack and the rest draw it from, named by its whole address and light enough to fetch.
+     */
+    @Test
+    fun aSharedLinkHasAPreviewImage() {
+        val image = "${StaticHtml.escape(portfolio.siteUrl)}og.png"
+        listOf(
+            "<meta property=\"og:image\" content=\"$image\">",
+            "<meta property=\"og:image:width\" content=\"1200\">",
+            "<meta property=\"og:image:height\" content=\"630\">",
+            "<meta name=\"twitter:card\" content=\"summary_large_image\">",
+            "<meta name=\"twitter:image\" content=\"$image\">",
+        ).forEach { assertTrue(it in page, "index.html lacks $it") }
+        val file = File(siteFiles, "og.png")
+        assertTrue(file.isFile, "missing ${file.path}; scripts/make_og_image.py writes it")
+        val bytes = file.readBytes()
+        assertEquals(listOf(0x89, 0x50, 0x4E, 0x47), bytes.take(4).map { it.toInt() and 0xFF }, "og.png is not a PNG")
+        val decoded = Image.makeFromEncoded(bytes)
+        assertEquals(1200 to 630, decoded.width to decoded.height, "og.png's size")
+        assertTrue(file.length() <= 300L * 1024, "og.png is ${file.length() / 1024} KB, budget 300 KB")
+    }
+
+    /**
+     * A link to one of the site's own files (the résumé) is to a file that ships: a plain name at the site's root,
+     * there in the sources and not empty. A PDF among them really is one, and small enough to pass on by mail.
+     */
+    @Test
+    fun everyLinkToTheSitesOwnFilesIsToAFileThatShips() {
+        val own = (portfolio.links + portfolio.projects.flatMap { it.links })
+            .filter { it.url.startsWith(portfolio.siteUrl) && it.url != portfolio.siteUrl }
+        own.forEach { link ->
+            val name = link.url.removePrefix(portfolio.siteUrl)
+            assertTrue(Regex("[A-Za-z0-9][A-Za-z0-9._-]*").matches(name), "${link.label}: \"$name\" is not a plain file name at the site's root")
+            val file = File(siteFiles, name)
+            assertTrue(file.isFile && file.length() > 0, "${link.label} links to $name, which is not in ${siteFiles.path}")
+            if (name.endsWith(".pdf")) {
+                val start = file.readBytes().take(5).map { it.toInt().toChar() }.joinToString("")
+                assertEquals("%PDF-", start, "$name is not a PDF")
+                assertTrue(file.length() <= 512L * 1024, "$name is ${file.length() / 1024} KB, budget 512 KB")
+            }
+        }
+    }
+
+    /**
+     * The app draws on a canvas, and at hand-off the HTML under it leaves the accessibility tree, so the page's first
+     * link asks for the HTML to stay (`?plain`): ahead of the scrolling page, where it is still reachable once that
+     * page is inert, off the top edge until it has the focus. The boot script then never loads the app.
+     */
+    @Test
+    fun theFirstLinkKeepsThePlainPage() {
+        val body = page.substringAfter("<body>")
+        val link = "<a class=\"plain\" href=\"?plain\">"
+        assertTrue(body.trimStart().startsWith(link), "the plain page's link opens the body")
+        assertTrue(body.indexOf(link) < body.indexOf("<div id=\"static-scroll\">"), "outside the page the hand-off makes inert")
+        val css = page.substringAfter("<style>").substringBefore("</style>")
+        assertTrue(".plain:focus { transform: none;" in css, "it shows once it has the focus")
+        assertTrue("body.static-only .plain, :root:not(.js) .plain { display: none; }" in css, "and not where the page is plain already")
+        val boot = Regex("<script>([\\s\\S]*?)</script>").findAll(page).map { it.groupValues[1] }.single { "composeApp.js?v=" in it }
+        assertTrue("var plain = /(^\\?|&)plain(=|&|\$)/.test(location.search);" in boot, "the boot script reads the address")
+        assertTrue("if (!gc || plain) return staticOnly();" in boot, "and leaves the app unloaded")
     }
 
     /**

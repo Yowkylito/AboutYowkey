@@ -23,7 +23,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         applySystemBars(AndroidThemeStore.dark.value)
         super.onCreate(savedInstanceState)
-        DebugApi.capture(this, intent)
         if (savedInstanceState == null) owner.start(OwnerLink.from(intent))
         setContent {
             YowkeyRoot(owner, reducedMotion = reducedMotion())
@@ -33,7 +32,6 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        DebugApi.capture(this, intent)
         OwnerLink.from(intent)?.let(owner::open)
     }
 

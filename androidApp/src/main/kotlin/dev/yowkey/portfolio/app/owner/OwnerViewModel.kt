@@ -235,10 +235,15 @@ class OwnerViewModel(
         }
     }
 
+    /**
+     * To the guest view at once, then the forgetting. The session tells the worker only after it has forgotten the
+     * owner, and on a dead network that request lasts as long as its socket: waiting for it here would leave the
+     * sign-in screen up meanwhile, which is what the admin view is once signed out.
+     */
     fun signOut() {
+        _nav.value = OwnerNav(portfolio = true)
         viewModelScope.launch {
             withContext(io) { session.signOut() }
-            _nav.value = OwnerNav(portfolio = true)
         }
     }
 

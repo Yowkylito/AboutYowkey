@@ -138,7 +138,7 @@ object StaticHtml {
         }
         if (front.isNotEmpty()) append("<span class=\"front\">$front</span>")
         val role = roleOf(p.headline)
-        append("<span class=\"who\"><strong>${escape(p.name)}</strong><span aria-label=\"${escape(role)}\">${fitted(role, ROLE_SHORT)}</span></span>")
+        append("<span class=\"who\"><strong>${escape(p.name)}</strong><span>${fitted(role, ROLE_SHORT)}</span></span>")
         appendLine("</div>")
         appendLine("<nav class=\"sections\" id=\"sections\" aria-label=\"Sections\"><ul>")
         sections(portfolio).forEach { appendLine("<li><a href=\"#${it.name.lowercase()}\">${escape(it.title)}</a></li>") }
@@ -193,7 +193,7 @@ object StaticHtml {
         val forms = whereForms(profile)
         if (forms.isEmpty()) return
         val short = forms.getOrElse(1) { forms[0] }
-        append("<span class=\"where\" aria-label=\"${escape(forms[0])}\">")
+        append("<span class=\"where\">${said(forms[0])}")
         append("<span class=\"full\" aria-hidden=\"true\">${escape(forms[0])}</span>")
         append("<span class=\"short\" aria-hidden=\"true\">${escape(short)}</span></span>")
     }
@@ -209,13 +209,21 @@ object StaticHtml {
     /**
      * [text] whole, and for a phone's bar its longest whole-word form of at most [shortChars] characters (the role
      * without its "since 2024"), the same cut the app's bar makes (`shorterForms`); CSS shows one or the other. Both
-     * are hidden from screen readers, which hear the whole text from the element's label.
+     * are hidden from screen readers, which hear the whole text from the words ahead of them ([said]).
      */
     private fun fitted(text: String, shortChars: Int): String {
         val short = shorterForms(text).firstOrNull { it.length <= shortChars } ?: text
-        return "<span class=\"full\" aria-hidden=\"true\">${escape(text)}</span>" +
+        return said(text) +
+            "<span class=\"full\" aria-hidden=\"true\">${escape(text)}</span>" +
             "<span class=\"short\" aria-hidden=\"true\">${escape(short)}</span>"
     }
+
+    /**
+     * [text] for screen readers only (the template's `.say`: on the page, drawn nowhere), ahead of the forms CSS
+     * shows, which are hidden from them. Real text and not an `aria-label`: a label on a plain `<span>` is not
+     * allowed (it has no role to name), browsers may drop it, and with the forms hidden nothing would be read.
+     */
+    private fun said(text: String): String = "<span class=\"say\">${escape(text)}</span>"
 
     /** The phone bar's room, in characters, for the role. */
     private const val ROLE_SHORT = 30
@@ -904,7 +912,9 @@ object StaticHtml {
             put("description", p.summary)
             put("url", portfolio.siteUrl)
             p.email?.let { put("email", "mailto:$it") }
-            put("sameAs", JsonArray(portfolio.links.filter { it.url.startsWith("https://") }.map { JsonPrimitive(it.url) }))
+            // The owner's profiles elsewhere. A file on the site itself (the résumé) is not another of them.
+            val profiles = portfolio.links.filter { it.url.startsWith("https://") && !it.url.startsWith(portfolio.siteUrl) }
+            put("sameAs", JsonArray(profiles.map { JsonPrimitive(it.url) }))
         }
         // No "<" at all inside the <script>: "</" would end it early, and "<!--<script" would keep it from ending.
         // The JSON escape < reads back as the same character.
