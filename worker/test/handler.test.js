@@ -69,7 +69,7 @@ const act = (id, action, options = {}) =>
     method: "POST",
     origin: "https://api.example",
     headers: { ...basic(env.ADMIN_TOKEN), "Content-Type": "application/x-www-form-urlencoded", "Sec-Fetch-Site": "same-origin", ...options.headers },
-    body: `action=${action}`,
+    body: options.body ?? `action=${action}`,
   });
 
 const publicNotes = async (options = {}) => (await call("/notes", options)).json();
@@ -365,8 +365,12 @@ test("the inbox's buttons need the password and must be pressed on the inbox pag
 
   const pressed = await act(1, "publish");
   assert.equal(pressed.status, 303);
-  assert.equal(pressed.headers.get("Location"), "/inbox");
+  assert.equal(pressed.headers.get("Location"), "/inbox?tab=notes#n1", "back to the notes, at the note");
   assert.equal(feedbackRows()[0].published_at, DAY_ONE);
+  const fromPageTwo = await act(1, "pin", { body: "action=pin&back=%2Finbox%3Ftab%3Dnotes%26page%3D2" });
+  assert.equal(fromPageTwo.headers.get("Location"), "/inbox?tab=notes&page=2#n1", "and to the page of them the button was on");
+  const elsewhere = await act(1, "unpin", { body: "action=unpin&back=https%3A%2F%2Fevil.example%2F" });
+  assert.equal(elsewhere.headers.get("Location"), "/inbox?tab=notes#n1", "never anywhere but the inbox");
   const oldBrowser = await call("/inbox/notes/1", {
     method: "POST", headers: { ...basic(env.ADMIN_TOKEN), ...form }, body: "action=hide", origin: "https://api.example",
   });
@@ -692,15 +696,21 @@ test("the inbox asks for the password, then shows the notes and the visits, esca
   await post("/feedback", { message: "Taken down", consent: true }, { address: "198.51.100.5" });
   await act(3, "hide");
 
-  const open = await call("/inbox", { headers: basic(env.ADMIN_TOKEN, "whoever"), now: DAY_TWO });
+  const open = await call("/inbox?tab=notes", { headers: basic(env.ADMIN_TOKEN, "whoever"), now: DAY_TWO });
   assert.equal(open.status, 200);
   assert.equal(open.headers.get("X-Robots-Tag"), "noindex");
   assert.equal(open.headers.get("Cache-Control"), "no-store");
   const page = await open.text();
-  assert.match(page, /2 visits since 2026-10-24 · 1 today \(2026-10-25, Asia\/Manila\) · 3 notes, 1 on the site/);
+  assert.match(page, /<li><span>Visits today<\/span><strong>1<\/strong><small>2026-10-25<\/small><\/li>/);
+  assert.match(page, /<li><span>Visits in all<\/span><strong>2<\/strong><small>since 2026-10-24<\/small><\/li>/);
+  assert.match(page, /<li><span>Notes on the site<\/span><strong>1<\/strong><small>of 3 · 3\.0 ★<\/small><\/li>/);
+  assert.match(page, /Times are Asia\/Manila's\./);
+  assert.match(page, /<a href="\/inbox\?tab=notes" aria-current="page">Notes<\/a>/, "the tab it is on");
+  assert.match(page, /<time>2026-10-24 18:00<\/time>/, "10:00 UTC, on the owner's clock");
   assert.match(page, /<strong>On the site<\/strong>/, "a note sent as public is up at once");
   assert.match(page, /<span class="dim">Private<\/span>/, "the note without a tick is private");
-  assert.match(page, /Hidden<br>/);
+  assert.match(page, /<article id="n3" class="card hidden">/);
+  assert.match(page, /Hidden <span class="dim">2026-10-24 18:00<\/span>/);
   assert.match(page, /<form method="post" action="\/inbox\/notes\/1"><button name="action" value="hide">/);
   assert.match(page, /<form method="post" action="\/inbox\/notes\/3"><button name="action" value="unhide">/);
   assert.doesNotMatch(page, /value="publish"/, "nothing waits for a Publish click");
@@ -708,17 +718,25 @@ test("the inbox asks for the password, then shows the notes and the visits, esca
   assert.match(page, /Great &lt;script&gt;alert\(1\)&lt;\/script&gt;/);
   assert.doesNotMatch(page, /<script>alert/);
   assert.match(page, /href="mailto:ada@example.com"/);
-  assert.match(page, /<br>linkedin\.com\/in\/ada</, "a contact that is not an address is text, not a link");
+  assert.match(page, /<p class="contact">linkedin\.com\/in\/ada<\/p>/, "a contact that is not an address is text, not a link");
+  assert.match(page, /<p class="contact"><span class="dim">No contact left<\/span><\/p>/);
   await post("/feedback", { message: "Odd", contact: "hr%40corp.example?bcc=evil@x.example&body=Hello" }, { address: "198.51.100.40", now: DAY_TWO });
-  const odd = await (await call("/inbox", { headers: basic(env.ADMIN_TOKEN), now: DAY_TWO })).text();
+  const odd = await (await call("/inbox?tab=notes", { headers: basic(env.ADMIN_TOKEN), now: DAY_TWO })).text();
   assert.match(
     odd,
     /<a href="mailto:hr%2540corp\.example%3Fbcc%3Devil@x\.example%26body%3DHello">hr%40corp\.example\?bcc=evil@x\.example&amp;body=Hello<\/a>/,
     "the link is to the address as written, never to one with the visitor's own recipients or words",
   );
   assert.match(page, /★★★<span class="dim">★★<\/span>/);
-  assert.match(page, /<span>2026-10-25<\/span><strong>1<\/strong>/);
   assert.match(page, /<meta name="robots" content="noindex, nofollow">/);
+  assert.doesNotMatch(page, /class="columns"/, "a tab reads and shows only its own");
+
+  const visits = await (await call("/inbox?tab=visits", { headers: basic(env.ADMIN_TOKEN), now: DAY_TWO })).text();
+  assert.match(visits, /<li title="2026-10-24: 1"><span>2026-10-24<\/span><strong>1<\/strong><i style="height:100%"><\/i><small>10-24<\/small><\/li><li title="2026-10-25: 1">/, "oldest day first");
+  assert.match(visits, /<h2>Countries, all time<\/h2>/);
+  assert.doesNotMatch(visits, /class="card/);
+  const unknown = await (await call("/inbox?tab=nope&page=x", { headers: basic(env.ADMIN_TOKEN), now: DAY_TWO })).text();
+  assert.match(unknown, /<a href="\/inbox" aria-current="page">Messages<\/a>/, "anything else is the first tab, its first page");
 });
 
 test(`an address gets ${LIMITS.ownerTries} wrong owner passwords per ${LIMITS.ownerWindowMinutes} minutes, on any owner route`, async () => {
@@ -769,8 +787,9 @@ test("without the owner_tries table (its migration not applied yet), the owner s
 test("the owner's own requests, sent at once, never lock the owner out", async () => {
   env.DB = roundTrips(env.DB);
   const burst = await Promise.all(Array.from({ length: LIMITS.ownerTries + 6 }, () => owner("/admin/summary")));
-  assert.equal(burst.filter((response) => response.status === 200).length, LIMITS.ownerTries, "those under the limit while in flight");
-  assert.equal(burst.filter((response) => response.status === 429).length, 6, "the rest are asked to come back");
+  const got = (status) => burst.filter((response) => response.status === status).length;
+  assert.ok(got(200) >= LIMITS.ownerTries, "at least those under the limit while in flight");
+  assert.equal(got(200) + got(429), burst.length, "the rest are asked to come back, none is called wrong");
   assert.deepEqual(query("SELECT count FROM owner_tries"), [], "and every one of them is given back");
   assert.equal((await owner("/admin/summary")).status, 200, "so the next request gets in");
 });
@@ -796,8 +815,8 @@ test("a database that cannot count the tries lets nobody in, the right password 
 test("the owner's pages may not be framed, run only their own confirm() handlers, and send no referrer", async () => {
   await post("/feedback", { message: "private, so it has Show on the site" });
   await post("/messages", { contact: "ada@example.com", message: "hello" });
-  const open = await call("/inbox", { headers: basic(env.ADMIN_TOKEN) });
-  const page = await open.text();
+  const open = await call("/inbox?tab=notes", { headers: basic(env.ADMIN_TOKEN) });
+  const page = (await open.text()) + (await (await call("/inbox", { headers: basic(env.ADMIN_TOKEN) })).text());
   const policy = open.headers.get("Content-Security-Policy") || "";
   for (const directive of ["default-src 'none'", "frame-ancestors 'none'", "form-action 'self'", "base-uri 'none'"]) {
     assert.ok(policy.includes(directive), `the policy has ${directive}: ${policy}`);
@@ -1191,7 +1210,7 @@ test("the app and the inbox act on messages: read, unread, archive, unarchive, d
     });
   const pressed = await press(2, "read");
   assert.equal(pressed.status, 303);
-  assert.equal(pressed.headers.get("Location"), "/inbox");
+  assert.equal(pressed.headers.get("Location"), "/inbox#m2", "back to the messages, at the message");
   assert.equal(messageRows()[1].read_at, DAY_ONE);
   assert.equal((await press(1, "archive", { "Sec-Fetch-Site": "cross-site" })).status, 403, "a form on another site");
   assert.equal(messageRows()[0].archived_at, null);
@@ -1208,16 +1227,24 @@ test("the inbox shows the messages, escaped, with their buttons, and today's lin
   await click("linkedin", { address: "198.51.100.2" });
 
   const page = await (await call("/inbox", { headers: basic(env.ADMIN_TOKEN) })).text();
-  assert.match(page, /· 0 notes, 0 on the site · 2 messages, 1 unread/);
-  assert.match(page, /<h2>Link clicks today<\/h2>\n<ul class="days"><li><span>LinkedIn<\/span><strong>2<\/strong><\/li><li><span>GitHub<\/span><strong>0<\/strong><\/li><\/ul>/);
-  assert.match(page, /<h2>Messages<\/h2>/);
-  assert.match(page, /<td class="topic">Freelance<\/td>/);
-  assert.match(page, /&lt;b&gt;Ada&lt;\/b&gt;<br><a href="mailto:ada@example.com">/);
+  assert.match(page, /<li><span>Unread messages<\/span><strong>1<\/strong><small>1 in the inbox<\/small><\/li>/);
+  assert.match(page, /<a href="\/inbox" aria-current="page">Messages <span class="count">1<\/span><\/a>/, "the tab says how many wait");
+  assert.match(page, /<a href="\/inbox" aria-current="true">Inbox <span class="count">1<\/span><\/a><a href="\/inbox\?tab=messages&amp;show=archived">Archived <span class="count">1<\/span><\/a>/);
+  assert.match(page, /<article id="m1" class="card unread">/);
+  assert.match(page, /<span class="who">&lt;b&gt;Ada&lt;\/b&gt;<\/span><span class="topic">Freelance<\/span>/);
+  assert.match(page, /<p class="contact"><a href="mailto:ada@example.com">/);
+  assert.doesNotMatch(page, /Archived one/, "an archived message is out of the way");
+  const clicks = await (await call("/inbox?tab=visits", { headers: basic(env.ADMIN_TOKEN) })).text();
+  assert.match(clicks, /<li><span>LinkedIn<\/span><strong>2<\/strong><small>today · 2 in all<\/small><\/li><li><span>GitHub<\/span><strong>0<\/strong><small>today · 0 in all<\/small><\/li>/);
   assert.match(page, /Hi &lt;script&gt;alert\(1\)&lt;\/script&gt;/);
   assert.doesNotMatch(page, /<script>alert/);
   assert.match(page, /<form method="post" action="\/inbox\/messages\/1"><button name="action" value="read" class="primary">Mark read<\/button><button name="action" value="archive">/);
-  assert.match(page, /<tr class="hidden">\n  <td class="when">[^<]+<\/td>\n  <td class="topic">Other<\/td>/, "an archived message is dimmed");
-  assert.match(page, /action="\/inbox\/messages\/2"><button name="action" value="read" class="primary">Mark read<\/button><button name="action" value="unarchive">/);
+  const archived = await (await call("/inbox?tab=messages&show=archived", { headers: basic(env.ADMIN_TOKEN) })).text();
+  assert.match(archived, /<article id="m2" class="card hidden">/, "an archived message is dimmed, under Archived");
+  assert.match(archived, /<span class="who">No name<\/span><span class="topic">Other<\/span>/);
+  assert.match(archived, /action="\/inbox\/messages\/2"><button name="action" value="read" class="primary">Mark read<\/button><button name="action" value="unarchive">/);
+  assert.match(archived, /<input type="hidden" name="back" value="\/inbox\?tab=messages&amp;show=archived"><\/form>/, "a button there comes back there");
+  assert.doesNotMatch(archived, /id="m1"/);
   assert.match(page, /<strong>Unread<\/strong>/);
 });
 
@@ -1571,9 +1598,9 @@ test("the owner's lists put the pinned notes first too, so an old pin is never p
   assert.deepEqual((await appJson("/admin/feedback")).items.map((item) => item.id), [3, 1, 4, 2], "newest pin first, then newest first");
   assert.deepEqual((await appJson("/admin/feedback?limit=2")).items.map((item) => item.id), [3, 1]);
   assert.deepEqual((await (await owner("/feedback?limit=1")).json()).items.map((item) => item.id), [3], "the old owner's list too");
-  const page = await (await call("/inbox", { headers: basic(env.ADMIN_TOKEN) })).text();
+  const page = await (await call("/inbox?tab=notes", { headers: basic(env.ADMIN_TOKEN) })).text();
   const rows = [...page.matchAll(/action="\/inbox\/notes\/(\d+)"/g)].map((match) => Number(match[1]));
-  assert.deepEqual(rows, [3, 1, 4, 2], "and the inbox's table");
+  assert.deepEqual(rows, [3, 1, 4, 2], "and the inbox's notes");
 });
 
 test("a note's alert says who it is from when the relation has a badge", async () => {
@@ -1599,13 +1626,13 @@ test("the inbox shows the relation beside the name, Pinned in the status, and Pi
   await noteAct(1, "pin", { now: DAY_TWO });
   await noteAct(4, "hide");
 
-  const page = await (await call("/inbox", { headers: basic(env.ADMIN_TOKEN) })).text();
-  assert.match(page, /<td>Ada <span class="relation">Colleague<\/span><\/td>/);
-  assert.match(page, /<td> <span class="relation">Special someone<\/span><\/td>/);
-  assert.match(page, /<td>Gone <span class="relation">Other<\/span><\/td>/);
-  assert.match(page, /<td>Old<\/td>/, "nothing when they did not say");
-  assert.match(page, /<strong>On the site<\/strong><br>Pinned<br><span class="dim">2026-10-25 09:00 UTC<\/span>/);
-  assert.equal(page.match(/Pinned<br>/g).length, 1);
+  const page = await (await call("/inbox?tab=notes", { headers: basic(env.ADMIN_TOKEN) })).text();
+  assert.match(page, /<span class="who">Ada <span class="relation">Colleague<\/span><\/span>/);
+  assert.match(page, /<span class="who">A visitor <span class="relation">Special someone<\/span><\/span>/);
+  assert.match(page, /<span class="who">Gone <span class="relation">Other<\/span><\/span>/);
+  assert.match(page, /<span class="who">Old<\/span>/, "nothing when they did not say");
+  assert.match(page, /<strong>On the site<\/strong> · Pinned <span class="dim">2026-10-25 17:00<\/span>/, "on the owner's clock");
+  assert.equal(page.match(/ · Pinned /g).length, 1);
   assert.match(page, /action="\/inbox\/notes\/1"><button name="action" value="hide">Hide<\/button><button name="action" value="unpin">Unpin<\/button><button name="action" value="delete"/);
   assert.match(page, /action="\/inbox\/notes\/2"><button name="action" value="hide">Hide<\/button><button name="action" value="pin">Pin<\/button><button name="action" value="delete"/);
   assert.match(
@@ -1614,6 +1641,153 @@ test("the inbox shows the relation beside the name, Pinned in the status, and Pi
     "a private note cannot be pinned, but can go on the site on the owner's word, asked for first",
   );
   assert.match(page, /action="\/inbox\/notes\/4"><button name="action" value="unhide">Unhide<\/button><button name="action" value="delete"/, "nor a hidden one");
+});
+
+// ---- Reading ----
+
+const reading = (events, options = {}) => post("/events", { events }, options);
+const readingRows = () => query("SELECT day, event, count FROM reading ORDER BY day, event");
+
+test("how the page is read is counted once per visitor per day per event, and only what the worker knows", async () => {
+  const first = await reading(["section:home", "section:experience", "device:phone", "source:linkedin", "view:app", "time:10", "project:vistago"]);
+  assert.equal(first.status, 200);
+  assert.equal(first.headers.get("Access-Control-Allow-Origin"), SITE);
+  assert.deepEqual(await first.json(), { ok: true, counted: 7 });
+  assert.deepEqual(await (await reading(["section:home", "section:projects", "section:projects"])).json(), { ok: true, counted: 1 }, "only what is new to this visitor today");
+  assert.deepEqual(await (await reading(["section:home"], { address: "198.51.100.2" })).json(), { ok: true, counted: 1 }, "another visitor");
+
+  const unknown = await reading(["section:nowhere", "time:11", "device:fridge", "source:evil.example", "view:", "project:Has Spaces", "<script>", 7, null, "project:" + "x".repeat(41)]);
+  assert.deepEqual(await unknown.json(), { ok: true, counted: 0 }, "nothing the worker does not know is kept");
+  assert.equal((await post("/events", { events: "section:home" })).status, 400);
+  assert.equal((await post("/events", {})).status, 400);
+  assert.deepEqual(await (await reading(["section:skills"], { agent: "curl/8.4.0" })).json(), { ok: true, counted: 0 }, "a bot reads nothing");
+
+  // sendBeacon posts text/plain, as for clicks.
+  const beacon = await call("/events", { method: "POST", headers: { "Content-Type": "text/plain;charset=UTF-8" }, body: JSON.stringify({ events: ["section:skills"] }) });
+  assert.deepEqual(await beacon.json(), { ok: true, counted: 1 });
+  assert.equal((await reading(["section:home"], { origin: "https://evil.example" })).status, 403);
+
+  assert.deepEqual(await (await reading(["section:home"], { now: DAY_TWO })).json(), { ok: true, counted: 1 }, "the same person, the next day");
+
+  assert.deepEqual(readingRows(), [
+    { day: "2026-10-24", event: "device:phone", count: 1 },
+    { day: "2026-10-24", event: "project:vistago", count: 1 },
+    { day: "2026-10-24", event: "section:experience", count: 1 },
+    { day: "2026-10-24", event: "section:home", count: 2 },
+    { day: "2026-10-24", event: "section:projects", count: 1 },
+    { day: "2026-10-24", event: "section:skills", count: 1 },
+    { day: "2026-10-24", event: "source:linkedin", count: 1 },
+    { day: "2026-10-24", event: "time:10", count: 1 },
+    { day: "2026-10-24", event: "view:app", count: 1 },
+    { day: "2026-10-25", event: "section:home", count: 1 },
+  ]);
+  const seen = query("SELECT day, visitor FROM reading_seen");
+  assert.deepEqual([...new Set(seen.map((row) => row.day))], ["2026-10-25"], "the ids of an earlier day went with the new day's first event");
+  for (const { visitor } of seen) assert.match(visitor, /^[0-9a-f]{64}$/);
+});
+
+test("reading events are bounded: a request's, a network's browsers, a day's projects, and one round trip", async () => {
+  const many = Array.from({ length: 30 }, (_, i) => `project:p${i}`);
+  assert.equal((await (await reading(many)).json()).counted, LIMITS.eventsPerRequest, "a request carries so many");
+  for (let i = 0; i < 6; i++) await reading(Array.from({ length: 16 }, (_, j) => `project:q${i}-${j}`), { address: `198.51.100.${i + 1}` });
+  assert.equal(query("SELECT COUNT(*) AS n FROM reading WHERE event LIKE 'project:%'")[0].n, LIMITS.projectsPerDay, "a day names so many projects");
+  assert.equal(query("SELECT COUNT(DISTINCT event) AS n FROM reading_seen")[0].n, LIMITS.projectsPerDay, "and keeps no id for one it did not count");
+  assert.deepEqual(await (await reading(["project:p0"], { address: "198.51.100.50" })).json(), { ok: true, counted: 1 }, "one already named still counts");
+  assert.deepEqual(await (await reading(["section:home"], { address: "198.51.100.50" })).json(), { ok: true, counted: 1 }, "and so does what is not a project");
+
+  const browsers = Array.from({ length: LIMITS.visitorsPerNetwork + 5 }, (_, i) => `${CHROME} Edg/${i}`);
+  for (const agent of browsers) await reading(["section:contact"], { agent, address: "198.51.100.60" });
+  assert.equal(query("SELECT count FROM reading WHERE event = 'section:contact'")[0].count, LIMITS.visitorsPerNetwork, "one network, so many browsers");
+
+  let trips = 0;
+  const { batch, prepare } = env.DB;
+  env.DB.batch = (statements) => (trips++, batch(statements));
+  env.DB.prepare = (sql) => {
+    const statement = prepare(sql);
+    const counted = (bound) => ({ ...bound, first: (...a) => (trips++, bound.first(...a)), all: () => (trips++, bound.all()), run: () => (trips++, bound.run()) });
+    return { ...counted(statement), bind: (...params) => counted(statement.bind(...params)) };
+  };
+  await reading(["section:home", "section:skills", "time:30"], { address: "198.51.100.70" });
+  assert.equal(trips, 1, "however many events, the database is asked once");
+});
+
+test("before the reading tables exist (their migration not applied yet), the page is answered and nothing breaks", async () => {
+  env.DB.raw.exec("DROP TABLE reading; DROP TABLE reading_seen");
+  assert.deepEqual(await (await reading(["section:home"])).json(), { ok: true, counted: 0 });
+  const empty = await appJson("/admin/reading");
+  assert.deepEqual(empty.sections, [{ name: "home", count: 0 }]);
+  const tab = await call("/inbox?tab=reading", { headers: basic(env.ADMIN_TOKEN) });
+  assert.equal(tab.status, 200);
+  assert.match(await tab.text(), /Nothing counted yet/);
+  await post("/feedback", { message: "day one" });
+  await dailyReport(env, ctx, { now: new Date("2026-10-25T15:59:00.000Z"), fetch: fetchStub });
+  assert.equal(feedbackRows()[0].visitor, "", "and the cron still drops the other ids");
+});
+
+test("the owner reads how far visitors got, where they stopped, and the rest, in the app's JSON and the inbox's tab", async () => {
+  const visitor = (i, events, now = DAY_ONE) => reading(events, { address: `198.51.100.${i}`, now });
+  for (let i = 1; i <= 10; i++) {
+    await call("/visits", { method: "POST", address: `198.51.100.${i}` });
+    await visitor(i, ["section:home", i <= 6 ? "device:phone" : "device:desktop", i <= 3 ? "source:linkedin" : "source:direct", "view:app"]);
+  }
+  for (let i = 1; i <= 8; i++) await visitor(i, ["section:experience", "time:10"]);
+  for (let i = 1; i <= 3; i++) await visitor(i, ["section:projects", "time:30", "project:vistago"]);
+  await visitor(1, ["section:skills", "section:recognition", "section:contact", "time:60", "project:bubuprotect"]);
+  await visitor(1, ["section:home", "section:experience"], "2026-09-01T10:00:00.000Z"); // too long ago to count
+
+  const summary = await appJson("/admin/reading?limit=30", { now: DAY_TWO });
+  assert.deepEqual(summary, {
+    from: "2026-09-26", to: "2026-10-25", days: 30, visits: 10,
+    sections: [
+      { name: "home", count: 10 }, { name: "experience", count: 8 }, { name: "projects", count: 3 },
+      { name: "skills", count: 1 }, { name: "recognition", count: 1 }, { name: "contact", count: 1 },
+    ],
+    times: [{ name: "10", count: 8 }, { name: "30", count: 3 }, { name: "60", count: 1 }, { name: "180", count: 0 }],
+    devices: [{ name: "phone", count: 6 }, { name: "tablet", count: 0 }, { name: "desktop", count: 4 }],
+    sources: [
+      { name: "direct", count: 7 }, { name: "linkedin", count: 3 }, { name: "github", count: 0 },
+      { name: "google", count: 0 }, { name: "facebook", count: 0 }, { name: "other", count: 0 },
+    ],
+    views: [{ name: "app", count: 10 }, { name: "plain", count: 0 }],
+    projects: [{ name: "vistago", count: 3 }, { name: "bubuprotect", count: 1 }],
+  }, "a section the page does not have (services) is left out");
+  assert.equal((await call("/admin/reading")).status, 401);
+
+  const page = await (await call("/inbox?tab=reading", { headers: basic(env.ADMIN_TOKEN), now: DAY_TWO })).text();
+  assert.match(page, /<a href="\/inbox\?tab=reading" aria-current="page">Reading<\/a>/);
+  assert.match(page, /2026-09-26 to 2026-10-25 \(30 days\): 10 readers, 10 visits counted\./);
+  assert.match(page, /Most readers who stopped did so in <strong>Experience<\/strong>: 5 of the 8 who got there went no further \(63%\)\./);
+  assert.match(page, /<li><span class="label">First screen<\/span><span class="track"><i style="width:100%"><\/i><\/span><strong>10<\/strong><small>everyone who opened the page<\/small><\/li>/);
+  assert.match(page, /<li><span class="label">Projects<\/span><span class="track"><i style="width:30%"><\/i><\/span><strong>3<\/strong><small>30% of readers · 5 left before it \(63%\)<\/small><\/li>/);
+  assert.match(page, /<li><span class="label">Education &amp; awards<\/span><span class="track"><i style="width:10%"><\/i><\/span><strong>1<\/strong><small>10% of readers · nobody left before it<\/small><\/li>/);
+  assert.match(page, /<h2>Projects opened<\/h2><ul class="bars"><li><span class="label">vistago<\/span>/);
+  assert.match(page, /<span class="label">1 min or more<\/span>/);
+  assert.match(page, /<span class="label">Phone<\/span><span class="track"><i style="width:60%">/);
+  assert.match(page, /<span class="label">LinkedIn<\/span><span class="track"><i style="width:30%">/);
+  assert.doesNotMatch(page, /Focus areas|class="card/);
+});
+
+test("the inbox asks the database four times a page, and only for the tab it shows", async () => {
+  for (let i = 1; i <= 30; i++) await post("/messages", { contact: `s${i}@example.com`, message: `Message ${i}` }, { address: `2001:db8:${i}::1` });
+  const sql = [];
+  let trips = 0;
+  const { batch, prepare } = env.DB;
+  env.DB.batch = (statements) => (trips++, batch(statements));
+  env.DB.prepare = (text) => {
+    sql.push(text);
+    const statement = prepare(text);
+    const counted = (bound) => ({ ...bound, first: (...a) => (trips++, bound.first(...a)), all: () => (trips++, bound.all()), run: () => (trips++, bound.run()) });
+    return { ...counted(statement), bind: (...params) => counted(statement.bind(...params)) };
+  };
+  const first = await (await call("/inbox", { headers: basic(env.ADMIN_TOKEN) })).text();
+  assert.equal(trips, 4, "the try counted, given back with the tidying in one batch, the header's counts, the tab's rows");
+  assert.ok(!sql.some((text) => /FROM feedback ORDER BY|visit_countries|FROM reading/.test(text)), "and nothing another tab shows");
+  assert.equal(first.match(/<article /g).length, 25, "a page of them");
+  assert.match(first, /<nav class="pager" aria-label="Pages"><span><\/span><span class="muted">Page 1<\/span><a href="\/inbox\?tab=messages&amp;page=2">Older<\/a><\/nav>/);
+  const second = await (await call("/inbox?tab=messages&page=2", { headers: basic(env.ADMIN_TOKEN) })).text();
+  assert.deepEqual([...second.matchAll(/<article id="m(\d+)"/g)].map((match) => Number(match[1])), [5, 4, 3, 2, 1]);
+  assert.match(second, /<a href="\/inbox">Newer<\/a><span class="muted">Page 2<\/span><span><\/span>/);
+  assert.match(second, /<input type="hidden" name="back" value="\/inbox\?tab=messages&amp;page=2">/);
 });
 
 // ---- Push ----

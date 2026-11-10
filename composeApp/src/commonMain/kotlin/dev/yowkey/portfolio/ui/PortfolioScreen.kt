@@ -409,6 +409,8 @@ fun PortfolioPage(
             else items.getOrNull(listState.firstVisibleItemIndex)?.section ?: Section.Home
         }
     }
+    // How far readers get is counted by the page's script (in the browser); the app says which section is being read.
+    LaunchedEffect(activeSection) { reportReading(activeSection.name.lowercase()) }
     // A glide whose time scales with the distance, landing exactly on the row's header (see glideToItem).
     val jumpTo: (Int) -> Unit = remember(items, layout, density, reducedMotion, reading) {
         { index -> reading.jumpTo(index, with(density) { items[index].landingInto(layout).roundToPx() }, reducedMotion) }

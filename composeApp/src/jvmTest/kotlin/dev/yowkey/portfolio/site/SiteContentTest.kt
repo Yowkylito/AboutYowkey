@@ -13,6 +13,7 @@ import dev.yowkey.portfolio.model.PublicNote
 import dev.yowkey.portfolio.model.Relation
 import dev.yowkey.portfolio.model.RepoVisibility
 import dev.yowkey.portfolio.model.trackingKey
+import dev.yowkey.portfolio.ui.Section
 import dev.yowkey.portfolio.ui.image.AnimatedClip
 import dev.yowkey.portfolio.ui.image.ClipFrames
 import dev.yowkey.portfolio.ui.image.ScreenshotImages
@@ -231,6 +232,29 @@ class SiteContentTest {
         val boot = Regex("<script>([\\s\\S]*?)</script>").findAll(page).map { it.groupValues[1] }.single { "composeApp.js?v=" in it }
         assertTrue("var plain = /(^\\?|&)plain(=|&|\$)/.test(location.search);" in boot, "the boot script reads the address")
         assertTrue("if (!gc || plain) return staticOnly();" in boot, "and leaves the app unloaded")
+    }
+
+    /**
+     * The page reports how it is read to the backend's `/events`, in the words the worker counts (worker/src/handler.js:
+     * SECTIONS, TIMES, DEVICES, SOURCES, VIEWS): the bar's sections, each implying those above it, the app's size
+     * classes, the app's project addresses. It keeps nothing on the device, and the app reports through it.
+     */
+    @Test
+    fun thePageReportsHowItIsReadInTheWorkersWords() {
+        val script = Regex("<script>([\\s\\S]*?)</script>").findAll(page).map { it.groupValues[1] }.single { "/events" in it }
+        assertTrue("navigator.sendBeacon(api + \"/events\", JSON.stringify({ events: events }))" in script)
+        assertTrue("window.yowkeyReading = reached;" in script, "the app reports the section being read through the page")
+        assertTrue("for (var i = 0; i <= at; i++) note(\"section:\" + order[i]);" in script, "reaching a section counts those above it")
+        // The sections it can name are the bar's links, which are the worker's names.
+        val known = setOf("home", "experience", "projects", "skills", "services", "recognition", "contact")
+        val linked = Regex("href=\"#([\\w-]+)\"").findAll(StaticHtml.bar(portfolio).substringAfter("<nav")).map { it.groupValues[1] }.toSet()
+        assertTrue(known.containsAll(linked), "the bar links to sections the worker does not count: ${linked - known}")
+        assertEquals(known - "home", Section.entries.map { it.name.lowercase() }.toSet() - "home", "the app's sections, lower case, are the same names")
+        listOf("width < 600 ? \"phone\" : width < 840 ? \"tablet\" : \"desktop\"", "marks = [10, 30, 60, 180]", "\"view:app\"", "\"view:plain\"")
+            .forEach { assertTrue(it in script, "the script lacks $it") }
+        listOf("\"direct\"", "\"linkedin\"", "\"github\"", "\"google\"", "\"facebook\"", "\"other\"").forEach { assertTrue(it in script, "source $it") }
+        assertTrue("/^#\\/projects\\/([a-z0-9][a-z0-9-]{0,39})\\/?\$/" in script, "a project's address, as the app writes it")
+        listOf("localStorage", "document.cookie", "sessionStorage").forEach { assertFalse(it in script, "the reading script keeps nothing: $it") }
     }
 
     /**

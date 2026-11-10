@@ -1400,6 +1400,97 @@
     })();
   </script>
   <script>
+    // How the page is read, for the owner to see what to improve: how far down a reader gets (each section reached,
+    // and every one above it), the projects they open, how long the page stays in view, what it is read on, where
+    // the reader came from and which page they got. Each is a word sent to the backend's /events, which keeps a
+    // count per day and nothing about who: no cookie, no id, nothing stored on this device. Only with an "api".
+    // The static page reports its own scrolling; once the app has taken over, the app says which section is being
+    // read (window.yowkeyReading), since a canvas has nothing to observe.
+    (function () {
+      var holder = document.querySelector("[data-api]");
+      if (!holder || !navigator.sendBeacon) return;
+      var api = holder.dataset.api, sent = {}, queue = [], timer = null;
+      function flush() {
+        timer = null;
+        if (!queue.length) return;
+        var events = queue.splice(0, 16);
+        try { navigator.sendBeacon(api + "/events", JSON.stringify({ events: events })); } catch (e) {}
+        if (queue.length) timer = setTimeout(flush, 0);
+      }
+      // Once per page load each; a few gathered into one beacon, which also leaves as the page is hidden or closed.
+      function note(event) {
+        if (sent[event]) return;
+        sent[event] = true;
+        queue.push(event);
+        if (!timer) timer = setTimeout(flush, 1500);
+      }
+      function leave() { if (timer) clearTimeout(timer); flush(); }
+      document.addEventListener("visibilitychange", function () { if (document.visibilityState === "hidden") leave(); });
+      window.addEventListener("pagehide", leave);
+
+      // The sections in the page's order, from the bar's own links: reaching one means having passed those above it.
+      var order = ["home"].concat(Array.prototype.map.call(document.querySelectorAll("#sections a[href^='#']"), function (link) {
+        return link.getAttribute("href").slice(1);
+      }));
+      function reached(name) {
+        var at = order.indexOf(name);
+        for (var i = 0; i <= at; i++) note("section:" + order[i]);
+      }
+      window.yowkeyReading = reached;
+      reached("home");
+      var scroller = document.getElementById("static-scroll"), looking = false;
+      function look() {
+        looking = false;
+        if (document.body.classList.contains("app-ready")) return;
+        var line = scroller.clientHeight * 0.6;
+        for (var i = order.length - 1; i > 0; i--) {
+          var section = document.getElementById(order[i]);
+          if (section && section.getBoundingClientRect().top < line) { reached(order[i]); break; }
+        }
+      }
+      scroller.addEventListener("scroll", function () {
+        if (!looking) { looking = true; requestAnimationFrame(look); }
+      }, { passive: true });
+
+      // A project opened: the app's address for it, which the static page takes too.
+      function project() {
+        var match = /^#\/projects\/([a-z0-9][a-z0-9-]{0,39})\/?$/.exec(location.hash);
+        if (match) note("project:" + match[1]);
+      }
+      project();
+      window.addEventListener("hashchange", project);
+
+      // The window's width, by the app's own size classes.
+      var width = window.innerWidth;
+      note("device:" + (width < 600 ? "phone" : width < 840 ? "tablet" : "desktop"));
+
+      // Where the reader came from, as one of a few names; never the address itself.
+      var from = "";
+      try { from = document.referrer ? new URL(document.referrer).hostname : ""; } catch (e) {}
+      note("source:" + (
+        !from || from === location.hostname ? "direct" :
+        /(^|\.)(linkedin\.com|lnkd\.in)$/.test(from) ? "linkedin" :
+        /(^|\.)github\.(com|io)$/.test(from) ? "github" :
+        /(^|\.)google\.[a-z.]+$/.test(from) ? "google" :
+        /(^|\.)(facebook\.com|messenger\.com|fb\.com|fb\.me)$/.test(from) ? "facebook" : "other"));
+
+      // Which page they read: the app once it has taken over, the plain page where it never will.
+      function view() {
+        var body = document.body.classList;
+        if (body.contains("app-ready")) note("view:app");
+        else if (body.contains("static-only")) note("view:plain");
+      }
+      if (window.MutationObserver) new MutationObserver(view).observe(document.body, { attributes: true, attributeFilter: ["class"] });
+
+      // Seconds with the page in view, as marks passed: a tab left open in the background counts nothing.
+      var seconds = 0, marks = [10, 30, 60, 180];
+      setInterval(function () {
+        if (document.visibilityState !== "visible" || !marks.length) return;
+        if (++seconds >= marks[0]) note("time:" + marks.shift());
+      }, 1000);
+    })();
+  </script>
+  <script>
     (function () {
       // A minimal module declaring a GC struct type: validates only where WasmGC (required by Kotlin/Wasm) exists.
       var gc = typeof WebAssembly === "object" &&

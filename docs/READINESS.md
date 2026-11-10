@@ -39,6 +39,10 @@ apply; what does is below. `[x]` done, `[ ]` open, `N/A` with the reason.
   `TRACKED_LINKS`, never for a bot; a country is Cloudflare's guess from the address, stored only as a count per
   country per day. Neither is ever next to a visitor id. One network adds at most 30 browsers to a day's visits
   and to a link's clicks, since a browser's name is whatever its sender says
+- [x] How the page is read (sections reached, projects opened, time in view, device, source, app or plain page) is
+  kept as counts per day only, once per visitor per day by the same daily hash as a visit, with a request's events,
+  a network's browsers and a day's project names all bounded; the page stores nothing on the device and sends no
+  address, only one of a few names for where the reader came from
 - [x] Messages are private: never on the site, 3 per visitor per day, the same limits and trap field as notes. The
   owner's app reads them, the notes and the counts over `/admin/` with the same `ADMIN_TOKEN` as a Bearer token,
   answered `no-store`; the phones' push tokens are dropped when FCM says they are dead. A push carries a visitor's
@@ -86,7 +90,8 @@ apply; what does is below. `[x]` done, `[ ]` open, `N/A` with the reason.
 - Content is one JSON file in the repo, versioned by git
 - Visits, clicks, notes and messages live in a D1 (SQLite) database on Cloudflare: `worker/migrations/`, applied in
   order by `npm run db:init` (wrangler remembers which have run). Counts by the owner's local day (Asia/Manila):
-  `visits`, `visit_countries` and `clicks`; today's hashes, deleted the next day: `visitors` and `clickers`; what
+  `visits`, `visit_countries`, `clicks` and `reading`; today's hashes, deleted the next day: `visitors`, `clickers`
+  and `reading_seen`; what
   visitors write: `feedback` (with `consent`, `published_at`, `hidden_at`, `day`) and `messages` (with `read_at`,
   `archived_at`); the owner's: `notifications` (every alert), `devices` (the phones' FCM tokens) and
   `daily_reports`. Nothing identifying is kept beyond what a visitor types into a form

@@ -393,9 +393,15 @@ ten minutes, once:
    The build checks it is `https://` with no trailing slash. The next deploy of the site shows the rating and visits in
    the bar and the form under Contact; a note appears as soon as it is sent.
 
-**Reading the notes, and taking one down**: open `https://aboutyowkey-api.<account>.workers.dev/inbox` in a browser;
-any user name, the password is `ADMIN_TOKEN`. It lists the notes newest first, with the visit totals and the last two
-weeks by day, and a button for each: **Hide** (off the site, but kept), **Unhide**, **Pin** (first on the site, newest
+**The inbox**: open `https://aboutyowkey-api.<account>.workers.dev/inbox` in a browser; any user name, the password
+is `ADMIN_TOKEN`. Its header has the numbers that matter (today's visits, all of them, unread messages, notes on the
+site and their average), and under it four tabs, each reading only what it shows, 25 to a page: **Messages** (the
+first, since they wait on you: those in the inbox, or the archived ones, with **Reply** for a sender who left an
+address), **Notes**, **Reading** (below) and **Visits** (the last 30 days as a chart, link clicks, countries). Times
+are yours (`TIME_ZONE`). A button brings you back to the card it was on.
+
+**Reading the notes, and taking one down**: the Notes tab lists them pinned first, then newest, with a button for
+each: **Hide** (off the site, but kept), **Unhide**, **Pin** (first on the site, newest
 pin first; only for a note on the site) or **Unpin**, and **Delete**. A private note (sent before notes were public,
 without the tick) also has **Show on the site**, for when its writer has since said yes. The app's Notes screen has
 the same. The page's buttons only work from the
@@ -422,6 +428,16 @@ Cloudflare Workers" template, with D1 edit added). Without them the workflow onl
   same way. Bots are not counted.
 - **Countries**: Cloudflare's guess at a counted visit's country, kept only as a count per country per day, never
   next to a visitor.
+
+- **Reading**: how the page is read, as counts per day (`worker/migrations/0006`). The page's script
+  (`index.template.html`) sends words, never who: each section a reader reaches (and so those above it), each project
+  opened, 10, 30, 60 and 180 seconds with the page in view, phone, tablet or desktop, where they came from (direct,
+  LinkedIn, GitHub, Google, Facebook or another site, never the address), and whether they read the app or the plain
+  page. Each counts once per visitor per day, by the same daily hash as a visit, deleted the same way; nothing is
+  stored on the reader's device. The inbox's **Reading** tab shows the last 30 days: how far readers got and how
+  many were lost before each section, with the section most stopped in named first, then time, projects, devices,
+  sources. `GET /admin/reading?limit=30` gives the same as JSON. Once, to turn it on: `npm run db:init` (it applies
+  0006), then `npm run deploy`; until then the page's reports are answered and dropped.
 
 Everything is counted by your day, Asia/Manila (`TIME_ZONE`), and at 23:59 there a cron writes the day's report.
 Each new note, new message and daily report is kept as an alert that the Android app reads from the worker's

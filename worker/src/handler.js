@@ -9,16 +9,19 @@
  *   GET  /visits             { total, today, since }    reads the counts without adding to them
  *   POST /visits             { total, today, since }    counts one visit per visitor per day, then answers as GET
  *   POST /clicks             { ok, counted }            one click per visitor per day on a tracked link (JSON, or sendBeacon's text/plain)
+ *   POST /events             { ok, counted }            how the page is read: { events: ["section:skills", …] }, each once per visitor per day
  *   GET  /notes              { visits, ratings, notes, total, more, relations }  the public notes, pinned first, then
  *                            newest first, a page at a time (?stars=1..5, ?relation=colleague|friend|special|other,
  *                            ?offset=0..100000, ?limit=1..50; the 1.1 app's ?before=<id>), and every rating counted
  *   POST /feedback           { ok }                     JSON from the page's script, or a plain HTML form post
  *   POST /messages           { ok }                     a private message to the owner: JSON, or a plain HTML form post
  *   GET  /feedback           { visits, items }          owner only: `Authorization: Bearer <ADMIN_TOKEN>`
- *   GET  /inbox              HTML                       owner only: HTTP Basic auth, any user name, password ADMIN_TOKEN
- *   POST /inbox/notes/:id    303 → /inbox               owner only, from the inbox page: hide, unhide, pin, unpin, delete
+ *   GET  /inbox              HTML                       owner only: HTTP Basic auth, any user name, password ADMIN_TOKEN;
+ *                                                       ?tab=messages (the default) | notes | reading | visits, ?page=2…,
+ *                                                       and for messages ?show=archived
+ *   POST /inbox/notes/:id    303 → the tab it was on    owner only, from the inbox page: hide, unhide, pin, unpin, delete
  *                                                       (and the 1.0 app's publish, unpublish)
- *   POST /inbox/messages/:id 303 → /inbox               owner only, from the inbox page: read, unread, archive, unarchive, delete
+ *   POST /inbox/messages/:id 303 → the tab it was on    owner only, from the inbox page: read, unread, archive, unarchive, delete
  *   /admin/*                 JSON                       the owner's app, Bearer ADMIN_TOKEN: listed at "The owner's app" below
  *
  * A note is public as soon as it arrives: the form says so, and sends `consent`. Notes left before that, without the
@@ -31,7 +34,7 @@
  * Bindings and settings (wrangler.toml): DB (D1), ALLOWED_ORIGINS, SITE_URL, TIME_ZONE, TRACKED_LINKS. Secrets:
  * ADMIN_TOKEN, VISITOR_SALT, and FCM_SERVICE_ACCOUNT for push (optional: without it alerts are records the app polls).
  */
-import { linkLabel, PAGE_HEADERS, relationLabel, renderInbox, renderNotice, topicLabel } from "./inbox.js";
+import { INBOX_PAGE, INBOX_TABS, linkLabel, PAGE_HEADERS, relationLabel, renderInbox, renderNotice, topicLabel } from "./inbox.js";
 import { notify } from "./push.js";
 
 export const LIMITS = Object.freeze({
@@ -59,6 +62,9 @@ export const LIMITS = Object.freeze({
    * the sender says it is, so without this one address could count as any number of visitors.
    */
   visitorsPerNetwork: 30,
+  /** Reading events one request may carry, and the different projects a day's events may name (the ids are the sender's words). */
+  eventsPerRequest: 16,
+  projectsPerDay: 40,
   /** Characters of request body read; more is a 413. */
   body: 16 * 1024,
   /** Public notes a page of `GET /notes` holds, newest first, unless it asks for up to `notesPageMax`. */
@@ -136,6 +142,7 @@ export async function handleRequest(request, env, ctx, { now = new Date(), fetch
     if (path === "/visits" && request.method === "GET") return json(await visitCounts(env.DB, localDay(env, now)), 200, cors);
     if (path === "/visits" && request.method === "POST") return json(await recordVisit(request, env, now), 200, cors);
     if (path === "/clicks" && request.method === "POST") return await recordClick(request, env, now, cors);
+    if (path === "/events" && request.method === "POST") return await recordReading(request, env, now, cors);
     if (path === "/notes" && request.method === "GET") {
       // Short: a visitor who has just left a note reloads the list, and should find it there.
       return json(await publicNotes(env.DB, localDay(env, now), url), 200, { ...cors, "Cache-Control": "public, max-age=15" });
@@ -143,7 +150,7 @@ export async function handleRequest(request, env, ctx, { now = new Date(), fetch
     if (path === "/feedback" && request.method === "POST") return await submitFeedback(request, env, now, cors, alerts);
     if (path === "/feedback" && request.method === "GET") return await listFeedback(request, env, url, now);
     if (path === "/messages" && request.method === "POST") return await submitMessage(request, env, now, cors, alerts);
-    if (path === "/inbox" && request.method === "GET") return await inbox(request, env, now);
+    if (path === "/inbox" && request.method === "GET") return await inbox(request, env, now, url);
     const action = /^\/inbox\/(notes|messages)\/(\d+)$/.exec(path);
     if (action && request.method === "POST") return await inboxAction(request, env, action[1], Number(action[2]), now, url);
     if (path === "/admin" || path.startsWith("/admin/")) return await admin(request, env, url, path.slice("/admin".length), now, alerts);
@@ -307,6 +314,12 @@ async function forgetYesterday(db, today) {
     db.prepare("UPDATE feedback SET visitor = '' WHERE visitor <> '' AND day < ?1").bind(today),
     db.prepare("UPDATE messages SET visitor = '' WHERE visitor <> '' AND day < ?1").bind(today),
   ]);
+  // On its own: before migration 0006 has run the table is not there, and that must not keep the others' ids.
+  try {
+    await db.prepare("DELETE FROM reading_seen WHERE day < ?1").bind(today).run();
+  } catch (error) {
+    if (!missingTable(error, "reading_seen")) throw error;
+  }
 }
 
 /**
@@ -365,6 +378,122 @@ function clickCounts(links, rows) {
   const counts = Object.fromEntries(links.map((link) => [link, 0]));
   for (const row of rows) counts[row.link] = (counts[row.link] || 0) + row.count;
   return counts;
+}
+
+// ---- Reading ----
+
+/** The page's sections, top to bottom: the bar's own names, lowercase (the app's `Section`, the static page's ids). */
+export const SECTIONS = Object.freeze(["home", "experience", "projects", "skills", "services", "recognition", "contact"]);
+/** Seconds of the page in view that are counted as reached. */
+export const TIMES = Object.freeze(["10", "30", "60", "180"]);
+export const DEVICES = Object.freeze(["phone", "tablet", "desktop"]);
+export const SOURCES = Object.freeze(["direct", "linkedin", "github", "google", "facebook", "other"]);
+export const VIEWS = Object.freeze(["app", "plain"]);
+const READING = Object.freeze({ section: SECTIONS, time: TIMES, device: DEVICES, source: SOURCES, view: VIEWS });
+/** A project's id, as portfolio.json's parser allows it: the one value here the worker cannot list. */
+const PROJECT_EVENT = /^project:[a-z0-9][a-z0-9-]{0,39}$/;
+
+/** [value] as a reading event the worker counts ("section:skills", "project:vistago"), or null. */
+function readingEvent(value) {
+  if (typeof value !== "string") return null;
+  if (PROJECT_EVENT.test(value)) return value;
+  const cut = value.indexOf(":");
+  const allowed = cut > 0 ? READING[value.slice(0, cut)] : null;
+  return allowed?.includes(value.slice(cut + 1)) ? value : null;
+}
+
+/**
+ * How the page is being read, from the page's own script: a list of events, each counted like a click (in one
+ * batch, once per visitor per day, never for a bot, one network adding no more browsers than a visit allows).
+ * Only counts are kept: no order, no times, nothing that says which visitor did what. What is not an event the
+ * worker knows is dropped, and a day names at most LIMITS.projectsPerDay projects, since their ids are the
+ * sender's words. Before migration 0006 has run there is nowhere to count, and the page is told so quietly.
+ */
+async function recordReading(request, env, now, cors) {
+  const body = await readBody(request, { form: false, plain: true, tooLarge: "Send fewer events." });
+  if (body.error) return json({ error: body.error }, body.status, cors);
+  if (!Array.isArray(body.fields.events)) return json({ error: "Send { events: [...] }." }, 400, cors);
+  const events = [...new Set(body.fields.events.map(readingEvent).filter(Boolean))].slice(0, LIMITS.eventsPerRequest);
+  const agent = request.headers.get("User-Agent") || "";
+  if (!events.length || isBot(agent)) return json({ ok: true, counted: 0 }, 200, cors);
+  const today = localDay(env, now);
+  const visitor = await visitorId(request, env, today, agent);
+  const db = env.DB;
+  // ?4 and ?5 are the ends of the network's ids in the key, ?6 how many it may have on this event today; ?7 is how
+  // many projects a day may name, which only a project not yet named today is held to.
+  const room =
+    "(SELECT COUNT(*) FROM reading_seen WHERE day = ?1 AND event = ?2 AND visitor >= ?4 AND visitor < ?5) < ?6 " +
+    "AND (?2 NOT LIKE 'project:%' OR EXISTS (SELECT 1 FROM reading WHERE day = ?1 AND event = ?2) " +
+    "OR (SELECT COUNT(*) FROM reading WHERE day = ?1 AND event LIKE 'project:%') < ?7)";
+  const statements = () => events.flatMap((event) => {
+    const who = [today, event, visitor, ...networkRange(visitor), LIMITS.visitorsPerNetwork, LIMITS.projectsPerDay];
+    return [
+      db
+        .prepare(
+          "INSERT INTO reading (day, event, count) SELECT ?1, ?2, 1 " +
+            `WHERE NOT EXISTS (SELECT 1 FROM reading_seen WHERE day = ?1 AND event = ?2 AND visitor = ?3) AND ${room} ` +
+            "ON CONFLICT (day, event) DO UPDATE SET count = count + 1",
+        )
+        .bind(...who),
+      // Kept only where it was counted: the count's row is there by now, so a project past the day's limit is not.
+      db
+        .prepare(
+          "INSERT OR IGNORE INTO reading_seen (day, event, visitor) SELECT ?1, ?2, ?3 " +
+            "WHERE EXISTS (SELECT 1 FROM reading WHERE day = ?1 AND event = ?2) AND " +
+            "(SELECT COUNT(*) FROM reading_seen WHERE day = ?1 AND event = ?2 AND visitor >= ?4 AND visitor < ?5) < ?6",
+        )
+        .bind(...who.slice(0, 6)),
+    ];
+  });
+  try {
+    const results = await db.batch([...statements(), db.prepare(`DELETE FROM reading_seen WHERE ${NOT_TODAY}`).bind(today)]);
+    const counted = events.filter((_, index) => results[index * 2].meta.changes === 1).length;
+    return json({ ok: true, counted }, 200, cors);
+  } catch (error) {
+    if (!missingTable(error, "reading")) throw error;
+    return json({ ok: true, counted: 0 }, 200, cors);
+  }
+}
+
+/** Whether [error] is the database saying a table whose name starts with [name] is not there: its migration has not run. */
+function missingTable(error, name) {
+  return new RegExp(`no such table: ${name}`, "i").test(String(error?.message ?? error));
+}
+
+/**
+ * What the owner reads of it: each event's count over the last [days] local days up to [today], and the visits of
+ * the same days to set them against. Empty before migration 0006 has run.
+ */
+async function readingSummary(db, today, days) {
+  const from = new Date(Date.parse(`${today}T00:00:00Z`) - (days - 1) * 86400000).toISOString().slice(0, 10);
+  const visits = await db.prepare("SELECT COALESCE(SUM(count), 0) AS n FROM visits WHERE day BETWEEN ?1 AND ?2").bind(from, today).first("n");
+  let rows = [];
+  try {
+    rows = (await db.prepare("SELECT event, SUM(count) AS count FROM reading WHERE day BETWEEN ?1 AND ?2 GROUP BY event").bind(from, today).all()).results;
+  } catch (error) {
+    if (!missingTable(error, "reading")) throw error;
+  }
+  const of = (kind) =>
+    rows
+      .filter((row) => row.event.startsWith(`${kind}:`))
+      .map((row) => ({ name: row.event.slice(kind.length + 1), count: row.count }));
+  const listed = (kind, names) => {
+    const counts = new Map(of(kind).map((row) => [row.name, row.count]));
+    return names.map((name) => ({ name, count: counts.get(name) ?? 0 }));
+  };
+  return {
+    from,
+    to: today,
+    days,
+    visits,
+    // The sections the page has, in its order: one nobody has reached in all these days is one the page does not have.
+    sections: listed("section", SECTIONS).filter((row, index) => index === 0 || row.count > 0),
+    times: listed("time", TIMES),
+    devices: listed("device", DEVICES),
+    sources: listed("source", SOURCES),
+    views: listed("view", VIEWS),
+    projects: of("project").sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)),
+  };
 }
 
 // ---- Public notes ----
@@ -773,18 +902,78 @@ async function listFeedback(request, env, url, now) {
   return json({ visits, items }, 200, { "Cache-Control": "no-store" });
 }
 
-async function inbox(request, env, now) {
+/**
+ * The owner's page, a tab at a time, so a tab reads only what it shows: the counts every tab's header has (one
+ * query), then the tab's own rows, a page of INBOX_PAGE at a time. Messages are the first tab: they are what waits
+ * on the owner.
+ */
+async function inbox(request, env, now, url) {
   const entry = await authorize(basicPassword(request), env, { basic: true, request, now });
   if (entry !== true) return entry;
+  const db = env.DB;
   const today = localDay(env, now);
-  const [visits, items, days, messages, clicks] = await Promise.all([
-    visitCounts(env.DB, today),
-    feedbackItems(env.DB, 200),
-    env.DB.prepare("SELECT day, count FROM visits ORDER BY day DESC LIMIT 14").all().then((result) => result.results),
-    messageItems(env.DB, 200),
-    env.DB.prepare("SELECT link, count FROM clicks WHERE day = ?1").bind(today).all().then((result) => clickCounts(trackedLinks(env), result.results)),
-  ]);
-  return html(renderInbox({ visits, items, days, today, timeZone: timeZoneOf(env), messages, clicks }), 200, {
+  const asked = url.searchParams.get("tab");
+  const tab = INBOX_TABS.includes(asked) ? asked : INBOX_TABS[0];
+  const page = wholeNumber(url.searchParams.get("page"), 1, 100000) ?? 1;
+  const archived = url.searchParams.get("show") === "archived";
+  const all = (statement) => statement.all().then((result) => result.results);
+  const head = db
+    .prepare(
+      "SELECT (SELECT COALESCE(SUM(count), 0) FROM visits) AS visits, (SELECT MIN(day) FROM visits) AS since, " +
+        "COALESCE((SELECT count FROM visits WHERE day = ?1), 0) AS today, " +
+        "(SELECT COUNT(*) FROM messages WHERE archived_at IS NULL) AS waiting, " +
+        "(SELECT COUNT(*) FROM messages WHERE archived_at IS NOT NULL) AS archived, " +
+        "(SELECT COUNT(*) FROM messages WHERE read_at IS NULL AND archived_at IS NULL) AS unread, " +
+        `(SELECT COUNT(*) FROM feedback) AS notes, (SELECT COUNT(*) FROM feedback WHERE ${PUBLIC}) AS shown, ` +
+        `(SELECT ROUND(AVG(rating), 1) FROM feedback WHERE ${COUNTED}) AS rating`,
+    )
+    .bind(today)
+    .first();
+  const offset = (page - 1) * INBOX_PAGE;
+  // One more than a page: whether there is a next one, without counting.
+  const paged = (rows) => ({ rows: rows.slice(0, INBOX_PAGE), more: rows.length > INBOX_PAGE });
+  const tabs = {
+    messages: async () => ({
+      archived,
+      ...paged(
+        await all(
+          db
+            .prepare(
+              "SELECT id, created_at, name, contact, topic, message, read_at, archived_at FROM messages " +
+                `WHERE archived_at IS ${archived ? "NOT NULL" : "NULL"} ORDER BY id DESC LIMIT ?1 OFFSET ?2`,
+            )
+            .bind(INBOX_PAGE + 1, offset),
+        ),
+      ),
+    }),
+    notes: async () =>
+      paged(
+        await all(
+          db
+            .prepare(
+              "SELECT id, created_at, name, contact, rating, message, consent, published_at, hidden_at, relation, pinned_at FROM feedback " +
+                `ORDER BY ${PINNED_FIRST} LIMIT ?1 OFFSET ?2`,
+            )
+            .bind(INBOX_PAGE + 1, offset),
+        ),
+      ),
+    reading: () => readingSummary(db, today, 30),
+    visits: async () => {
+      const [days, clicks, countries] = await Promise.all([
+        all(db.prepare("SELECT day, count FROM visits ORDER BY day DESC LIMIT 30")),
+        all(db.prepare("SELECT link, SUM(count) AS total, COALESCE(SUM(CASE WHEN day = ?1 THEN count END), 0) AS today FROM clicks GROUP BY link").bind(today)),
+        all(db.prepare("SELECT country, SUM(count) AS count FROM visit_countries GROUP BY country ORDER BY count DESC, country LIMIT 12")),
+      ]);
+      const byLink = new Map(clicks.map((row) => [row.link, row]));
+      return {
+        days,
+        countries,
+        clicks: trackedLinks(env).map((link) => ({ link, total: byLink.get(link)?.total ?? 0, today: byLink.get(link)?.today ?? 0 })),
+      };
+    },
+  };
+  const [counts, data] = await Promise.all([head, tabs[tab]()]);
+  return html(renderInbox({ tab, page, counts, data, today, timeZone: timeZoneOf(env) }), 200, {
     "Cache-Control": "no-store",
     "X-Robots-Tag": "noindex",
   });
@@ -801,10 +990,19 @@ async function inboxAction(request, env, kind, id, now, url) {
     const things = kind === "notes" ? "Notes" : "Messages";
     return html(renderNotice("Refused", `${things} are acted on from the inbox page only.`, "/inbox"), 403);
   }
-  const { action = "" } = Object.fromEntries(new URLSearchParams(await request.text()));
+  const { action = "", back = "" } = Object.fromEntries(new URLSearchParams(await request.text()));
   const outcome = await (kind === "notes" ? noteAction : messageAction)(env.DB, id, action, now);
-  if (outcome.error) return html(renderNotice(outcome.title, outcome.error, "/inbox"), outcome.status);
-  return new Response(null, { status: 303, headers: { Location: "/inbox" } });
+  // Back where the button was: the tab, its page, and the card itself unless it is gone.
+  const tab = kind === "notes" ? "/inbox?tab=notes" : "/inbox";
+  const from = backTo(back) ?? tab;
+  if (outcome.error) return html(renderNotice(outcome.title, outcome.error, from), outcome.status);
+  const card = action === "delete" ? "" : `#${kind === "notes" ? "n" : "m"}${id}`;
+  return new Response(null, { status: 303, headers: { Location: from + card } });
+}
+
+/** The inbox address a button says it was pressed on, when it is one: `/inbox` and its own query, nothing else. */
+function backTo(back) {
+  return /^\/inbox(\?[a-z0-9=&]{1,60})?$/.test(back) ? back : null;
 }
 
 /**
@@ -970,8 +1168,8 @@ async function ownerTry(request, env, now) {
   const since = new Date(start).toISOString();
   const address = request.headers.get("CF-Connecting-IP") || "unknown";
   const client = await sha256Hex(`owner|${networkOf(address)}|${env.VISITOR_SALT || ""}`);
-  const tidy = () => env.DB.prepare("DELETE FROM owner_tries WHERE count <= 0 OR since <> ?1").bind(since).run();
-  const giveBack = () => env.DB.prepare("UPDATE owner_tries SET count = count - 1 WHERE client = ?1 AND since = ?2").bind(client, since).run();
+  const tidy = () => env.DB.prepare("DELETE FROM owner_tries WHERE count <= 0 OR since <> ?1").bind(since);
+  const giveBack = () => env.DB.prepare("UPDATE owner_tries SET count = count - 1 WHERE client = ?1 AND since = ?2").bind(client, since);
   try {
     const count = await env.DB
       .prepare(
@@ -981,20 +1179,17 @@ async function ownerTry(request, env, now) {
       .bind(client, since)
       .first("count");
     if (count > LIMITS.ownerTries) {
-      await giveBack();
+      await env.DB.batch([giveBack(), tidy()]);
       return { wait: Math.ceil((start + window - now.getTime()) / 1000) };
     }
-    await tidy();
   } catch (error) {
     console.error("Owner tries not counted:", error);
     return /no such table: owner_tries/i.test(String(error?.message ?? error)) ? { wait: 0, right: async () => {} } : { uncounted: true };
   }
   return {
     wait: 0,
-    right: async () => {
-      await giveBack();
-      await tidy();
-    },
+    // One round trip: the try given back, and the rows that hold nothing any more (this one's, earlier windows') gone.
+    right: () => env.DB.batch([giveBack(), tidy()]),
   };
 }
 
@@ -1042,6 +1237,7 @@ async function sha256Hex(input) {
 //   POST   /admin/messages/:id            { action: read | unread | archive | unarchive | delete }
 //   GET    /admin/notifications?after=<id>&limit=50   the alerts' records: newest first, or after an id oldest first
 //   GET    /admin/reports?limit=60        the cron's daily reports, newest first
+//   GET    /admin/reading?limit=30        how the page was read over that many days: sections reached, projects opened, time, device, source
 //   POST   /admin/devices                 { token, platform }  a phone signs in for push
 //   DELETE /admin/devices                 { token }            and out
 //
@@ -1061,6 +1257,7 @@ async function admin(request, env, url, route, now, alerts) {
   if (route === "/messages" && method === "GET") return ownerJson({ items: await messageItems(env.DB, limitOf(url, 100, 500)) });
   if (route === "/notifications" && method === "GET") return await notifications(env.DB, url);
   if (route === "/reports" && method === "GET") return ownerJson({ items: await reportItems(env.DB, limitOf(url, 60, 366)) });
+  if (route === "/reading" && method === "GET") return ownerJson(await readingSummary(env.DB, localDay(env, now), limitOf(url, 30, 366)));
   if (route === "/devices" && method === "POST") return await addDevice(request, env, now);
   if (route === "/devices" && method === "DELETE") return await removeDevice(request, env);
   const target = /^\/(feedback|messages)\/(\d+)$/.exec(route);
