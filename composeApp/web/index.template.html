@@ -7,7 +7,8 @@
   Boot: the static <main> is a full, crawlable version of the page and shows first. If the browser supports
   WasmGC, composeApp.js loads the Compose app into #app (invisible), and once it has drawn real content Kotlin
   adds body.app-ready, which fades the app in over it. Without WasmGC, or if the script fails, the static page
-  simply stays. The hero's entrance plays here first; the app reads how far it has got (the .hero's hero-intro
+  simply stays. It stays too when the address asks for it (?plain), which the first link on the page does: the app
+  draws on a canvas, and a reader who needs real text (a screen reader, find in page, translation) keeps the HTML. The hero's entrance plays here first; the app reads how far it has got (the .hero's hero-intro
   animation) and carries on from that frame, usually its end, so no word the visitor can see vanishes to come in again.
 -->
 <html lang="en">
@@ -26,7 +27,14 @@
   <meta property="og:description" content="{{description}}">
   <meta property="og:url" content="{{url}}">
   <meta property="og:site_name" content="{{name}}">
-  <meta name="twitter:card" content="summary">
+  <!-- The link's preview: og.png beside this page (scripts/make_og_image.py), the size a large preview is drawn from. -->
+  <meta property="og:image" content="{{url}}og.png">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="{{title}}">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="{{url}}og.png">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <script type="application/ld+json">{{jsonLd}}</script>
   <script>
@@ -95,6 +103,24 @@
     :root { --bar-offset: 64px; }
     #static-content [id] { scroll-margin-top: calc(var(--bar-offset) + 24px); }
     @media (prefers-reduced-motion: no-preference) { #static-scroll { scroll-behavior: smooth; } }
+    /*
+      Words for screen readers only (StaticHtml.said): on the page, read out, drawn nowhere. Out of the flow, so the
+      forms CSS shows beside them keep their places.
+    */
+    .say { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+    /*
+      The way to the plain page (?plain, read by the boot script): the first thing the keyboard and a screen reader
+      reach, outside #static-scroll so it is still there once the app has taken over and the page under it is inert.
+      Off the top edge until it has the focus; above the app's canvas then.
+    */
+    .plain {
+      position: fixed; top: 8px; left: 8px; z-index: 10; padding: 8px 14px; border-radius: 999px;
+      background: var(--surface); color: var(--accent); border: 1px solid var(--line-strong);
+      font-size: 14px; font-weight: 600; line-height: 1.4; text-decoration: none; transform: translateY(-64px);
+    }
+    .plain:focus { transform: none; outline: 2px solid var(--accent); outline-offset: 2px; }
+    /* Where the page is already the plain one (asked for, no WasmGC, or no script at all), there is nowhere to send the reader. */
+    body.static-only .plain, :root:not(.js) .plain { display: none; }
     .bar { position: sticky; top: 0; z-index: 5; background: var(--bg); box-shadow: 0 1px 0 var(--line); }
     /* Where the page can show through, it does, blurred; elsewhere the bar is the page's own colour. */
     @supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
@@ -640,6 +666,7 @@
   </style>
 </head>
 <body>
+  <a class="plain" href="?plain">Read this page as plain HTML</a>
   <div class="loading-bar" aria-hidden="true"></div>
   <div id="static-scroll">
 {{bar}}
@@ -1378,7 +1405,10 @@
       var gc = typeof WebAssembly === "object" &&
         WebAssembly.validate(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 95, 1, 120, 0]));
       function staticOnly() { document.body.classList.add("static-only"); }
-      if (!gc) return staticOnly();
+      // The reader asked for the plain page (the .plain link's ?plain): the app is never loaded, so the HTML stays
+      // the page, with its text selectable, searchable and in the accessibility tree.
+      var plain = /(^\?|&)plain(=|&|$)/.test(location.search);
+      if (!gc || plain) return staticOnly();
       var started = false;
       function start() {
         if (started) return;

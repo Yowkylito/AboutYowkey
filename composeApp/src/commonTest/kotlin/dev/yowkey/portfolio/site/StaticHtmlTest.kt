@@ -51,6 +51,21 @@ class StaticHtmlTest {
         assertTrue("script.src = \"composeApp.js?v=949ee26\";" in page)
     }
 
+    /** `sameAs` names the owner's profiles elsewhere; a file on the site itself (the résumé) is not one, nor is a mail address. */
+    @Test
+    fun sameAsListsTheProfilesAndNotTheSitesOwnFiles() {
+        val owner = portfolio.copy(
+            links = listOf(
+                Link("GitHub", "https://github.com/ada"),
+                Link("Résumé", "${portfolio.siteUrl}Ada-Resume.pdf"),
+                Link("Mail", "mailto:ada@example.com"),
+            ),
+        )
+        val page = StaticHtml.page(owner, "<script type=\"application/ld+json\">{{jsonLd}}</script>", "949ee26")
+        assertTrue("\"sameAs\":[\"https://github.com/ada\"]" in page, page)
+        assertTrue("${portfolio.siteUrl}Ada-Resume.pdf" in StaticHtml.content(owner), "the page still links to it")
+    }
+
     @Test
     fun pageFillsTheBarAndTheButtonAroundTheContent() {
         val page = StaticHtml.page(portfolio, "{{bar}}<main>{{content}}</main>{{toTop}}", "949ee26")
@@ -82,8 +97,8 @@ class StaticHtmlTest {
         assertTrue(bar.startsWith("<div id=\"top\"></div>\n<header class=\"bar\">"), bar.take(80))
         listOf(
             "<a class=\"mark\" href=\"#top\" aria-label=\"Ada &lt;King&gt;  Lovelace, back to top\"><span aria-hidden=\"true\">AL</span></a>",
-            "<div class=\"brand\"><span class=\"front\"><span class=\"where\" aria-label=\"Open to &lt;work&gt;\">",
-            "</span></span></span><span class=\"who\"><strong>Ada &lt;King&gt;  Lovelace</strong><span aria-label=\"Engineer at &quot;Acme&quot;\">" +
+            "<div class=\"brand\"><span class=\"front\"><span class=\"where\"><span class=\"say\">Open to &lt;work&gt;</span>",
+            "</span></span></span><span class=\"who\"><strong>Ada &lt;King&gt;  Lovelace</strong><span><span class=\"say\">Engineer at &quot;Acme&quot;</span>" +
                 "<span class=\"full\" aria-hidden=\"true\">Engineer at &quot;Acme&quot;</span><span class=\"short\" aria-hidden=\"true\">Engineer at &quot;Acme&quot;</span></span></span></div>",
             "<nav class=\"sections\" id=\"sections\" aria-label=\"Sections\"><ul>",
             "<button class=\"theme\" type=\"button\" role=\"switch\" aria-checked=\"false\" aria-label=\"Dark theme\"><span class=\"knob\"></span><svg class=\"sun\"",
@@ -105,8 +120,23 @@ class StaticHtmlTest {
             ),
         )
         val bar = StaticHtml.bar(owner)
-        assertTrue("aria-label=\"Android Developer at DigiPlus since 2024\"" in bar)
+        assertTrue("<span class=\"say\">Android Developer at DigiPlus since 2024</span>" in bar, bar)
         assertTrue("<span class=\"short\" aria-hidden=\"true\">Android Developer at DigiPlus</span>" in bar, bar)
+    }
+
+    /**
+     * What the bar shows in two forms (the role, where the owner is) is read once, whole, from real text: an
+     * `aria-label` on a plain `<span>` names nothing, and with both forms hidden a screen reader had nothing to read.
+     */
+    @Test
+    fun theBarsFittedWordsAreReadFromTextNotFromALabelOnASpan() {
+        val owner = everySection.copy(profile = everySection.profile.copy(location = "Quezon City, Philippines", availability = "Open to relocation"))
+        val bar = StaticHtml.bar(owner.copy(api = "https://api.example"))
+        assertFalse(Regex("<span[^>]*\\saria-label=").containsMatchIn(bar), bar)
+        assertEquals(2, Regex("<span class=\"say\">[^<]+</span>").findAll(bar).count(), "the place and the role")
+        Regex("<span class=\"(full|short)\"([^>]*)>").findAll(bar).forEach {
+            assertEquals(" aria-hidden=\"true\"", it.groupValues[2], "each shown form is hidden from readers, who have the whole text")
+        }
     }
 
     /**
@@ -122,7 +152,7 @@ class StaticHtmlTest {
         listOf(owner, owner.copy(api = "https://api.example")).forEach {
             val bar = StaticHtml.bar(it)
             assertTrue(
-                "<span class=\"where\" aria-label=\"Philippines · Open to relocation\"><span class=\"full\" aria-hidden=\"true\">" +
+                "<span class=\"where\"><span class=\"say\">Philippines · Open to relocation</span><span class=\"full\" aria-hidden=\"true\">" +
                     "Philippines · Open to relocation</span><span class=\"short\" aria-hidden=\"true\">Open to relocation</span></span>" in bar,
                 bar,
             )
@@ -260,7 +290,7 @@ class StaticHtmlTest {
         val bar = StaticHtml.bar(portfolio)
         assertFalse("class=\"proof\"" in bar || "data-api" in bar || "#notes" in bar, bar)
         assertTrue(
-            "<div class=\"brand\"><span class=\"who\"><strong>Ada</strong><span aria-label=\"Engineer\">" +
+            "<div class=\"brand\"><span class=\"who\"><strong>Ada</strong><span><span class=\"say\">Engineer</span>" +
                 "<span class=\"full\" aria-hidden=\"true\">Engineer</span><span class=\"short\" aria-hidden=\"true\">Engineer</span></span></span></div>" in bar,
             bar,
         )
