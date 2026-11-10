@@ -61,23 +61,35 @@ class OwnerSession(
     }
 
     /**
-     * Tells the worker to stop pushing here (best effort, briefly), then forgets the owner. The forgetting is in a
-     * `finally`, so a sign-out cancelled while the worker is asked (the screen closing) still leaves no token behind.
+     * Forgets the owner, then tells the worker to stop pushing here (best effort). In that order: the request can
+     * hang on a dead network for as long as its socket does, since a timeout cancels the coroutine but not the
+     * blocking read under it, and until the forgetting the token is still on the phone. So what the request needs
+     * (the push token, and the owner's routes with the token already in hand) is taken first, the forgetting is in
+     * a `finally`, and a sign-out cancelled at any point, or a process killed while the worker is asked, leaves no
+     * token behind.
      */
     suspend fun signOut() {
-        try {
-            val pushToken = store.pushToken
-            if (pushToken != null) {
+        val pushToken = store.pushToken
+        val worker: AdminApi? = try {
+            if (pushToken == null) {
+                null
+            } else {
                 try {
-                    withTimeout(5_000) { api().unregisterDevice(pushToken) }
-                } catch (e: TimeoutCancellationException) {
-                    // Offline: FCM drops the token below anyway, and the worker deletes tokens FCM calls unregistered.
+                    api()
                 } catch (e: AdminApiException) {
-                    // Same.
+                    null // no token to ask with, or no server named: there is nobody to tell
                 }
             }
         } finally {
             forget()
+        }
+        if (worker == null || pushToken == null) return
+        try {
+            withTimeout(5_000) { worker.unregisterDevice(pushToken) }
+        } catch (e: TimeoutCancellationException) {
+            // Offline: FCM has dropped the token already, and the worker deletes tokens FCM calls unregistered.
+        } catch (e: AdminApiException) {
+            // Same.
         }
     }
 

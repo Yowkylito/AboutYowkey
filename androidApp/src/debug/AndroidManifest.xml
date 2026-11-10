@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <!--
+          Debug builds only: sets the local stand-in for the worker (DebugApi). Exported so adb can reach it, and
+          behind android.permission.DUMP so nothing else can: the shell holds that permission, and an installed app
+          cannot get it by asking for it. Whoever names the stand-in gets the owner's token with the next request.
+        -->
+        <receiver
+            android:name=".app.DebugApiReceiver"
+            android:exported="true"
+            android:permission="android.permission.DUMP" />
+    </application>
+</manifest>
