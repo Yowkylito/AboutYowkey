@@ -525,10 +525,10 @@
       "highlights": [
         "Rendered the same JSON to crawlable HTML at build time: it paints first, the Wasm app takes over once Compose has drawn and the HTML stays the page where WebAssembly GC is missing",
         "Wrote the hero's entrance as one pure, unit-tested timeline that drives both the Compose animation and the static page's CSS, so the app takes over mid-animation without a jump",
-        "Built a Cloudflare Worker and D1 backend for visits, ratings and messages, with daily limits keyed by a salted hash of the sender's network, an owner sign-in lockout and 69 tests run against the real migrations",
+        "Built a Cloudflare Worker and D1 backend for visits, ratings and messages, with daily limits keyed by a salted hash of the sender's network, an owner sign-in lockout and 74 tests run against the real migrations",
         "Shipped an Android app on the same UI that doubles as my inbox, its sign-in token sealed with AES-256-GCM under an Android Keystore key",
         "Played project clips as browser-decoded video placed by Compose over its own canvas, so playback costs the UI thread nothing per frame",
-        "Gated every deploy on 317 JVM tests, image and clip size budgets and a checksum-verified gitleaks scan of the full history, with every CI action pinned to a commit",
+        "Gated every deploy on 318 JVM tests, image and clip size budgets and a checksum-verified gitleaks scan of the full history, with every CI action pinned to a commit",
         "Built with Claude Code, an AI coding agent, which the commit history credits as co-author"
       ],
       "engineering": {
@@ -591,7 +591,7 @@
           }
         ],
         "quality": [
-          "317 JVM tests and 69 Worker tests, all run in CI",
+          "318 JVM tests and 74 Worker tests, all run in CI",
           "Image, clip and content budgets checked by tests before each deploy",
           "Checksum-verified gitleaks scan of the full git history",
           "Lighthouse CI against the live site; every CI action pinned to a commit"

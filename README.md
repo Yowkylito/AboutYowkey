@@ -48,6 +48,9 @@ Each section is placed by what a hiring manager wants to know next. From the top
   the stars spread once there are enough of them. Visits are counted without storing anyone's address.
 - **A private line.** The message form reaches only me, and my phone app tells me about each message, each note and
   the day's numbers.
+- **It tells me what to improve.** The page counts how far readers get, section by section, and where they stop;
+  which projects they open; how long they stay; what they read on and where they came from. Counts per day only:
+  no cookie, no id, nothing about who. My inbox shows them as a funnel.
 - **Readable by everyone.** A plain HTML copy of the page shows first, so search engines, link previews and older
   browsers get all of it. The app that then takes over draws on a canvas, which serves a screen reader, find in
   page and translation less well than real text does, so the first link on the page, "Read this page as plain
