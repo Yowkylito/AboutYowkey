@@ -93,6 +93,26 @@ test("a visit counts once per visitor per day, and a day's first visit starts th
   assert.equal((await (await call("/visits", { now: DAY_TWO })).json()).total, 4, "GET reads without counting");
 });
 
+test(`one network adds at most ${LIMITS.visitorsPerNetwork} browsers to a day's visits and to a link's clicks`, async () => {
+  const browsers = Array.from({ length: LIMITS.visitorsPerNetwork + 15 }, (_, i) => `${CHROME} Edg/${i}`);
+  for (const agent of browsers) await call("/visits", { method: "POST", agent });
+  assert.equal((await (await call("/visits")).json()).total, LIMITS.visitorsPerNetwork, "a browser's name is the sender's to choose");
+  assert.equal(query("SELECT COUNT(*) AS n FROM visitors")[0].n, LIMITS.visitorsPerNetwork, "and the ids past the limit are not kept either");
+  assert.deepEqual(query("SELECT country, count FROM visit_countries"), [{ country: "XX", count: LIMITS.visitorsPerNetwork }]);
+
+  const v6 = (address, agent) => call("/visits", { method: "POST", address, agent });
+  for (const [i, agent] of browsers.entries()) await v6(`2001:db8:a:b::${i + 1}`, agent);
+  assert.equal((await (await call("/visits")).json()).total, LIMITS.visitorsPerNetwork * 2, "an IPv6 /64 is one network, whatever its addresses");
+  assert.equal((await (await call("/visits", { method: "POST", address: "198.51.100.2" })).json()).total, LIMITS.visitorsPerNetwork * 2 + 1, "another network still counts");
+  const nextDay = await (await call("/visits", { method: "POST", now: DAY_TWO })).json();
+  assert.equal(nextDay.today, 1, "and the network has its room again the next day");
+
+  for (const agent of browsers) await click("github", { agent });
+  assert.deepEqual(query("SELECT link, count FROM clicks"), [{ link: "github", count: LIMITS.visitorsPerNetwork }]);
+  assert.equal(query("SELECT COUNT(*) AS n FROM clickers")[0].n, LIMITS.visitorsPerNetwork);
+  assert.deepEqual(await (await click("linkedin", { agent: browsers.at(-1) })).json(), { ok: true, counted: true }, "each link has its own room");
+});
+
 test("crawlers, previews and Lighthouse read the count but are not counted", async () => {
   for (const agent of [
     "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
@@ -398,6 +418,33 @@ test("a body that says it is too large is turned away before it is read", async 
   }
 });
 
+test("a body that does not say how large it is is read only as far as the limit", async () => {
+  for (const path of ["/feedback", "/messages", "/clicks"]) {
+    let pulled = 0;
+    const piece = new TextEncoder().encode("x".repeat(LIMITS.body));
+    const body = new ReadableStream({ pull(controller) { pulled++; controller.enqueue(piece); } }, { highWaterMark: 0 }); // never ends
+    const headers = { "Content-Type": "application/json", "User-Agent": CHROME, Origin: SITE };
+    const request = new Request(`https://api.example${path}`, { method: "POST", headers, body, duplex: "half" });
+    assert.equal(request.headers.get("Content-Length"), null, "a streamed body sends no length");
+    const response = await handleRequest(request, env, ctx, { now: new Date(DAY_ONE), fetch: fetchStub });
+    assert.equal(response.status, 413, path);
+    assert.ok(pulled <= 5, `${path}: read ${pulled} pieces of a body without end`);
+  }
+  assert.equal(feedbackRows().length, 0);
+});
+
+test("a plain form's limit is on what it says, not on how its characters are written", async () => {
+  const form = (fields) =>
+    call("/feedback", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams(fields).toString() });
+  const words = "感謝".repeat(LIMITS.message / 2); // 2000 characters, 18000 once percent-encoded
+  assert.ok(new URLSearchParams({ message: words }).toString().length > LIMITS.body);
+  assert.equal((await form({ message: words })).status, 201, "as JSON would be taken");
+  assert.equal(feedbackRows()[0].message, words);
+  assert.equal((await form({ message: "x".repeat(LIMITS.body) })).status, 413, "too long however it is written");
+  assert.equal((await form({ message: "感".repeat(LIMITS.body) })).status, 413);
+  assert.equal(feedbackRows().length, 1);
+});
+
 test("the trap field keeps bots out without telling them", async () => {
   const response = await post("/feedback", { message: "Buy now", website: "https://spam.example" });
   assert.equal(response.status, 201);
@@ -413,6 +460,42 @@ test(`a visitor may leave ${LIMITS.notesPerDay} notes a day`, async () => {
   assert.equal((await post("/feedback", { message: "someone else" }, { address: "198.51.100.2" })).status, 201);
   assert.equal((await post("/feedback", { message: "next day" }, { now: DAY_TWO })).status, 201);
   assert.equal(feedbackRows().length, LIMITS.notesPerDay + 2);
+});
+
+test(`the whole site takes ${LIMITS.notesPerDayAll} notes and ${LIMITS.messagesPerDayAll} messages a day, however many networks send them`, async () => {
+  const network = (i) => `2001:db8:${i.toString(16)}::1`; // a new /64 each time: a new visitor to the per-visitor limits
+  for (let i = 0; i < LIMITS.notesPerDayAll; i++) assert.equal((await post("/feedback", { message: `note ${i}`, consent: true }, { address: network(i) })).status, 201);
+  const full = await post("/feedback", { message: "one more", consent: true }, { address: network(9000) });
+  assert.equal(full.status, 429);
+  assert.deepEqual(await full.json(), { error: "The inbox is full for today. Try again tomorrow." });
+  for (let i = 0; i < LIMITS.messagesPerDayAll; i++) {
+    assert.equal((await post("/messages", { contact: "a@example.com", message: `message ${i}` }, { address: network(i) })).status, 201);
+  }
+  const fullInbox = await post("/messages", { contact: "a@example.com", message: "one more" }, { address: network(9000) });
+  assert.equal(fullInbox.status, 429);
+  assert.deepEqual(await fullInbox.json(), { error: "The inbox is full for today. Try again tomorrow." });
+  assert.equal(feedbackRows().length, LIMITS.notesPerDayAll);
+  assert.equal(messageRows().length, LIMITS.messagesPerDayAll);
+  assert.equal(notificationRows().length, LIMITS.notesPerDayAll + LIMITS.messagesPerDayAll, "so the owner's alerts stop there too");
+
+  // Sent at once from as many networks, with D1 a round trip away: the insert holds the line.
+  env.DB.raw.exec("DELETE FROM feedback; DELETE FROM messages");
+  env.DB = roundTrips(env.DB);
+  const burst = await Promise.all(
+    Array.from({ length: LIMITS.notesPerDayAll + 10 }, (_, i) => post("/feedback", { message: `burst ${i}` }, { address: network(i + 100) })),
+  );
+  assert.equal(burst.filter((response) => response.status === 201).length, LIMITS.notesPerDayAll);
+  const letters = await Promise.all(
+    Array.from({ length: LIMITS.messagesPerDayAll + 10 }, (_, i) => post("/messages", { contact: "b@example.com", message: `m ${i}` }, { address: network(i + 100) })),
+  );
+  assert.equal(letters.filter((response) => response.status === 201).length, LIMITS.messagesPerDayAll);
+
+  // A note the owner deletes makes room again, and so does the next day.
+  await app("/admin/feedback/" + feedbackRows()[0].id, { method: "POST", payload: { action: "delete" } });
+  assert.equal((await post("/feedback", { message: "room again" }, { address: network(9001) })).status, 201);
+  assert.equal((await post("/feedback", { message: "full again" }, { address: network(9002) })).status, 429);
+  assert.equal((await post("/feedback", { message: "a new day" }, { address: network(9002), now: DAY_TWO })).status, 201);
+  assert.equal((await post("/messages", { contact: "c@example.com", message: "a new day" }, { address: network(9002), now: DAY_TWO })).status, 201);
 });
 
 test("a note sent again, its first answer lost, is answered as the first was and kept once", async () => {
@@ -485,6 +568,7 @@ function roundTrips(db) {
     first: (column) => later(() => bound.first(column)),
     all: () => later(() => bound.all()),
     run: () => later(() => bound.run()),
+    execute: () => bound.execute(), // what batch() runs: the batch itself is the round trip
   });
   return { ...db, prepare: (sql) => ({ ...statement(db.prepare(sql)), bind: (...params) => statement(db.prepare(sql).bind(...params)) }) };
 }
@@ -531,6 +615,29 @@ test("a sender's id is kept only for its day: the next day's first note or messa
   await post("/messages", { contact: "b@example.com", message: "day two" }, { now: DAY_TWO, address: "198.51.100.2" });
   assert.deepEqual(feedbackRows().map((row) => row.visitor === ""), [true, false]);
   assert.deepEqual(messageRows().map((row) => row.visitor === ""), [true, false]);
+});
+
+test("the daily cron drops the earlier days' ids, so none waits for the next visit or note to be forgotten", async () => {
+  await call("/visits", { method: "POST" });
+  await click("github");
+  await post("/feedback", { message: "day one" });
+  await post("/messages", { contact: "a@example.com", message: "day one" });
+  const kept = () => ({
+    visitors: query("SELECT day FROM visitors").map((row) => row.day),
+    clickers: query("SELECT day FROM clickers").map((row) => row.day),
+    notes: feedbackRows().map((row) => row.visitor !== ""),
+    messages: messageRows().map((row) => row.visitor !== ""),
+  });
+
+  await dailyReport(env, ctx, { now: new Date(REPORT_TIME), fetch: fetchStub });
+  assert.deepEqual(kept(), { visitors: ["2026-10-24"], clickers: ["2026-10-24"], notes: [true], messages: [true] }, "the day's own ids hold its limits until it ends");
+
+  // The next day nobody comes: the ids go with that day's report all the same. A visitor counted just after
+  // midnight, before a late cron, keeps theirs.
+  await call("/visits", { method: "POST", address: "198.51.100.9", now: "2026-10-25T16:00:05.000Z" });
+  await dailyReport(env, ctx, { now: new Date("2026-10-25T15:59:00.000Z"), fetch: fetchStub });
+  assert.deepEqual(kept(), { visitors: ["2026-10-26"], clickers: [], notes: [false], messages: [false] });
+  assert.equal(feedbackRows()[0].message, "day one", "only the id goes");
 });
 
 test("a plain form post gets a page back, with the way home", async () => {
@@ -602,6 +709,13 @@ test("the inbox asks for the password, then shows the notes and the visits, esca
   assert.doesNotMatch(page, /<script>alert/);
   assert.match(page, /href="mailto:ada@example.com"/);
   assert.match(page, /<br>linkedin\.com\/in\/ada</, "a contact that is not an address is text, not a link");
+  await post("/feedback", { message: "Odd", contact: "hr%40corp.example?bcc=evil@x.example&body=Hello" }, { address: "198.51.100.40", now: DAY_TWO });
+  const odd = await (await call("/inbox", { headers: basic(env.ADMIN_TOKEN), now: DAY_TWO })).text();
+  assert.match(
+    odd,
+    /<a href="mailto:hr%2540corp\.example%3Fbcc%3Devil@x\.example%26body%3DHello">hr%40corp\.example\?bcc=evil@x\.example&amp;body=Hello<\/a>/,
+    "the link is to the address as written, never to one with the visitor's own recipients or words",
+  );
   assert.match(page, /★★★<span class="dim">★★<\/span>/);
   assert.match(page, /<span>2026-10-25<\/span><strong>1<\/strong>/);
   assert.match(page, /<meta name="robots" content="noindex, nofollow">/);
@@ -628,7 +742,11 @@ test(`an address gets ${LIMITS.ownerTries} wrong owner passwords per ${LIMITS.ow
     assert.equal((await call("/inbox", { address: "198.51.100.3", now: at(2) })).status, 401);
     assert.equal((await guess(env.ADMIN_TOKEN, { address: "198.51.100.3", now: at(2) })).status, 200);
   }
-  assert.deepEqual(query("SELECT since, count FROM owner_tries"), [{ since: DAY_ONE, count: LIMITS.ownerTries + 3 }], "only the wrong tries are kept");
+  assert.deepEqual(
+    query("SELECT since, count FROM owner_tries"),
+    [{ since: DAY_ONE, count: LIMITS.ownerTries }],
+    "only the wrong tries are kept, and none of those turned away past the limit",
+  );
   assert.equal((await guess(env.ADMIN_TOKEN, { now: at(LIMITS.ownerWindowMinutes) })).status, 200, "the next window");
   assert.deepEqual(query("SELECT count FROM owner_tries"), [], "an earlier window's tries go");
 
@@ -645,6 +763,33 @@ test("without the owner_tries table (its migration not applied yet), the owner s
   assert.equal((await call("/admin/summary", { headers: { Authorization: "Bearer wrong" } })).status, 401);
   assert.equal((await owner("/admin/summary")).status, 200);
   assert.ok(errors.mock.callCount() >= 1, "and the missing table is logged");
+  errors.mock.restore();
+});
+
+test("the owner's own requests, sent at once, never lock the owner out", async () => {
+  env.DB = roundTrips(env.DB);
+  const burst = await Promise.all(Array.from({ length: LIMITS.ownerTries + 6 }, () => owner("/admin/summary")));
+  assert.equal(burst.filter((response) => response.status === 200).length, LIMITS.ownerTries, "those under the limit while in flight");
+  assert.equal(burst.filter((response) => response.status === 429).length, 6, "the rest are asked to come back");
+  assert.deepEqual(query("SELECT count FROM owner_tries"), [], "and every one of them is given back");
+  assert.equal((await owner("/admin/summary")).status, 200, "so the next request gets in");
+});
+
+test("a database that cannot count the tries lets nobody in, the right password included", async () => {
+  env.DB.raw.exec("CREATE TRIGGER full BEFORE INSERT ON owner_tries BEGIN SELECT RAISE(ABORT, 'D1_ERROR: quota exceeded'); END");
+  const errors = mock.method(console, "error", () => {});
+  const wrong = await call("/admin/summary", { headers: { Authorization: "Bearer wrong" } });
+  assert.equal(wrong.status, 503, "a wrong password is not told it is wrong");
+  const right = await owner("/admin/summary");
+  assert.equal(right.status, 503);
+  assert.equal(right.headers.get("Retry-After"), "60");
+  assert.equal(right.headers.get("Cache-Control"), "no-store");
+  assert.match((await right.json()).error, /could not be checked/);
+  const page = await call("/inbox", { headers: basic(env.ADMIN_TOKEN) });
+  assert.equal(page.status, 503);
+  assert.match(await page.text(), /could not be checked/);
+  assert.equal((await call("/inbox")).status, 401, "asking without a password counts nothing, so it is answered as ever");
+  assert.ok(errors.mock.callCount() >= 3, "and each failure is logged");
   errors.mock.restore();
 });
 
@@ -992,8 +1137,10 @@ test("the app acts on notes with the inbox's rules: 404, 409 without consent, 40
   assert.equal((await act(1, "unhide")).status, 200);
   assert.equal((await act(1, "unpublish")).status, 200);
   assert.deepEqual((await publicNotes()).notes, []);
+  assert.deepEqual(notificationRows().map((row) => [row.kind, row.ref_id]), [["feedback", 1], ["feedback", 2]]);
   assert.equal((await act(2, "delete")).status, 200);
   assert.deepEqual(feedbackRows().map((row) => row.id), [1]);
+  assert.deepEqual(notificationRows().map((row) => [row.kind, row.ref_id]), [["feedback", 1]], "a deleted note's alert, which quotes it, goes with it");
 });
 
 test("the app and the inbox act on messages: read, unread, archive, unarchive, delete", async () => {
@@ -1026,8 +1173,15 @@ test("the app and the inbox act on messages: read, unread, archive, unarchive, d
   assert.equal(unknown.status, 400);
   assert.deepEqual(await unknown.json(), { error: 'There is no "publish" to do with a message.' });
   assert.equal((await act(1, "toString")).status, 400, "only the five actions, not whatever an object has");
+  await post("/feedback", { message: "A note that happens to be number 3 too" }, { address: "198.51.100.9" });
+  env.DB.raw.exec("UPDATE notifications SET ref_id = 3 WHERE kind = 'feedback'");
   assert.equal((await act(3, "delete")).status, 200);
   assert.deepEqual(messageRows().map((row) => row.id), [1, 2]);
+  assert.deepEqual(
+    notificationRows().map((row) => [row.kind, row.ref_id]),
+    [["message", 1], ["message", 2], ["feedback", 3]],
+    "a deleted message's alert, with its sender and words, goes with it; a note's with the same number stays",
+  );
 
   // The inbox page's buttons: the same actions, the same rules, and only from the page itself.
   const press = (id, action, headers = { "Sec-Fetch-Site": "same-origin" }) =>

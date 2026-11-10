@@ -47,6 +47,18 @@ export const LIMITS = Object.freeze({
   noteGapMinutes: 5,
   /** Messages one visitor may send in a day; the next gets a 429. */
   messagesPerDay: 3,
+  /**
+   * Notes, and messages, the whole site takes in a day, whoever sends them. The limits above are per network, and a
+   * sender with many networks (a routed IPv6 prefix, a proxy pool) is a new visitor from each: without a ceiling
+   * they could fill the public notes, the inbox and the owner's phone without end. Far above a real day's notes.
+   */
+  notesPerDayAll: 40,
+  messagesPerDayAll: 40,
+  /**
+   * Browsers one network may add to a day's visits, and to a day's clicks on one link. A browser's name is whatever
+   * the sender says it is, so without this one address could count as any number of visitors.
+   */
+  visitorsPerNetwork: 30,
   /** Characters of request body read; more is a 413. */
   body: 16 * 1024,
   /** Public notes a page of `GET /notes` holds, newest first, unless it asks for up to `notesPageMax`. */
@@ -86,6 +98,8 @@ const PUBLIC = "consent = 1 AND hidden_at IS NULL";
 /** A rating the page counts: any note's that the owner has not hidden, its words public or not. */
 const COUNTED = "rating IS NOT NULL AND hidden_at IS NULL";
 const ENOUGH_FOR_TODAY = "That is plenty for one day, thank you. Try again tomorrow.";
+/** The whole site's day is used up (LIMITS.notesPerDayAll, messagesPerDayAll), whoever is asking. */
+const FULL_FOR_TODAY = "The inbox is full for today. Try again tomorrow.";
 
 /** The minutes one address waits between notes: NOTE_GAP_MINUTES when it is a whole number (0 turns it off), else 5. */
 function noteGapMinutes(env) {
@@ -196,7 +210,8 @@ async function visitCounts(db, today) {
  * Counts the visit unless this visitor is already counted today, then reads the counts: one batch, so one round
  * trip to D1 rather than up to five, and one transaction, so the count, the country and the visitor's id are kept
  * together or not at all (a failure never leaves an id that would keep its visitor from ever being counted today).
- * The counts go up only while the id is not there yet, which the batch's third statement then puts there.
+ * The counts go up only while the id is not there yet and its network still has room for one more browser today
+ * (LIMITS.visitorsPerNetwork); the batch's third statement then puts the id there, on the same two conditions.
  */
 async function recordVisit(request, env, now) {
   const today = localDay(env, now);
@@ -204,13 +219,16 @@ async function recordVisit(request, env, now) {
   if (isBot(agent)) return visitCounts(env.DB, today);
   const visitor = await visitorId(request, env, today, agent);
   const db = env.DB;
-  const isNew = "WHERE NOT EXISTS (SELECT 1 FROM visitors WHERE day = ?1 AND visitor = ?2)";
+  // ?3 and ?4 are the ends of the network's ids in the key (networkRange), ?5 how many it may have.
+  const room = "(SELECT COUNT(*) FROM visitors WHERE day = ?1 AND visitor >= ?3 AND visitor < ?4) < ?5";
+  const isNew = `WHERE NOT EXISTS (SELECT 1 FROM visitors WHERE day = ?1 AND visitor = ?2) AND ${room}`;
+  const who = [today, visitor, ...networkRange(visitor), LIMITS.visitorsPerNetwork];
   const results = await db.batch([
-    db.prepare(`INSERT INTO visits (day, count) SELECT ?1, 1 ${isNew} ON CONFLICT (day) DO UPDATE SET count = count + 1`).bind(today, visitor),
+    db.prepare(`INSERT INTO visits (day, count) SELECT ?1, 1 ${isNew} ON CONFLICT (day) DO UPDATE SET count = count + 1`).bind(...who),
     db
-      .prepare(`INSERT INTO visit_countries (day, country, count) SELECT ?1, ?3, 1 ${isNew} ON CONFLICT (day, country) DO UPDATE SET count = count + 1`)
-      .bind(today, visitor, countryOf(request)),
-    db.prepare("INSERT OR IGNORE INTO visitors (day, visitor) VALUES (?1, ?2)").bind(today, visitor),
+      .prepare(`INSERT INTO visit_countries (day, country, count) SELECT ?1, ?6, 1 ${isNew} ON CONFLICT (day, country) DO UPDATE SET count = count + 1`)
+      .bind(...who, countryOf(request)),
+    db.prepare(`INSERT OR IGNORE INTO visitors (day, visitor) SELECT ?1, ?2 WHERE ${room}`).bind(...who),
     // An id carries its day, so an earlier day's rows can never match again: nothing about a visitor outlives the day.
     db.prepare(`DELETE FROM visitors WHERE ${NOT_TODAY}`).bind(today),
     visitCountsQuery(db, today),
@@ -223,12 +241,29 @@ function isBot(agent) {
 }
 
 /**
- * Who is visiting, for today only: a hash of the day, the address, the browser and a secret salt. The address is
- * never stored, the hash cannot be turned back into it without the salt, and tomorrow the same person gets a new one.
+ * Who is visiting, for today only: 64 hex characters in two halves. The first is the network (a hash of the day, the
+ * address's network and a secret salt), the same for every browser behind it, so what one network may add to a day
+ * is counted in the key (networkRange). The second is the browser on it (a hash of the day, the address, the
+ * browser and the salt). The address is never stored, neither half can be turned back into it without the salt,
+ * tomorrow the same person gets a new id, and the ids go with their day (recordVisit, recordClick, forgetYesterday).
  */
 async function visitorId(request, env, today, agent) {
   const address = request.headers.get("CF-Connecting-IP") || "unknown";
-  return sha256Hex(`${today}|${address}|${agent}|${env.VISITOR_SALT || ""}`);
+  const salt = env.VISITOR_SALT || "";
+  const [network, browser] = await Promise.all([
+    sha256Hex(`${today}|visitor|${networkOf(address)}|${salt}`),
+    sha256Hex(`${today}|${address}|${agent}|${salt}`),
+  ]);
+  return network.slice(0, NETWORK_HEX) + browser.slice(0, 64 - NETWORK_HEX);
+}
+
+/** How many of a visitor id's 64 hex characters name its network. */
+const NETWORK_HEX = 32;
+
+/** Where the ids of [visitor]'s network start and end in the key: from its network half, up to but not including that half followed by "g", which sorts after every hex digit. */
+function networkRange(visitor) {
+  const network = visitor.slice(0, NETWORK_HEX);
+  return [network, `${network}g`];
 }
 
 /**
@@ -260,6 +295,21 @@ async function forgetOldSenders(db, table, today) {
 }
 
 /**
+ * Drops every id of a day before [today]: the visitors' and the clickers', and the senders' on notes and messages.
+ * Each is dropped anyway by the next visit, click, note or message, but on a quiet site that may be days away; the
+ * daily cron calls this, so an id never outlives the day after its own. Only the earlier days': a cron that starts
+ * a moment late, after midnight, must not drop the new day's ids, or its visitors would be counted twice.
+ */
+async function forgetYesterday(db, today) {
+  await db.batch([
+    db.prepare("DELETE FROM visitors WHERE day < ?1").bind(today),
+    db.prepare("DELETE FROM clickers WHERE day < ?1").bind(today),
+    db.prepare("UPDATE feedback SET visitor = '' WHERE visitor <> '' AND day < ?1").bind(today),
+    db.prepare("UPDATE messages SET visitor = '' WHERE visitor <> '' AND day < ?1").bind(today),
+  ]);
+}
+
+/**
  * The country Cloudflare places the address in (two letters; "T1" for Tor), or "XX" when it has none. Kept only as
  * a count per day, never next to a visitor.
  */
@@ -280,7 +330,7 @@ export function trackedLinks(env) {
 
 /**
  * A click on one of the page's tracked links, counted like a visit (in one batch, the same way): once per visitor per
- * day per link, never for a bot, and the earlier days' ids deleted. The page sends it with `navigator.sendBeacon`,
+ * day per link, never for a bot, no more browsers from one network than a visit allows, and the earlier days' ids deleted. The page sends it with `navigator.sendBeacon`,
  * which posts text/plain (any other type would need a preflight it cannot make), so that is read as JSON too.
  */
 async function recordClick(request, env, now, cors) {
@@ -293,15 +343,18 @@ async function recordClick(request, env, now, cors) {
   const today = localDay(env, now);
   const visitor = await visitorId(request, env, today, agent);
   const db = env.DB;
+  // As a visit: ?4 and ?5 are the ends of the network's ids in the key, ?6 how many it may have on this link today.
+  const room = "(SELECT COUNT(*) FROM clickers WHERE day = ?1 AND link = ?2 AND visitor >= ?4 AND visitor < ?5) < ?6";
+  const who = [today, link, visitor, ...networkRange(visitor), LIMITS.visitorsPerNetwork];
   const [, claimed] = await db.batch([
     db
       .prepare(
         "INSERT INTO clicks (day, link, count) SELECT ?1, ?2, 1 " +
-          "WHERE NOT EXISTS (SELECT 1 FROM clickers WHERE day = ?1 AND link = ?2 AND visitor = ?3) " +
+          `WHERE NOT EXISTS (SELECT 1 FROM clickers WHERE day = ?1 AND link = ?2 AND visitor = ?3) AND ${room} ` +
           "ON CONFLICT (day, link) DO UPDATE SET count = count + 1",
       )
-      .bind(today, link, visitor),
-    db.prepare("INSERT OR IGNORE INTO clickers (day, link, visitor) VALUES (?1, ?2, ?3)").bind(today, link, visitor),
+      .bind(...who),
+    db.prepare(`INSERT OR IGNORE INTO clickers (day, link, visitor) SELECT ?1, ?2, ?3 WHERE ${room}`).bind(...who),
     db.prepare(`DELETE FROM clickers WHERE ${NOT_TODAY}`).bind(today),
   ]);
   return json({ ok: true, counted: claimed.meta.changes === 1 }, 200, cors);
@@ -433,7 +486,7 @@ async function submitFeedback(request, env, now, cors, alerts) {
   const visitor = await senderId(request, env, today);
   const note = normalizeFeedback(fields);
   if (await resent(env.DB, "feedback", visitor, note.message, note.rating)) return reply(body.form, { ok: true }, 201, cors, env);
-  const refused = await noteRefusal(env, visitor, now);
+  const refused = await noteRefusal(env, visitor, now, today);
   if (refused) return reply(body.form, { error: refused }, 429, cors, env);
   const since = new Date(now.getTime() - noteGapMinutes(env) * 60000).toISOString();
   // The limits again, in the insert itself: notes sent at once all pass the check above before any is kept.
@@ -441,11 +494,15 @@ async function submitFeedback(request, env, now, cors, alerts) {
     .prepare(
       "INSERT INTO feedback (created_at, day, name, contact, rating, message, visitor, consent, relation) " +
         "SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9 WHERE (SELECT COUNT(*) FROM feedback WHERE visitor = ?7) < ?10 " +
-        "AND NOT EXISTS (SELECT 1 FROM feedback WHERE visitor = ?7 AND created_at > ?11)",
+        "AND NOT EXISTS (SELECT 1 FROM feedback WHERE visitor = ?7 AND created_at > ?11) " +
+        "AND (SELECT COUNT(*) FROM feedback WHERE day = ?2) < ?12",
     )
-    .bind(now.toISOString(), today, note.name, note.contact, note.rating, note.message, visitor, note.consent ? 1 : 0, note.relation, LIMITS.notesPerDay, since)
+    .bind(
+      now.toISOString(), today, note.name, note.contact, note.rating, note.message, visitor, note.consent ? 1 : 0, note.relation,
+      LIMITS.notesPerDay, since, LIMITS.notesPerDayAll,
+    )
     .run();
-  if (meta.changes !== 1) return reply(body.form, { error: (await noteRefusal(env, visitor, now)) || ENOUGH_FOR_TODAY }, 429, cors, env);
+  if (meta.changes !== 1) return reply(body.form, { error: (await noteRefusal(env, visitor, now, today)) || ENOUGH_FOR_TODAY }, 429, cors, env);
   await forgetOldSenders(env.DB, "feedback", today);
   // The owner's alert names the visitor (or "Someone"), never their contact.
   await alertOwner(env, alerts, {
@@ -470,13 +527,20 @@ async function resent(db, table, visitor, message, rating) {
   return Boolean(row);
 }
 
-/** Why [visitor] may not leave a note at [now]: the day's notes used up, or the last one too recent. Null if they may. */
-async function noteRefusal(env, visitor, now) {
-  const { n, last } = await env.DB
-    .prepare("SELECT COUNT(*) AS n, MAX(created_at) AS last FROM feedback WHERE visitor = ?1")
-    .bind(visitor)
+/**
+ * Why [visitor] may not leave a note at [now]: their day's notes used up, the last one too recent, or the whole
+ * site's notes for [today] used up. Null if they may.
+ */
+async function noteRefusal(env, visitor, now, today) {
+  const { n, last, all } = await env.DB
+    .prepare(
+      "SELECT COUNT(*) AS n, MAX(created_at) AS last, (SELECT COUNT(*) FROM feedback WHERE day = ?2) AS \"all\" " +
+        "FROM feedback WHERE visitor = ?1",
+    )
+    .bind(visitor, today)
     .first();
   if (n >= LIMITS.notesPerDay) return ENOUGH_FOR_TODAY;
+  if (all >= LIMITS.notesPerDayAll) return FULL_FOR_TODAY;
   const gap = noteGapMinutes(env);
   const wait = last && gap ? Date.parse(last) + gap * 60000 - now.getTime() : 0;
   return wait > 0 ? oneNoteAtATime(gap, wait) : null;
@@ -497,11 +561,20 @@ async function readBody(request, { form: forms = true, plain = false, tooLarge =
   const form = forms && type === "application/x-www-form-urlencoded";
   const isJson = type === "application/json" || (plain && type === "text/plain");
   if (!form && !isJson) return { form: false, error: forms ? "Send JSON or a URL-encoded form." : "Send JSON.", status: 415 };
-  // A body that says it is larger than any allowed one (UTF-8 takes at most 3 bytes a character) is never read.
-  if (Number(request.headers.get("Content-Length")) > LIMITS.body * 3) return { form, error: tooLarge, status: 413 };
-  const text = await request.text();
+  // The most bytes an allowed body takes: UTF-8 is at most 3 bytes a character, and a form writes each of those
+  // bytes as three ("%E4"). A body that says it is larger is never read; one that does not say (a chunked upload)
+  // is read only that far.
+  const most = LIMITS.body * (form ? 9 : 3);
+  if (Number(request.headers.get("Content-Length")) > most) return { form, error: tooLarge, status: 413 };
+  const text = await readText(request, most);
+  if (text === null) return { form, error: tooLarge, status: 413 };
+  if (form) {
+    // A form's limit is on what it says, not on how it is written: non-Latin text is three to nine times longer encoded.
+    const pairs = Array.from(new URLSearchParams(text));
+    const said = pairs.reduce((sum, [name, value]) => sum + name.length + value.length, 0);
+    return said > LIMITS.body ? { form, error: tooLarge, status: 413 } : { form, fields: Object.fromEntries(pairs) };
+  }
   if (text.length > LIMITS.body) return { form, error: tooLarge, status: 413 };
-  if (form) return { form, fields: Object.fromEntries(new URLSearchParams(text)) };
   let fields;
   try {
     fields = JSON.parse(text);
@@ -510,6 +583,34 @@ async function readBody(request, { form: forms = true, plain = false, tooLarge =
   }
   if (!fields || typeof fields !== "object" || Array.isArray(fields)) return { form, error: "Send a JSON object.", status: 400 };
   return { form, fields };
+}
+
+/**
+ * [request]'s body as text, or null once it is past [most] bytes: read a piece at a time and dropped there, where
+ * `request.text()` would first take in all of a body that gave no Content-Length.
+ */
+async function readText(request, most) {
+  if (!request.body) return "";
+  const reader = request.body.getReader();
+  const pieces = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > most) {
+      await reader.cancel().catch(() => {});
+      return null;
+    }
+    pieces.push(value);
+  }
+  const bytes = new Uint8Array(size);
+  let at = 0;
+  for (const piece of pieces) {
+    bytes.set(piece, at);
+    at += piece.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
 }
 
 /** A field as text: trimmed, a number spelled out, nothing for null; null for anything that is not a value. */
@@ -583,17 +684,19 @@ async function submitMessage(request, env, now, cors, alerts) {
   const visitor = await senderId(request, env, today);
   const message = normalizeMessage(fields);
   if (await resent(env.DB, "messages", visitor, message.message)) return answer({ ok: true }, 201);
-  const { n } = await env.DB.prepare("SELECT COUNT(*) AS n FROM messages WHERE visitor = ?1").bind(visitor).first();
-  if (n >= LIMITS.messagesPerDay) return answer({ error: ENOUGH_FOR_TODAY }, 429);
-  // The limit again, in the insert itself, for messages sent at once.
+  const refused = () => messageRefusal(env.DB, visitor, today);
+  const refusedNow = await refused();
+  if (refusedNow) return answer({ error: refusedNow }, 429);
+  // The limits again, in the insert itself, for messages sent at once.
   const { meta } = await env.DB
     .prepare(
       "INSERT INTO messages (created_at, day, name, contact, topic, message, visitor) " +
-        "SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7 WHERE (SELECT COUNT(*) FROM messages WHERE visitor = ?7) < ?8",
+        "SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7 WHERE (SELECT COUNT(*) FROM messages WHERE visitor = ?7) < ?8 " +
+        "AND (SELECT COUNT(*) FROM messages WHERE day = ?2) < ?9",
     )
-    .bind(now.toISOString(), today, message.name, message.contact, message.topic, message.message, visitor, LIMITS.messagesPerDay)
+    .bind(now.toISOString(), today, message.name, message.contact, message.topic, message.message, visitor, LIMITS.messagesPerDay, LIMITS.messagesPerDayAll)
     .run();
-  if (meta.changes !== 1) return answer({ error: ENOUGH_FOR_TODAY }, 429);
+  if (meta.changes !== 1) return answer({ error: (await refused()) || ENOUGH_FOR_TODAY }, 429);
   await forgetOldSenders(env.DB, "messages", today);
   // The one alert with a contact in it, for the owner's phone only: who to write back to.
   await alertOwner(env, alerts, {
@@ -603,6 +706,16 @@ async function submitMessage(request, env, now, cors, alerts) {
     refId: Number(meta.last_row_id),
   });
   return answer({ ok: true }, 201);
+}
+
+/** Why [visitor] may not send a message: their day's messages used up, or the whole site's for [today]. Null if they may. */
+async function messageRefusal(db, visitor, today) {
+  const { n, all } = await db
+    .prepare("SELECT COUNT(*) AS n, (SELECT COUNT(*) FROM messages WHERE day = ?2) AS \"all\" FROM messages WHERE visitor = ?1")
+    .bind(visitor, today)
+    .first();
+  if (n >= LIMITS.messagesPerDay) return ENOUGH_FOR_TODAY;
+  return all >= LIMITS.messagesPerDayAll ? FULL_FOR_TODAY : null;
 }
 
 /** What stops a message from being kept, message first, then the contact it needs, in sentences for the visitor. */
@@ -731,8 +844,9 @@ async function noteAction(db, id, action, now) {
       statement = db.prepare("UPDATE feedback SET pinned_at = NULL WHERE id = ?1").bind(id);
       break;
     case "delete":
-      statement = db.prepare("DELETE FROM feedback WHERE id = ?1").bind(id);
-      break;
+      // With its alert: the record quotes the note, and "deleted" means its words are gone from here.
+      await db.batch([db.prepare("DELETE FROM feedback WHERE id = ?1").bind(id), forgetAlerts(db, "feedback", id)]);
+      return { status: 200 };
     default:
       return refusal(400, "Refused", `There is no "${action}" to do with a note.`);
   }
@@ -753,11 +867,20 @@ async function messageAction(db, id, action, now) {
     unread: () => db.prepare("UPDATE messages SET read_at = NULL WHERE id = ?1").bind(id),
     archive: () => db.prepare("UPDATE messages SET archived_at = COALESCE(archived_at, ?1) WHERE id = ?2").bind(stamp, id),
     unarchive: () => db.prepare("UPDATE messages SET archived_at = NULL WHERE id = ?1").bind(id),
-    delete: () => db.prepare("DELETE FROM messages WHERE id = ?1").bind(id),
   };
+  if (action === "delete") {
+    // With its alert: the record quotes the message and names who sent it, and "deleted" means both are gone from here.
+    await db.batch([db.prepare("DELETE FROM messages WHERE id = ?1").bind(id), forgetAlerts(db, "message", id)]);
+    return { status: 200 };
+  }
   if (!Object.hasOwn(statements, action)) return refusal(400, "Refused", `There is no "${action}" to do with a message.`);
   await statements[action]().run();
   return { status: 200 };
+}
+
+/** Deletes the alert records about the note or message [id] ([kind] is the record's: "feedback" or "message"). */
+function forgetAlerts(db, kind, id) {
+  return db.prepare("DELETE FROM notifications WHERE kind = ?1 AND ref_id = ?2").bind(kind, id);
 }
 
 function refusal(status, title, error) {
@@ -810,6 +933,11 @@ async function authorize(secret, env, { basic = false, request, now }) {
     return json({ error: "ADMIN_TOKEN is not set on the worker: run `npx wrangler secret put ADMIN_TOKEN`." }, 503);
   }
   const attempt = typeof secret === "string" && secret ? await ownerTry(request, env, now) : null;
+  if (attempt?.uncounted) {
+    const sentence = "The sign-in could not be checked just now. Try again in a moment.";
+    const headers = { "Retry-After": "60", "Cache-Control": "no-store" };
+    return basic ? html(renderNotice("Not now", sentence, null), 503, headers) : json({ error: sentence }, 503, headers);
+  }
   if (attempt?.wait) {
     const minutes = Math.ceil(attempt.wait / 60);
     const sentence = `Too many wrong passwords from here. Try again in ${minutes} ${minutes === 1 ? "minute" : "minutes"}.`;
@@ -831,7 +959,10 @@ async function authorize(secret, env, { basic = false, request, now }) {
 /**
  * One password try from [request]'s address, counted in `owner_tries` before it is checked, so tries sent at once
  * cannot all pass under the limit; `right()` gives it back. `wait` is the seconds left in the window once the
- * address is over the limit. Without the table (migration 0005 not applied yet) nothing is counted.
+ * address is over the limit; a try turned away there is given back too, so the count never passes the limit and the
+ * owner's own requests, sent at once, cannot lock the owner out. Without the table (migration 0005 not applied yet)
+ * nothing is counted. Any other failure to count is `uncounted`, and the password is not tried: a database that
+ * cannot count must not become a way around the limit.
  */
 async function ownerTry(request, env, now) {
   const window = LIMITS.ownerWindowMinutes * 60000;
@@ -840,6 +971,7 @@ async function ownerTry(request, env, now) {
   const address = request.headers.get("CF-Connecting-IP") || "unknown";
   const client = await sha256Hex(`owner|${networkOf(address)}|${env.VISITOR_SALT || ""}`);
   const tidy = () => env.DB.prepare("DELETE FROM owner_tries WHERE count <= 0 OR since <> ?1").bind(since).run();
+  const giveBack = () => env.DB.prepare("UPDATE owner_tries SET count = count - 1 WHERE client = ?1 AND since = ?2").bind(client, since).run();
   try {
     const count = await env.DB
       .prepare(
@@ -848,16 +980,19 @@ async function ownerTry(request, env, now) {
       )
       .bind(client, since)
       .first("count");
-    if (count > LIMITS.ownerTries) return { wait: Math.ceil((start + window - now.getTime()) / 1000) };
+    if (count > LIMITS.ownerTries) {
+      await giveBack();
+      return { wait: Math.ceil((start + window - now.getTime()) / 1000) };
+    }
     await tidy();
   } catch (error) {
     console.error("Owner tries not counted:", error);
-    return { wait: 0, right: async () => {} };
+    return /no such table: owner_tries/i.test(String(error?.message ?? error)) ? { wait: 0, right: async () => {} } : { uncounted: true };
   }
   return {
     wait: 0,
     right: async () => {
-      await env.DB.prepare("UPDATE owner_tries SET count = count - 1 WHERE client = ?1 AND since = ?2").bind(client, since).run();
+      await giveBack();
       await tidy();
     },
   };
@@ -1109,9 +1244,10 @@ async function removeDevice(request, env) {
 // ---- The daily report ----
 
 /**
- * The cron's job at 23:59 local time: the day's numbers, kept in `daily_reports` and sent to the owner. Cloudflare
- * may run a cron twice, even at once; the run whose insert makes the day's row sends the alert, and any other
- * rewrites the row with the newer numbers and sends nothing more.
+ * The cron's job at 23:59 local time: the day's numbers, kept in `daily_reports` and sent to the owner, and the
+ * earlier days' visitor and sender ids dropped (forgetYesterday). Cloudflare may run a cron twice, even at once;
+ * the run whose insert makes the day's row sends the alert, and any other rewrites the row with the newer numbers
+ * and sends nothing more.
  */
 export async function dailyReport(env, ctx, { now = new Date(), fetch } = {}) {
   const today = localDay(env, now);
@@ -1128,6 +1264,8 @@ export async function dailyReport(env, ctx, { now = new Date(), fetch } = {}) {
   }
   const report = { day: today, visits, clicks, notes, messages };
   if (first) await notify(env, ctx, { kind: "daily", ...dailyText(report), refId: null }, { now, fetch });
+  // After the report, and never its failure: the ids are dropped by the next visit or note anyway.
+  await forgetYesterday(env.DB, today).catch((error) => console.error("Old ids not dropped:", error));
   return report;
 }
 
