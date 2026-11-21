@@ -1,5 +1,6 @@
 package dev.yowkey.portfolio.ui.sections
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -13,10 +14,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.DisableSelection
 import androidx.compose.material3.Button
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -48,7 +52,6 @@ import dev.yowkey.portfolio.model.Link
 import dev.yowkey.portfolio.model.Profile
 import dev.yowkey.portfolio.model.ProofPoint
 import dev.yowkey.portfolio.ui.components.LinkButton
-import dev.yowkey.portfolio.ui.components.OutlinedCard
 import kotlin.math.max
 import kotlin.math.roundToInt
 import dev.yowkey.portfolio.ui.theme.LocalReducedMotion
@@ -100,9 +103,7 @@ fun Hero(
             Spacer(Modifier.width(48.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 photo?.let { HeroPortrait(it, profile.name, entrance, Modifier.fillMaxWidth().height(224.dp)) }
-                OutlinedCard(Modifier.fillMaxWidth().introStep(entrance, IntroStep.PROOF)) {
-                    ProofPoints(profile.proof, Modifier.padding(28.dp))
-                }
+                ProofPanel(profile.proof, roomy = true, modifier = Modifier.introStep(entrance, IntroStep.PROOF))
             }
         }
     } else {
@@ -120,7 +121,7 @@ fun Hero(
                 }
                 if (plan == null) HeroIntro(profile, compact, entrance, ruler) else HeadlineBelow(profile.headline, plan, entrance)
                 if (profile.proof.isNotEmpty()) {
-                    ProofPoints(profile.proof, Modifier.padding(vertical = 4.dp).introStep(entrance, IntroStep.PROOF, staged))
+                    ProofPanel(profile.proof, roomy = false, modifier = Modifier.introStep(entrance, IntroStep.PROOF, staged))
                 }
                 HeroActions(profile.email, links, onSeeProjects, onContact, onOpenLink, Modifier.introStep(entrance, IntroStep.ACTIONS, staged))
                 HeroSummary(profile.summary, Modifier.introStep(entrance, IntroStep.SUMMARY, staged))
@@ -227,7 +228,7 @@ private fun HeroIntro(profile: Profile, compact: Boolean, entrance: HeroEntrance
  * the pointer over a button is a button's.
  */
 /**
- * The headline with its role (up to the first " · ") in near-black and medium weight and the stack after it in the
+ * The headline with the role (up to the first " · ") in semibold and the stack after it in the
  * muted grey: the title a recruiter looks for first stands apart from the keywords (Gestalt similarity).
  */
 @Composable
@@ -237,9 +238,9 @@ private fun headlineText(headline: String): AnnotatedString {
         val cut = headline.indexOf('·')
         buildAnnotatedString {
             if (cut < 0) {
-                withStyle(SpanStyle(color = ink, fontWeight = FontWeight.Medium)) { append(headline) }
+                withStyle(SpanStyle(color = ink, fontWeight = FontWeight.SemiBold)) { append(headline) }
             } else {
-                withStyle(SpanStyle(color = ink, fontWeight = FontWeight.Medium)) { append(headline.substring(0, cut)) }
+                withStyle(SpanStyle(color = ink, fontWeight = FontWeight.SemiBold)) { append(headline.substring(0, cut)) }
                 append(headline.substring(cut))
             }
         }
@@ -267,7 +268,9 @@ private fun HeroActions(
         } else {
             Button(onClick = onContact) { Text("Get in touch") }
         }
-        OutlinedButton(onClick = onSeeProjects) { Text("See projects") }
+        OutlinedButton(onClick = onSeeProjects, border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)) {
+            Text("See projects")
+        }
         // Together, so a narrow screen moves both to the next line rather than leaving one there alone.
         if (links.isNotEmpty()) {
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -287,17 +290,28 @@ private fun HeroSummary(summary: String, modifier: Modifier = Modifier) {
     )
 }
 
-/**
- * Each point is one merged node, so a screen reader says the figure and its sentence together. The figure stands out by
- * size and weight in near-black, not in the accent, which on this page means "press me".
- */
 @Composable
-fun ProofPoints(points: List<ProofPoint>, modifier: Modifier = Modifier) {
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(18.dp)) {
-        points.forEach { point ->
+private fun ProofPanel(points: List<ProofPoint>, roomy: Boolean, modifier: Modifier = Modifier) {
+    Surface(
+        modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.primaryContainer,
+        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+    ) {
+        ProofPoints(points, Modifier.padding(if (roomy) 24.dp else 16.dp))
+    }
+}
+
+/** Each point is one merged node, so a screen reader says the figure and its label together. */
+@Composable
+private fun ProofPoints(points: List<ProofPoint>, modifier: Modifier = Modifier) {
+    val ink = MaterialTheme.colorScheme.onPrimaryContainer
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        points.forEachIndexed { index, point ->
+            if (index > 0) HorizontalDivider(color = ink.copy(alpha = 0.24f))
             Column(Modifier.semantics(mergeDescendants = true) {}, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(point.value, style = ProofValueStyle(), color = MaterialTheme.colorScheme.onBackground)
-                Text(point.label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(point.value, style = ProofValueStyle(), color = ink)
+                Text(point.label, style = MaterialTheme.typography.bodyMedium, color = ink)
             }
         }
     }

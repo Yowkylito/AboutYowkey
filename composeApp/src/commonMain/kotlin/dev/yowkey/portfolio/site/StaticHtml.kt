@@ -761,17 +761,20 @@ object StaticHtml {
      * One project, with everything the app splits between its card and its detail screen. The card's answers come
      * first, in the card's order (media, title, meta and badges, one line, summary and any disclaimer, figures, what
      * it is built with and runs on), so a crawler or a skim reads the same summary; the detail follows (impact, highlights, optimizations, gallery,
-     * engineering, stack, links). Headings sit under the group's `<h3>`: the title is `<h4>`, after the app's icon
-     * when it has one, and its parts `<h5>`.
-     * The id is the app's deep link target too: `#/projects/<id>` scrolls here on this page.
+     * engineering, and stack). On the homepage, the title sits under the group's `<h3>` and the cover leads.
+     * Standalone case studies put the role, summary and facts before the cover so the contribution is visible first.
+     * The id is the app's deep link target too: `#/projects/<id>` scrolls here on the homepage.
      */
     private fun StringBuilder.project(project: Project, standalone: Boolean = false) {
         val assetPrefix = if (standalone) "../../" else ""
         val titleLevel = if (standalone) 1 else 4
         val sectionLevel = titleLevel + 1
+        fun leadMedia() {
+            project.coverClip?.let { clip(it, "cover ${orientation(it)}", assetPrefix) }
+                ?: project.cover?.let { cover(it, assetPrefix) }
+        }
         appendLine("<article id=\"${escape(project.anchor)}\">")
-        project.coverClip?.let { clip(it, "cover ${orientation(it)}", assetPrefix) }
-            ?: project.cover?.let { cover(it, assetPrefix) }
+        if (!standalone) leadMedia()
         val heading = if (standalone) project.caseStudyTitle ?: project.title else project.title
         val title = "<h$titleLevel>${escape(heading)}</h$titleLevel>"
         val icon = project.iconPath
@@ -797,7 +800,7 @@ object StaticHtml {
         project.disclaimer?.let { appendLine("<p class=\"disclaimer\">${escape(it)}</p>") }
         if (!standalone) {
             val label = project.caseStudyTitle ?: "Read the ${project.title} case study"
-            appendLine("<p><a href=\"${escape(project.caseStudyPath)}\">${escape(label)}</a></p>")
+            appendLine("<p><a class=\"case-study-link\" href=\"${escape(project.caseStudyPath)}\">${escape(label)}</a></p>")
         }
         if (project.figures.isNotEmpty()) {
             appendLine("<ul class=\"figures\">")
@@ -805,6 +808,7 @@ object StaticHtml {
             appendLine("</ul>")
         }
         project.engineering?.let { facts(it) }
+        if (standalone) leadMedia()
         if (project.isWork) {
             titledList("Impact", project.impact, sectionLevel)
             titledList(project.highlightsTitle, project.highlights, sectionLevel)

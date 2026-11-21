@@ -10,9 +10,9 @@
     "email": "yukstangonan@gmail.com",
     "availability": "Open to relocation",
     "proof": [
-      { "value": "53%", "label": "of ArenaPlus's native Android app's code, the most on its team, co-built from day one" },
-      { "value": "30 days", "label": "to build and launch Arena Social's Android app on my own, from first commit to release" },
-      { "value": "#2 of 9", "label": "Top 9 Awardees, hand-picked by DigiPlus executive leadership for engineering, Sep 2026" }
+      { "value": "53%", "label": "of ArenaPlus's native Android code, the largest share on the team" },
+      { "value": "30 days", "label": "to build and launch Arena Social as its sole Android developer" },
+      { "value": "#2", "label": "among DigiPlus's Top 9 Awardees for engineering contributions, Sep 2026" }
     ]
   },
   "services": [],
@@ -397,6 +397,125 @@
       ]
     },
     {
+      "id": "seventhj",
+      "icon": "seventhj.webp",
+      "visibility": "private",
+      "cover": {
+        "file": "seventhj-home.webp",
+        "caption": "Home: the stock's value, the requests that need you and the watchlist (sample data)",
+        "width": 720,
+        "height": 1600
+      },
+      "title": "Seventh J",
+      "caseStudyTitle": "Seventh J — iOS, Android and Web with Compose Multiplatform",
+      "tagline": "Art-gallery inventory and sales app for Android, iOS and web from one Kotlin codebase",
+      "summary": "I built Seventh J as an unofficial art gallery inventory and sales prototype for iOS, Android and the web. I used Compose Multiplatform to share every screen, wrote a software 3D renderer in common Kotlin and used a SwiftUI entry point to host the shared interface on iOS. The prototype runs on sample data while I build the data layer.",
+      "disclaimer": "An unofficial concept, not made for or endorsed by the gallery: I used a real Makati gallery to show what I can build. Its name and brand belong to it.",
+      "period": "Aug 2026",
+      "highlights": [
+        "Wrote a software 3D renderer in common Kotlin (rotate, project, cull, depth-sort, shade, fill) that turns about 1,000 faces per sculpture with zero allocation per frame",
+        "Painted a Starry Night splash from 960 strokes in one flow field: 420 short sky dashes and 540 long threads that spiral into the pixels of the gallery's mark",
+        "Shared every screen across Android, iOS and the web: 78 common files, zero android.* imports, platform needs behind expect/actual",
+        "Kept the back stack restorable on iOS and Wasm, where reflection is unavailable, with serializable Navigation 3 destinations and explicit polymorphic serializers",
+        "Budgeted the animation per platform: the splash plays once on Android and iOS, and is skipped on the web, on warm start and under reduced motion",
+        "Covered UI state, inventory, sales and the sculpture meshes with 35 shared tests; CI builds the release APK and compiles for Wasm on every push"
+      ],
+      "engineering": {
+        "builtWith": ["Kotlin Multiplatform", "Compose Multiplatform", "Kotlin/Wasm", "Navigation 3"],
+        "platforms": ["Android", "iOS", "Web"],
+        "architecture": "A KMP library, :shared, holds every screen in commonMain; :androidApp, :webApp (Wasm and JS) and an Xcode iosApp are thin entry points. Each screen splits into a stateless Content composable, a thin Screen wrapper and a multiplatform ViewModel exposing StateFlow of a sealed UiState. Platform differences go through expect/actual. Data is sample and in-memory for now; DI and a database are planned, not built.",
+        "decisions": [
+          {
+            "title": "One UI codebase, no Android leaks",
+            "detail": "commonMain has zero android.* imports. Platform needs such as reduced motion are expect/actual with Android, iOS, JS and Wasm implementations, so all three apps run the same UI code."
+          },
+          {
+            "title": "Reflection-free navigation",
+            "detail": "Destinations are a @Serializable sealed interface on Navigation 3 with explicit polymorphic serializers, because reflection is unavailable on iOS and Wasm and the back stack must still restore there."
+          },
+          {
+            "title": "Animation budgeted per platform",
+            "detail": "The 960-stroke Starry Night splash plays once per process on Android and iOS only. It is skipped on the web, on warm start and under reduced motion, because that many canvas strokes would stall a browser tab."
+          },
+          {
+            "title": "One software renderer, not three engines",
+            "detail": "Filament on Android, SceneKit on iOS and three.js on the web would be three engines and three sets of bugs for one turntable, so one painter's-algorithm pass over about 1,000 quads runs in common Kotlin."
+          }
+        ],
+        "modules": [
+          {
+            "name": ":shared",
+            "role": "KMP library with all Compose UI and expect/actual",
+            "dependsOn": []
+          },
+          {
+            "name": ":androidApp",
+            "role": "Android entry point, MainActivity only",
+            "dependsOn": [":shared"]
+          },
+          {
+            "name": ":webApp",
+            "role": "Browser entry for Kotlin/Wasm and Kotlin/JS",
+            "dependsOn": [":shared"]
+          },
+          {
+            "name": "iosApp",
+            "role": "Xcode project wrapping ComposeUIViewController in SwiftUI",
+            "dependsOn": [":shared"]
+          }
+        ],
+        "quality": [
+          "35 shared unit tests: UI state, inventory, sales, meshes",
+          "CI on every push: release APK and a Wasm compile",
+          "Shared UI with no Android imports in commonMain",
+          "Versions pinned in a Gradle version catalog"
+        ]
+      },
+      "stack": ["Kotlin", "Compose Multiplatform", "Kotlin/Wasm", "Navigation 3", "Coroutines", "kotlinx.serialization"],
+      "clips": [
+        {
+          "file": "seventhj-splash.webp",
+          "caption": "Seventh J's splash: brush strokes spiral in over a starry night sky and settle into the SJ mark",
+          "width": 252,
+          "height": 560,
+          "video": true
+        },
+        {
+          "file": "seventhj-splash-home.webp",
+          "caption": "First launch: strokes spiral in over a starry night sky, settle into the SJ mark, then hand off to Home",
+          "width": 324,
+          "height": 720,
+          "video": true
+        }
+      ],
+      "screenshots": [
+        {
+          "file": "seventhj-easel.webp",
+          "caption": "Works: a painting on the easel, laid stroke by stroke in code, with its artist, medium and price (sample data)",
+          "width": 720,
+          "height": 1600
+        },
+        {
+          "file": "seventhj-sculpture.webp",
+          "caption": "The sculpture room: a piece from the software 3D renderer that you drag to turn (sample data)",
+          "width": 720,
+          "height": 1600
+        },
+        {
+          "file": "seventhj-sale.webp",
+          "caption": "A sale in a sheet: its steps from approval to delivery, then the price, discount and commission (sample data)",
+          "width": 720,
+          "height": 1600
+        },
+        {
+          "file": "seventhj-cover.webp",
+          "caption": "Seventh J's splash: the SJ mark and wordmark over a starry night sky",
+          "width": 720,
+          "height": 1600
+        }
+      ]
+    },
+    {
       "id": "eagles-watch",
       "icon": "eagles-watch.webp",
       "visibility": "public",
@@ -607,125 +726,6 @@
       "screenshots": [
         { "file": "portfolio-hero.webp", "caption": "The page you are on, rendered by Compose from WebAssembly", "width": 800, "height": 600 },
         { "file": "portfolio-projects.webp", "caption": "Project cards that lead with a real screen of each app and open its own page", "width": 800, "height": 600 }
-      ]
-    },
-    {
-      "id": "seventhj",
-      "icon": "seventhj.webp",
-      "visibility": "private",
-      "cover": {
-        "file": "seventhj-home.webp",
-        "caption": "Home: the stock's value, the requests that need you and the watchlist (sample data)",
-        "width": 720,
-        "height": 1600
-      },
-      "title": "Seventh J",
-      "caseStudyTitle": "Seventh J — iOS, Android and Web with Compose Multiplatform",
-      "tagline": "Art-gallery inventory and sales app for Android, iOS and web from one Kotlin codebase",
-      "summary": "I built Seventh J as an unofficial art gallery inventory and sales prototype for iOS, Android and the web. I used Compose Multiplatform to share every screen, wrote a software 3D renderer in common Kotlin and used a SwiftUI entry point to host the shared interface on iOS. The prototype runs on sample data while I build the data layer.",
-      "disclaimer": "An unofficial concept, not made for or endorsed by the gallery: I used a real Makati gallery to show what I can build. Its name and brand belong to it.",
-      "period": "Aug 2026",
-      "highlights": [
-        "Wrote a software 3D renderer in common Kotlin (rotate, project, cull, depth-sort, shade, fill) that turns about 1,000 faces per sculpture with zero allocation per frame",
-        "Painted a Starry Night splash from 960 strokes in one flow field: 420 short sky dashes and 540 long threads that spiral into the pixels of the gallery's mark",
-        "Shared every screen across Android, iOS and the web: 78 common files, zero android.* imports, platform needs behind expect/actual",
-        "Kept the back stack restorable on iOS and Wasm, where reflection is unavailable, with serializable Navigation 3 destinations and explicit polymorphic serializers",
-        "Budgeted the animation per platform: the splash plays once on Android and iOS, and is skipped on the web, on warm start and under reduced motion",
-        "Covered UI state, inventory, sales and the sculpture meshes with 35 shared tests; CI builds the release APK and compiles for Wasm on every push"
-      ],
-      "engineering": {
-        "builtWith": ["Kotlin Multiplatform", "Compose Multiplatform", "Kotlin/Wasm", "Navigation 3"],
-        "platforms": ["Android", "iOS", "Web"],
-        "architecture": "A KMP library, :shared, holds every screen in commonMain; :androidApp, :webApp (Wasm and JS) and an Xcode iosApp are thin entry points. Each screen splits into a stateless Content composable, a thin Screen wrapper and a multiplatform ViewModel exposing StateFlow of a sealed UiState. Platform differences go through expect/actual. Data is sample and in-memory for now; DI and a database are planned, not built.",
-        "decisions": [
-          {
-            "title": "One UI codebase, no Android leaks",
-            "detail": "commonMain has zero android.* imports. Platform needs such as reduced motion are expect/actual with Android, iOS, JS and Wasm implementations, so all three apps run the same UI code."
-          },
-          {
-            "title": "Reflection-free navigation",
-            "detail": "Destinations are a @Serializable sealed interface on Navigation 3 with explicit polymorphic serializers, because reflection is unavailable on iOS and Wasm and the back stack must still restore there."
-          },
-          {
-            "title": "Animation budgeted per platform",
-            "detail": "The 960-stroke Starry Night splash plays once per process on Android and iOS only. It is skipped on the web, on warm start and under reduced motion, because that many canvas strokes would stall a browser tab."
-          },
-          {
-            "title": "One software renderer, not three engines",
-            "detail": "Filament on Android, SceneKit on iOS and three.js on the web would be three engines and three sets of bugs for one turntable, so one painter's-algorithm pass over about 1,000 quads runs in common Kotlin."
-          }
-        ],
-        "modules": [
-          {
-            "name": ":shared",
-            "role": "KMP library with all Compose UI and expect/actual",
-            "dependsOn": []
-          },
-          {
-            "name": ":androidApp",
-            "role": "Android entry point, MainActivity only",
-            "dependsOn": [":shared"]
-          },
-          {
-            "name": ":webApp",
-            "role": "Browser entry for Kotlin/Wasm and Kotlin/JS",
-            "dependsOn": [":shared"]
-          },
-          {
-            "name": "iosApp",
-            "role": "Xcode project wrapping ComposeUIViewController in SwiftUI",
-            "dependsOn": [":shared"]
-          }
-        ],
-        "quality": [
-          "35 shared unit tests: UI state, inventory, sales, meshes",
-          "CI on every push: release APK and a Wasm compile",
-          "Shared UI with no Android imports in commonMain",
-          "Versions pinned in a Gradle version catalog"
-        ]
-      },
-      "stack": ["Kotlin", "Compose Multiplatform", "Kotlin/Wasm", "Navigation 3", "Coroutines", "kotlinx.serialization"],
-      "clips": [
-        {
-          "file": "seventhj-splash.webp",
-          "caption": "Seventh J's splash: brush strokes spiral in over a starry night sky and settle into the SJ mark",
-          "width": 252,
-          "height": 560,
-          "video": true
-        },
-        {
-          "file": "seventhj-splash-home.webp",
-          "caption": "First launch: strokes spiral in over a starry night sky, settle into the SJ mark, then hand off to Home",
-          "width": 324,
-          "height": 720,
-          "video": true
-        }
-      ],
-      "screenshots": [
-        {
-          "file": "seventhj-easel.webp",
-          "caption": "Works: a painting on the easel, laid stroke by stroke in code, with its artist, medium and price (sample data)",
-          "width": 720,
-          "height": 1600
-        },
-        {
-          "file": "seventhj-sculpture.webp",
-          "caption": "The sculpture room: a piece from the software 3D renderer that you drag to turn (sample data)",
-          "width": 720,
-          "height": 1600
-        },
-        {
-          "file": "seventhj-sale.webp",
-          "caption": "A sale in a sheet: its steps from approval to delivery, then the price, discount and commission (sample data)",
-          "width": 720,
-          "height": 1600
-        },
-        {
-          "file": "seventhj-cover.webp",
-          "caption": "Seventh J's splash: the SJ mark and wordmark over a starry night sky",
-          "width": 720,
-          "height": 1600
-        }
       ]
     },
     {
@@ -1027,7 +1027,11 @@
   "skills": [
     {
       "name": "Android",
-      "items": ["Kotlin", "Jetpack Compose", "Coroutines and Flow", "Android SDK", "Java", "Material 3", "Kotlin Multiplatform", "Compose Multiplatform"]
+      "items": ["Kotlin", "Jetpack Compose", "Coroutines and Flow", "Android SDK", "Java", "Material 3"]
+    },
+    {
+      "name": "Cross-platform",
+      "items": ["Kotlin Multiplatform", "Compose Multiplatform", "SwiftUI hosting", "Kotlin/Wasm"]
     },
     {
       "name": "Architecture",

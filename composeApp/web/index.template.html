@@ -334,7 +334,7 @@
       headlineSmall, the proof headlineMedium over bodyMedium, the buttons labelLarge, the summary bodyLarge), as wide
       as the app lets it run (the headline and summary to their reading measure, 680px), wrapped word by word as the
       app wraps, and spaced as its columns are (a grid, so no margins collapse): 16px from the name to the headline,
-      20px between the rest, 4px more around the proof. The links are the app's buttons, 40px tall in a 48px row.
+      20px between the rest. The links are the app's buttons, 40px tall in a 48px row.
     */
     .hero { position: relative; container: hero / inline-size; display: grid; grid-template-columns: minmax(0, 1fr); }
     .hero hgroup { margin: 0; }
@@ -342,11 +342,14 @@
     .hero h1 { font-size: 48px; line-height: 52px; letter-spacing: -1.2px; font-weight: 700; margin: 0 0 16px; text-wrap: wrap; }
     @media (min-width: 600px) { .hero h1 { font-size: 72px; line-height: 76px; letter-spacing: -2px; } }
     .hero .headline { font-size: 24px; line-height: 34px; margin: 0 0 20px; max-width: 680px; text-wrap: wrap; color: var(--muted); }
-    /* The role in near-black and medium weight, the stack after it muted, as the app's headline. */
-    .hero .headline .lead, .hero hgroup.whole + .headline { color: var(--ink); font-weight: 500; }
-    .hero .proof { list-style: none; padding: 0; margin: 4px 0 24px; display: grid; gap: 18px; }
-    .hero .proof strong { display: block; margin-bottom: 2px; color: var(--ink); font-size: 28px; line-height: 36px; font-weight: 700; letter-spacing: -.5px; }
-    .hero .proof li { max-width: none; color: var(--muted); font-size: 15px; line-height: 24px; letter-spacing: .2px; text-wrap: wrap; }
+    /* A recruiter reads the role before the technologies. The evidence stays grouped beside or below it. */
+    .hero .headline .lead, .hero hgroup.whole + .headline { color: var(--ink); font-weight: 600; }
+    .hero .proof {
+      list-style: none; padding: 16px; margin: 0 0 20px; display: grid; gap: 12px;
+      background: var(--stage); color: var(--on-stage); border-radius: 16px;
+    }
+    .hero .proof strong { display: block; margin-bottom: 2px; color: inherit; font-size: 28px; line-height: 36px; font-weight: 700; letter-spacing: -.5px; }
+    .hero .proof li { max-width: none; color: inherit; font-size: 15px; line-height: 24px; letter-spacing: .2px; text-wrap: wrap; }
     .hero .links { display: flex; flex-wrap: wrap; gap: 12px; max-width: none; margin: 0 0 20px; }
     .hero .links a {
       display: inline-flex; align-items: center; justify-content: center; min-width: 58px; height: 40px; margin: 4px 0; padding: 0 24px;
@@ -354,6 +357,7 @@
       font-size: 14px; line-height: 20px; letter-spacing: .1px; font-weight: 600; text-decoration: none;
     }
     .hero .links a[href^="mailto:"] { border-color: transparent; background: var(--accent); color: var(--on-accent); }
+    .hero .links a[href="#projects"] { border-color: var(--accent); }
     /* LinkedIn and GitHub, as the app's text buttons: after the two main actions, lighter than both. */
     .hero .links a.quiet { border-color: transparent; padding: 0 12px; }
     .hero .links .pair { display: inline-flex; gap: 4px; }
@@ -371,8 +375,7 @@
       .hero:has(> .proof) > .links { grid-area: 4 / 1; }
       .hero:has(> .proof) > .links + p { grid-area: 5 / 1; }
       .hero:has(> .proof) > .proof {
-        grid-area: 1 / 2 / -1; align-self: center; margin: 0; padding: 27px;
-        border: 1px solid var(--line); border-radius: 16px; background: var(--surface);
+        grid-area: 1 / 2 / -1; align-self: center; margin: 0; padding: 24px;
       }
       .hero:has(> .proof) > .portrait { grid-area: 1 / 2 / -1; align-self: start; max-width: none; height: 224px; margin: 0; --h: 224px; }
       .hero:has(> .portrait) > .proof { align-self: end; margin-top: 240px; }
@@ -392,6 +395,9 @@
     .cards li, article { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 24px; }
     article + article { margin-top: 16px; }
     a { color: var(--accent); font-weight: 600; }
+    .hero .links a:focus-visible, .case-study-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+    #experience > article:first-of-type, #projects-work > article { border-inline-start: 4px solid var(--accent); }
+    #experience > article:first-of-type h3 { font-size: 22px; }
     .shots { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0; }
     /* Never wider than the page: a wide shot on a phone is cropped to fit rather than pushing the page sideways. */
     .shots img { display: block; height: 200px; width: auto; max-width: 100%; object-fit: cover; border: 1px solid var(--line); border-radius: 10px; background: var(--line); }
@@ -617,13 +623,23 @@
     h3.group::after { content: ""; flex: 1; border-top: 1px solid var(--line); }
     .project-group > .note { margin: 0 0 24px; }
     article h4 { font-size: 19px; margin: 0 0 4px; }
+    #projects-work h4 { font-size: 24px; line-height: 1.25; }
     .heading { display: flex; align-items: center; gap: 12px; margin: 0 0 4px; }
     .heading h4 { margin: 0; }
     img.app-icon { flex: none; width: 40px; height: 40px; border: 1px solid var(--line); border-radius: 22%; background: var(--line); }
     article h5, .engineering h6 { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); margin: 20px 0 8px; }
-    .figures { list-style: none; margin: 16px 0; padding: 14px 16px; display: grid; gap: 8px; background: var(--bg); border-radius: 12px; }
-    .figures li { display: grid; grid-template-columns: 6.5em 1fr; gap: 12px; align-items: baseline; font-size: 15px; }
-    .figures strong { color: var(--accent); font-size: 22px; line-height: 1.2; white-space: nowrap; }
+    .case-study-link {
+      display: inline-flex; align-items: center; min-height: 44px; padding: 8px 14px;
+      border: 1px solid var(--accent); border-radius: 10px;
+      text-decoration-thickness: .08em; text-underline-offset: .18em;
+    }
+    .case-study-link:hover { background: var(--stage); color: var(--on-stage); }
+    .figures {
+      list-style: none; margin: 16px 0; padding: 14px 16px; display: grid; gap: 8px;
+      background: var(--stage); color: var(--on-stage); border-radius: 12px;
+    }
+    .figures li { display: grid; grid-template-columns: minmax(5.25em, max-content) 1fr; gap: 12px; align-items: baseline; font-size: 15px; }
+    .figures strong { font-size: 22px; line-height: 1.2; white-space: nowrap; }
     .facts { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 12px 0; font-size: 15px; }
     .facts dt { color: var(--muted); font-weight: 600; }
     .facts dd { margin: 0; }

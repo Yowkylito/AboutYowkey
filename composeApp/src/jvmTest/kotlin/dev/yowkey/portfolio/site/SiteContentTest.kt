@@ -195,12 +195,20 @@ class SiteContentTest {
                 val html = File(output, "${project.caseStudyPath}index.html").readText()
                 val url = StaticHtml.escape(portfolio.caseStudyUrl(project))
                 val heading = StaticHtml.escape(project.caseStudyTitle ?: project.title)
-                assertTrue("href=\"${project.caseStudyPath}\"" in home, project.id)
+                assertTrue("class=\"case-study-link\" href=\"${project.caseStudyPath}\"" in home, project.id)
                 assertTrue("<loc>$url</loc>" in sitemap, project.id)
                 assertTrue("(${portfolio.caseStudyUrl(project)})" in llms, project.id)
                 assertTrue("<link rel=\"canonical\" href=\"$url\">" in html, project.id)
                 assertTrue("<h1>$heading</h1>" in html, project.id)
-                assertTrue(StaticHtml.escape(project.summary) in html, project.id)
+                val summary = html.indexOf("<p>${StaticHtml.escape(project.summary)}</p>")
+                assertTrue(summary >= 0, project.id)
+                if (project.coverClip != null || project.cover != null) {
+                    val cover = html.indexOf("class=\"cover ")
+                    assertTrue(cover > summary, "${project.id}: the case study opens with text before its cover")
+                    project.engineering?.takeIf { it.builtWith.isNotEmpty() || it.platforms.isNotEmpty() }?.let {
+                        assertTrue(html.indexOf("<dl class=\"facts\">") in summary until cover, "${project.id}: quick facts come before the cover")
+                    }
+                }
                 assertFalse("{{" in html || "<script>" in html, project.id)
                 project.iconPath?.let { assertTrue("src=\"../../${StaticHtml.resourceUrl(it)}\"" in html, project.id) }
             }
