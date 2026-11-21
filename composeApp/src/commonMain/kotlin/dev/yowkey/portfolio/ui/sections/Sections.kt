@@ -39,6 +39,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Alignment
@@ -169,9 +170,10 @@ fun SectionNote(text: String, modifier: Modifier = Modifier) {
  * and the rail's start are placed in sp, as the title's line is, so the dot stays on the title at any text size.
  */
 @Composable
-fun JobEntry(experience: Experience, isLast: Boolean, wide: Boolean, modifier: Modifier = Modifier) {
-    val rail = MaterialTheme.colorScheme.outline
-    val dot = MaterialTheme.colorScheme.primary
+fun JobEntry(experience: Experience, isLast: Boolean, wide: Boolean, modifier: Modifier = Modifier, leading: Boolean = false) {
+    val scheme = MaterialTheme.colorScheme
+    val rail = scheme.outline
+    val dot = scheme.primary
     Row(modifier.fillMaxWidth()) {
         if (wide) {
             Text(
@@ -194,8 +196,11 @@ fun JobEntry(experience: Experience, isLast: Boolean, wide: Boolean, modifier: M
         ) {
             Text(
                 "${experience.role} · ${experience.company}",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onBackground,
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = if (leading) FontWeight.Bold else FontWeight.SemiBold,
+                ),
+                color = if (leading) scheme.primary else scheme.onBackground,
+                modifier = Modifier.semantics { heading() },
             )
             val meta = listOfNotNull(experience.period.takeUnless { wide }, experience.location).joinToString(" · ")
             if (meta.isNotEmpty()) {

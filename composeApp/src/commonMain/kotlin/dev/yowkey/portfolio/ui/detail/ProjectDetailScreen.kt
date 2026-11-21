@@ -169,12 +169,13 @@ fun ProjectDetailScreen(
                             },
                         verticalArrangement = Arrangement.spacedBy(gap),
                     ) {
-                        DetailMedia(lead!!, playing, compact = false, onOpen = { openViewer(leadIndex) }, onTogglePlay = togglePlay)
+                        DetailMedia(lead, playing, compact = false, onOpen = { openViewer(leadIndex) }, onTogglePlay = togglePlay)
                         GallerySection(strip, gallery.indexOf(strip.firstOrNull()), openViewer)
                     }
                     Spacer(Modifier.width(48.dp))
                     Column(Modifier.weight(1.08f), verticalArrangement = Arrangement.spacedBy(gap)) {
-                        DetailText(project, compact = false, onBack = onBack, caseStudyUrl = caseStudyUrl)
+                        DetailHeader(project, compact = false, caseStudyUrl = caseStudyUrl)
+                        DetailText(project, compact = false, onBack = onBack)
                     }
                 }
             } else {
@@ -183,11 +184,10 @@ fun ProjectDetailScreen(
                     Modifier.padding(horizontal = layout.gutter).then(ends).widthIn(max = ArticleWidth).fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(gap),
                 ) {
-                    // On a phone the title, the line and the links come before the media, which would fill the first
-                    // screen alone: what it is and where to check it, then what it looks like.
-                    if (layout.compact) DetailHeader(project, compact = true)
+                    // A single column introduces the contribution and platforms before the media.
+                    DetailHeader(project, compact = layout.compact, caseStudyUrl = caseStudyUrl)
                     lead?.let { DetailMedia(it, playing, compact = layout.compact, onOpen = { openViewer(leadIndex) }, onTogglePlay = togglePlay) }
-                    DetailText(project, compact = layout.compact, onBack = onBack, caseStudyUrl = caseStudyUrl, withHeader = !layout.compact, gallery = {
+                    DetailText(project, compact = layout.compact, onBack = onBack, gallery = {
                         GallerySection(strip, gallery.indexOf(strip.firstOrNull()), openViewer)
                     })
                 }
@@ -199,19 +199,15 @@ fun ProjectDetailScreen(
 
 /**
  * The text column. [gallery] is slotted between "How it's built" and the stack in the one-column layout; the
- * two-column layout shows the gallery under the media instead and passes nothing. Without [withHeader] the caller has
- * put the header (and its links) above the media already.
+ * two-column layout shows the gallery under the media instead and passes nothing.
  */
 @Composable
 private fun DetailText(
     project: Project,
     compact: Boolean,
     onBack: () -> Unit,
-    caseStudyUrl: String?,
-    withHeader: Boolean = true,
     gallery: (@Composable () -> Unit)? = null,
 ) {
-    if (withHeader) DetailHeader(project, compact)
     // Work, outcome first: the numbers, what it changed, my part in it, then the optimizations and audits.
     if (project.figures.isNotEmpty()) FigureList(project.figures, large = !compact)
     if (project.impact.isNotEmpty()) {
@@ -234,12 +230,11 @@ private fun DetailText(
         DetailSection("Stack") { Tags(project.stack) }
     }
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-    caseStudyUrl?.let { Links(listOf(Link("Open web case study", it))) }
     OutlinedButton(onClick = onBack) { Text("Back to all projects") }
 }
 
 @Composable
-private fun DetailHeader(project: Project, compact: Boolean) {
+private fun DetailHeader(project: Project, compact: Boolean, caseStudyUrl: String?) {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         // A step above the section headings that follow, on a phone too.
         ProjectHeading(
@@ -259,13 +254,15 @@ private fun DetailHeader(project: Project, compact: Boolean) {
         Text(
             project.summary,
             style = typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.readingMeasure(typography.bodyLarge),
         )
-        // Where to check it (the code, an APK), right under what it is: 74% of viewing time goes to the first two
-        // screens (NN/g, 2018), and a hiring manager trusts what they can verify in one click.
-        if (project.links.isNotEmpty()) Links(project.links)
         project.disclaimer?.let { Disclaimer(it) }
+        val platforms = project.engineering?.platforms.orEmpty()
+        if (platforms.isNotEmpty()) {
+            LabelledChips("Runs on") { platforms.forEach { PlatformChip(it) } }
+        }
+        Links(project.links, caseStudyUrl)
     }
 }
 
@@ -286,13 +283,13 @@ private fun Disclaimer(text: String) {
 /** Chips, the architecture paragraph, the module diagram, the decisions and the quality checklist, each if given. */
 @Composable
 private fun HowItsBuilt(engineering: Engineering) {
+    val hasDetails = engineering.builtWith.isNotEmpty() || engineering.architecture != null ||
+        engineering.modules.isNotEmpty() || engineering.decisions.isNotEmpty() || engineering.quality.isNotEmpty()
+    if (!hasDetails) return
     DetailSection("How it's built") {
         Column(verticalArrangement = Arrangement.spacedBy(28.dp)) {
-            if (engineering.builtWith.isNotEmpty() || engineering.platforms.isNotEmpty()) {
-                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    if (engineering.builtWith.isNotEmpty()) LabelledChips("Built with") { engineering.builtWith.forEach { TechChip(it) } }
-                    if (engineering.platforms.isNotEmpty()) LabelledChips("Runs on") { engineering.platforms.forEach { PlatformChip(it) } }
-                }
+            if (engineering.builtWith.isNotEmpty()) {
+                LabelledChips("Built with") { engineering.builtWith.forEach { TechChip(it) } }
             }
             engineering.architecture?.let {
                 val style = MaterialTheme.typography.bodyLarge
@@ -404,9 +401,11 @@ private fun Tags(items: List<String>) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun Links(links: List<Link>) {
+private fun Links(links: List<Link>, caseStudyUrl: String?) {
+    if (links.isEmpty() && caseStudyUrl == null) return
     FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         links.forEachIndexed { index, link -> LinkButton(link, primary = index == 0) }
+        caseStudyUrl?.let { LinkButton(Link("Open web case study", it)) }
     }
 }
 

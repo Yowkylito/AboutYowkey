@@ -577,7 +577,7 @@ private fun PageRow(
             SelectionContainer { AwardList(item.awards, wide = !layout.compact) }
         }
         is PageItem.Job -> SectionFrame(item, layout) {
-            SelectionContainer { JobEntry(item.experience, item.isLast, wide = !layout.compact) }
+            SelectionContainer { JobEntry(item.experience, item.isLast, wide = !layout.compact, leading = item.index == 0) }
         }
         is PageItem.Skills -> SectionFrame(item, layout) {
             SelectionContainer { SkillGroups(item.groups, layout.skillColumns) }

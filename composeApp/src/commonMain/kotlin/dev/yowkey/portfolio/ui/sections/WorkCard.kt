@@ -14,7 +14,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -34,9 +38,22 @@ import dev.yowkey.portfolio.ui.theme.PortfolioTheme
  */
 @Composable
 fun WorkCard(project: Project, onOpen: () -> Unit, modifier: Modifier = Modifier) {
+    val scheme = MaterialTheme.colorScheme
     OutlinedCard(modifier, onClick = onOpen, onClickLabel = "View ${project.title}") {
-        Column(Modifier.fillMaxHeight().padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            ProjectHeading(project, MaterialTheme.typography.titleLarge, maxTitleLines = 2, showCompany = false)
+        Column(
+            Modifier.fillMaxHeight().fillMaxWidth().drawBehind {
+                val edge = 4.dp.toPx()
+                val start = if (layoutDirection == LayoutDirection.Ltr) 0f else size.width - edge
+                drawRect(scheme.primary, topLeft = Offset(start, 0f), size = Size(edge, size.height))
+            }.padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            ProjectHeading(
+                project,
+                MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                maxTitleLines = 2,
+                showCompany = false,
+            )
             Text(
                 project.cardLine,
                 style = MaterialTheme.typography.bodyMedium,
@@ -53,19 +70,17 @@ fun WorkCard(project: Project, onOpen: () -> Unit, modifier: Modifier = Modifier
 }
 
 /**
- * Headline numbers, one per row: the figure in a fixed-width column, its label beside it, on a light accent wash.
- * Rows rather than tiles side by side, because three tiles leave a phone card about 70dp a figure, too narrow for
- * "30 days" and its label, while a row fits any width. Each row reads as one phrase to a screen reader. Figure on
- * the wash: 4.7:1 in light, 7.0:1 in dark (and it is large text); label 16.1:1 and 13.4:1.
+ * Headline numbers on the same high-contrast blue as the hero proof panel. Each figure and label read as a phrase.
  */
 @Composable
 fun FigureList(figures: List<ProofPoint>, large: Boolean, modifier: Modifier = Modifier) {
     val scheme = MaterialTheme.colorScheme
-    val valueStyle = if (large) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.titleLarge
+    val valueStyle = (if (large) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.titleLarge)
+        .copy(fontWeight = FontWeight.Bold)
     Column(
         modifier
             .fillMaxWidth()
-            .background(scheme.primary.copy(alpha = 0.07f).compositeOver(scheme.surface), RoundedCornerShape(12.dp))
+            .background(scheme.primaryContainer, RoundedCornerShape(12.dp))
             .padding(horizontal = if (large) 24.dp else 16.dp, vertical = if (large) 20.dp else 14.dp),
         verticalArrangement = Arrangement.spacedBy(if (large) 14.dp else 10.dp),
     ) {
@@ -74,7 +89,7 @@ fun FigureList(figures: List<ProofPoint>, large: Boolean, modifier: Modifier = M
                 Text(
                     figure.value,
                     style = valueStyle,
-                    color = scheme.primary,
+                    color = scheme.onPrimaryContainer,
                     maxLines = 1,
                     softWrap = false,
                     modifier = Modifier.width(if (large) FigureWidthLarge else FigureWidth).alignByBaseline(),
@@ -82,7 +97,7 @@ fun FigureList(figures: List<ProofPoint>, large: Boolean, modifier: Modifier = M
                 Text(
                     figure.label,
                     style = if (large) MaterialTheme.typography.bodyLarge else MaterialTheme.typography.bodyMedium,
-                    color = scheme.onSurface,
+                    color = scheme.onPrimaryContainer,
                     modifier = Modifier.weight(1f).alignByBaseline(),
                 )
             }
