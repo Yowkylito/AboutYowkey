@@ -171,6 +171,44 @@ class SiteContentTest {
             .forEach { assertTrue(it in page, "index.html lacks $it") }
     }
 
+    @Test
+    fun staticBuildPublishesCaseStudiesAtTheLinkedCanonicalUrls() {
+        val output = kotlin.io.path.createTempDirectory("portfolio-site-").toFile()
+        try {
+            val stale = File(output, "projects/removed/index.html")
+            stale.parentFile.mkdirs()
+            stale.writeText("removed project")
+            main(arrayOf(
+                File(resources, "files/portfolio.json").path,
+                "web/index.template.html",
+                "web/project.template.html",
+                output.path,
+                build,
+            ))
+
+            val home = File(output, "index.html").readText()
+            val sitemap = File(output, "sitemap.xml").readText()
+            val llms = File(output, "llms.txt").readText()
+            assertFalse(stale.exists())
+            assertTrue("<title>${StaticHtml.escape(assertNotNull(portfolio.profile.pageTitle))}</title>" in home)
+            portfolio.projects.forEach { project ->
+                val html = File(output, "${project.caseStudyPath}index.html").readText()
+                val url = StaticHtml.escape(portfolio.caseStudyUrl(project))
+                val heading = StaticHtml.escape(project.caseStudyTitle ?: project.title)
+                assertTrue("href=\"${project.caseStudyPath}\"" in home, project.id)
+                assertTrue("<loc>$url</loc>" in sitemap, project.id)
+                assertTrue("(${portfolio.caseStudyUrl(project)})" in llms, project.id)
+                assertTrue("<link rel=\"canonical\" href=\"$url\">" in html, project.id)
+                assertTrue("<h1>$heading</h1>" in html, project.id)
+                assertTrue(StaticHtml.escape(project.summary) in html, project.id)
+                assertFalse("{{" in html || "<script>" in html, project.id)
+                project.iconPath?.let { assertTrue("src=\"../../${StaticHtml.resourceUrl(it)}\"" in html, project.id) }
+            }
+        } finally {
+            output.deleteRecursively()
+        }
+    }
+
     /**
      * A shared link gets a large preview: og.png at the site's root (scripts/make_og_image.py), a PNG of 1200 x 630,
      * the shape LinkedIn, Slack and the rest draw it from, named by its whole address and light enough to fetch.

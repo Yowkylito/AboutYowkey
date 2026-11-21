@@ -5,6 +5,9 @@ still leaves knowing who I am, what I have shipped and how to reach me.
 
 **Live:** https://yowkylito.github.io/AboutYowkey/
 
+- [ArenaPlus — Native Android Migration and Payments](https://yowkylito.github.io/AboutYowkey/projects/arenaplus/)
+- [Arena Social — Android App Built and Launched in 30 Days](https://yowkylito.github.io/AboutYowkey/projects/arena-social/)
+
 ![The first screen: my name, my role and since when, three proof points, the contact buttons, and where I am](docs/images/hero.webp)
 
 ## What it is

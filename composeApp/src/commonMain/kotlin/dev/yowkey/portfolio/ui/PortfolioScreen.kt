@@ -358,7 +358,7 @@ private fun PortfolioContent(
                 )
             }
         } else {
-            ProjectDetailScreen(shown, layout, onBack = onBack)
+            ProjectDetailScreen(shown, layout, onBack = onBack, caseStudyUrl = portfolio.caseStudyUrl(shown))
         }
     }
 }
