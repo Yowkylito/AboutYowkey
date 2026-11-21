@@ -48,7 +48,7 @@ object StaticHtml {
         require(BUILD_ID.matches(build)) { "the build id must be letters, digits, '.', '_' or '-', not \"$build\"" }
         val profile = portfolio.profile
         val values = mapOf(
-            "title" to escape("${profile.name} — ${profile.headline}"),
+            "title" to escape(profile.pageTitle ?: "${profile.name} — ${profile.headline}"),
             "description" to escape(profile.summary),
             "url" to escape(portfolio.siteUrl),
             "name" to escape(profile.name),
@@ -62,10 +62,14 @@ object StaticHtml {
             "minVisits" to LiveStats.MIN_VISITS.toString(),
             "build" to build,
         )
+        return fillPage(portfolio, template, values)
+    }
+
+    private fun fillPage(portfolio: Portfolio, template: String, values: Map<String, String>): String {
         val placeholder = Regex("\\{\\{(\\w+)}}")
         val unknown = placeholder.findAll(template).map { it.groupValues[1] }.toSet() - values.keys - "csp"
-        require(unknown.isEmpty()) { "index.template.html uses unknown placeholders: $unknown" }
-        // One pass over the template: a value that contains "{{content}}" stays text instead of being filled in turn.
+        require(unknown.isEmpty()) { "The HTML template uses unknown placeholders: $unknown" }
+        // One pass over the template: a value that contains "{{content}}" stays text.
         fun fill(csp: String) = placeholder.replace(template) { (values + ("csp" to csp)).getValue(it.groupValues[1]) }
         // The policy names the page's own inline scripts by hash, so they are read from the page as it will ship.
         val scripts = INLINE_SCRIPT.findAll(fill("")).map { it.groupValues[1] }.toList()
@@ -98,12 +102,53 @@ object StaticHtml {
     /** An inline script the browser runs: `<script>` with no attributes (the JSON-LD block has a type, and only data). */
     private val INLINE_SCRIPT = Regex("<script>([\\s\\S]*?)</script>")
 
-    fun sitemap(portfolio: Portfolio): String = """
-        |<?xml version="1.0" encoding="UTF-8"?>
-        |<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-        |  <url><loc>${escape(portfolio.siteUrl)}</loc></url>
-        |</urlset>
-        |""".trimMargin()
+    fun projectPage(portfolio: Portfolio, project: Project, template: String): String {
+        val title = project.caseStudyTitle ?: project.title
+        val image = project.coverClip?.posterPath ?: project.cover?.fullPath
+        return fillPage(
+            portfolio,
+            template,
+            mapOf(
+                "title" to escape("$title — ${portfolio.profile.name}"),
+                "description" to escape(project.summary),
+                "url" to escape(portfolio.caseStudyUrl(project)),
+                "name" to escape(portfolio.profile.name),
+                "image" to escape("${portfolio.siteUrl.trimEnd('/')}/${image?.let(::resourceUrl) ?: "og.png"}"),
+                "content" to buildString { project(project, standalone = true) },
+            ),
+        )
+    }
+
+    fun sitemap(portfolio: Portfolio): String = buildString {
+        appendLine("<?xml version=\"1.0\" encoding=\"UTF-8\"?>")
+        appendLine("<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">")
+        appendLine("  <url><loc>${escape(portfolio.siteUrl)}</loc></url>")
+        portfolio.projects.forEach { project ->
+            appendLine("  <url><loc>${escape(portfolio.caseStudyUrl(project))}</loc></url>")
+        }
+        appendLine("</urlset>")
+    }
+
+    fun llmsTxt(portfolio: Portfolio): String = buildString {
+        appendLine("# ${portfolio.profile.name}")
+        appendLine()
+        appendLine("> ${portfolio.profile.summary}")
+        appendLine()
+        appendLine("## Portfolio")
+        appendLine()
+        appendLine("- [Portfolio](${portfolio.siteUrl}): Experience, skills, and contact information.")
+        if (portfolio.projects.isNotEmpty()) {
+            appendLine()
+            appendLine("## Case studies")
+            appendLine()
+            portfolio.projectGroups.forEach { (_, projects) ->
+                projects.forEach { project ->
+                    val title = project.caseStudyTitle ?: project.title
+                    appendLine("- [$title](${portfolio.caseStudyUrl(project)}): ${project.tagline ?: project.summary}")
+                }
+            }
+        }
+    }
 
     fun robots(portfolio: Portfolio): String = "User-agent: *\nAllow: /\nSitemap: ${portfolio.siteUrl}sitemap.xml\n"
 
@@ -720,17 +765,22 @@ object StaticHtml {
      * when it has one, and its parts `<h5>`.
      * The id is the app's deep link target too: `#/projects/<id>` scrolls here on this page.
      */
-    private fun StringBuilder.project(project: Project) {
+    private fun StringBuilder.project(project: Project, standalone: Boolean = false) {
+        val assetPrefix = if (standalone) "../../" else ""
+        val titleLevel = if (standalone) 1 else 4
+        val sectionLevel = titleLevel + 1
         appendLine("<article id=\"${escape(project.anchor)}\">")
-        project.coverClip?.let { clip(it, "cover ${orientation(it)}") } ?: project.cover?.let { cover(it) }
-        val title = "<h4>${escape(project.title)}</h4>"
+        project.coverClip?.let { clip(it, "cover ${orientation(it)}", assetPrefix) }
+            ?: project.cover?.let { cover(it, assetPrefix) }
+        val heading = if (standalone) project.caseStudyTitle ?: project.title else project.title
+        val title = "<h$titleLevel>${escape(heading)}</h$titleLevel>"
         val icon = project.iconPath
         if (icon == null) {
             appendLine(title)
         } else {
             // Decorative (empty alt): the title beside it names the app.
             appendLine(
-                "<div class=\"heading\"><img class=\"app-icon\" src=\"${resourceUrl(icon)}\" alt=\"\" width=\"40\" " +
+                "<div class=\"heading\"><img class=\"app-icon\" src=\"$assetPrefix${resourceUrl(icon)}\" alt=\"\" width=\"40\" " +
                     "height=\"40\" loading=\"lazy\" decoding=\"async\">$title</div>",
             )
         }
@@ -742,6 +792,10 @@ object StaticHtml {
         if (meta.isNotEmpty()) appendLine("<p class=\"muted\">${meta.joinToString(" ")}</p>")
         project.tagline?.let { appendLine("<p class=\"tagline\">${escape(it)}</p>") }
         appendLine("<p>${escape(project.summary)}</p>")
+        if (!standalone) {
+            val label = project.caseStudyTitle ?: "Read the ${project.title} case study"
+            appendLine("<p><a href=\"${escape(project.caseStudyPath)}\">${escape(label)}</a></p>")
+        }
         // The proof a reader can check (the code, an APK) right under what the project is, not after everything.
         links(project.links)
         project.disclaimer?.let { appendLine("<p class=\"disclaimer\">${escape(it)}</p>") }
@@ -752,15 +806,15 @@ object StaticHtml {
         }
         project.engineering?.let { facts(it) }
         if (project.isWork) {
-            titledList("Impact", project.impact)
-            titledList(project.highlightsTitle, project.highlights)
-            titledList("Optimizations and audits", project.optimizations)
+            titledList("Impact", project.impact, sectionLevel)
+            titledList(project.highlightsTitle, project.highlights, sectionLevel)
+            titledList("Optimizations and audits", project.optimizations, sectionLevel)
         } else {
             list(project.highlights)
         }
         // With a cover clip leading, the still cover joins the gallery, so every image the app shows is here.
-        gallery(listOfNotNull(project.cover.takeIf { project.coverClip != null }), project.clips, project.screenshots)
-        project.engineering?.let { engineering(it) }
+        gallery(listOfNotNull(project.cover.takeIf { project.coverClip != null }), project.clips, project.screenshots, assetPrefix)
+        project.engineering?.let { engineering(it, sectionLevel) }
         if (project.stack.isNotEmpty()) {
             appendLine("<p class=\"muted\">${project.stack.joinToString(" · ") { escape(it) }}</p>")
         }
@@ -782,15 +836,16 @@ object StaticHtml {
      * The detail screen's "How it's built": the architecture paragraph, the modules as a nested list (each module,
      * then what it depends on), the decisions as a definition list, and the quality checklist.
      */
-    private fun StringBuilder.engineering(engineering: Engineering) {
+    private fun StringBuilder.engineering(engineering: Engineering, sectionLevel: Int) {
         val hasBody = engineering.architecture != null || engineering.modules.isNotEmpty() ||
             engineering.decisions.isNotEmpty() || engineering.quality.isNotEmpty()
         if (!hasBody) return
         appendLine("<div class=\"engineering\">")
-        appendLine("<h5>How it&#39;s built</h5>")
+        val detailLevel = sectionLevel + 1
+        appendLine("<h$sectionLevel>How it&#39;s built</h$sectionLevel>")
         engineering.architecture?.let { appendLine("<p>${escape(it)}</p>") }
         if (engineering.modules.isNotEmpty()) {
-            appendLine("<h6>Modules</h6>")
+            appendLine("<h$detailLevel>Modules</h$detailLevel>")
             appendLine("<ul class=\"modules\">")
             engineering.modules.forEach { module ->
                 append("<li><code>${escape(module.name)}</code> ${escape(module.role)}")
@@ -804,13 +859,13 @@ object StaticHtml {
             appendLine("</ul>")
         }
         if (engineering.decisions.isNotEmpty()) {
-            appendLine("<h6>Key decisions</h6>")
+            appendLine("<h$detailLevel>Key decisions</h$detailLevel>")
             appendLine("<dl class=\"decisions\">")
             engineering.decisions.forEach { appendLine("<dt>${escape(it.title)}</dt><dd>${escape(it.detail)}</dd>") }
             appendLine("</dl>")
         }
         if (engineering.quality.isNotEmpty()) {
-            appendLine("<h6>Quality</h6>")
+            appendLine("<h$detailLevel>Quality</h$detailLevel>")
             appendLine("<ul class=\"quality\">${engineering.quality.joinToString("") { "<li>${escape(it)}</li>" }}</ul>")
         }
         appendLine("</div>")
@@ -819,10 +874,10 @@ object StaticHtml {
     private fun orientation(shot: Screenshot) = if (shot.aspectRatio < 1f) "portrait" else "landscape"
 
     /** The project's splash screen first, as on the card: its hero-sized thumbnail, linking to the full image. */
-    private fun StringBuilder.cover(cover: Screenshot) {
+    private fun StringBuilder.cover(cover: Screenshot, assetPrefix: String) {
         appendLine(
-            "<a href=\"${resourceUrl(cover.fullPath)}\"><img class=\"cover ${orientation(cover)}\" " +
-                "src=\"${resourceUrl(cover.thumbPath)}\" ${imgAttributes(cover)}></a>",
+            "<a href=\"$assetPrefix${resourceUrl(cover.fullPath)}\"><img class=\"cover ${orientation(cover)}\" " +
+                "src=\"$assetPrefix${resourceUrl(cover.thumbPath)}\" ${imgAttributes(cover)}></a>",
         )
     }
 
@@ -830,24 +885,29 @@ object StaticHtml {
      * A clip is the animated WebP itself, which every browser that runs this page animates natively; under reduced
      * motion the `<source>` swaps in its still poster. [imgClass] styles a cover clip like a cover.
      */
-    private fun StringBuilder.clip(clip: Screenshot, imgClass: String? = null) {
+    private fun StringBuilder.clip(clip: Screenshot, imgClass: String? = null, assetPrefix: String) {
         val classAttribute = imgClass?.let { "class=\"$it\" " }.orEmpty()
         appendLine(
-            "<picture><source media=\"(prefers-reduced-motion: reduce)\" srcset=\"${resourceUrl(clip.posterPath)}\">" +
-                "<img ${classAttribute}src=\"${resourceUrl(clip.fullPath)}\" ${imgAttributes(clip)}></picture>",
+            "<picture><source media=\"(prefers-reduced-motion: reduce)\" srcset=\"$assetPrefix${resourceUrl(clip.posterPath)}\">" +
+                "<img ${classAttribute}src=\"$assetPrefix${resourceUrl(clip.fullPath)}\" ${imgAttributes(clip)}></picture>",
         )
     }
 
     /** Stills (thumbnails linking to the full image) for [leading], then clips, then screenshots. */
-    private fun StringBuilder.gallery(leading: List<Screenshot>, clips: List<Screenshot>, shots: List<Screenshot>) {
+    private fun StringBuilder.gallery(
+        leading: List<Screenshot>,
+        clips: List<Screenshot>,
+        shots: List<Screenshot>,
+        assetPrefix: String,
+    ) {
         if (leading.isEmpty() && clips.isEmpty() && shots.isEmpty()) return
         appendLine("<div class=\"shots\">")
         fun still(shot: Screenshot) = appendLine(
-            "<a href=\"${resourceUrl(shot.fullPath)}\"><img src=\"${resourceUrl(shot.thumbPath)}\" " +
+            "<a href=\"$assetPrefix${resourceUrl(shot.fullPath)}\"><img src=\"$assetPrefix${resourceUrl(shot.thumbPath)}\" " +
                 "${imgAttributes(shot)}></a>",
         )
         leading.forEach(::still)
-        clips.forEach { clip(it) }
+        clips.forEach { clip(it, assetPrefix = assetPrefix) }
         shots.forEach(::still)
         appendLine("</div>")
     }
@@ -870,9 +930,9 @@ object StaticHtml {
     }
 
     /** A work article's part, as the detail screen titles it. */
-    private fun StringBuilder.titledList(title: String, items: List<String>) {
+    private fun StringBuilder.titledList(title: String, items: List<String>, headingLevel: Int) {
         if (items.isEmpty()) return
-        appendLine("<h5>${escape(title)}</h5>")
+        appendLine("<h$headingLevel>${escape(title)}</h$headingLevel>")
         list(items)
     }
 

@@ -114,6 +114,7 @@ fun ProjectDetailScreen(
     layout: PageLayout,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    caseStudyUrl: String? = null,
 ) {
     val scroll = rememberScrollState()
     val focus = remember { FocusRequester() }
@@ -173,7 +174,7 @@ fun ProjectDetailScreen(
                     }
                     Spacer(Modifier.width(48.dp))
                     Column(Modifier.weight(1.08f), verticalArrangement = Arrangement.spacedBy(gap)) {
-                        DetailText(project, compact = false, onBack = onBack)
+                        DetailText(project, compact = false, onBack = onBack, caseStudyUrl = caseStudyUrl)
                     }
                 }
             } else {
@@ -186,7 +187,7 @@ fun ProjectDetailScreen(
                     // screen alone: what it is and where to check it, then what it looks like.
                     if (layout.compact) DetailHeader(project, compact = true)
                     lead?.let { DetailMedia(it, playing, compact = layout.compact, onOpen = { openViewer(leadIndex) }, onTogglePlay = togglePlay) }
-                    DetailText(project, compact = layout.compact, onBack = onBack, withHeader = !layout.compact, gallery = {
+                    DetailText(project, compact = layout.compact, onBack = onBack, caseStudyUrl = caseStudyUrl, withHeader = !layout.compact, gallery = {
                         GallerySection(strip, gallery.indexOf(strip.firstOrNull()), openViewer)
                     })
                 }
@@ -206,6 +207,7 @@ private fun DetailText(
     project: Project,
     compact: Boolean,
     onBack: () -> Unit,
+    caseStudyUrl: String?,
     withHeader: Boolean = true,
     gallery: (@Composable () -> Unit)? = null,
 ) {
@@ -232,6 +234,7 @@ private fun DetailText(
         DetailSection("Stack") { Tags(project.stack) }
     }
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+    caseStudyUrl?.let { Links(listOf(Link("Open web case study", it))) }
     OutlinedButton(onClick = onBack) { Text("Back to all projects") }
 }
 

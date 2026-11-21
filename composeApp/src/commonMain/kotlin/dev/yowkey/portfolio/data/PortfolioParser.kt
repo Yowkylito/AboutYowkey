@@ -32,6 +32,7 @@ object PortfolioParser {
 
     private fun validate(portfolio: Portfolio) {
         require(portfolio.profile.name.isNotBlank()) { "profile.name must not be blank" }
+        require(portfolio.profile.pageTitle?.isNotBlank() != false) { "profile.pageTitle must not be blank" }
         require(portfolio.siteUrl.startsWith("https://")) { "siteUrl must be an https:// URL" }
         portfolio.api?.let { api ->
             // The static form posts to it as written and the app appends /visits and /feedback to it.
@@ -49,10 +50,11 @@ object PortfolioParser {
         require(duplicateIds.isEmpty()) { "project ids must be unique, repeated: $duplicateIds" }
         require(portfolio.projects.none { it.id.isBlank() }) { "every project needs an id" }
         portfolio.projects.forEach { project ->
-            // The id is part of a URL (#/projects/<id>) and an HTML id (project-<id>), so it stays plain.
+            // The id is a URL path segment and an HTML id, so it stays plain.
             require(PROJECT_ID.matches(project.id)) {
                 "project id \"${project.id}\" must be lowercase letters, digits and hyphens (it is used in the page's URL)"
             }
+            require(project.caseStudyTitle?.isNotBlank() != false) { "project ${project.id}: caseStudyTitle must not be blank" }
         }
 
         val links = portfolio.links + portfolio.projects.flatMap { it.links }

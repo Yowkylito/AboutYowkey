@@ -23,6 +23,8 @@ data class Portfolio(
      */
     val api: String? = null,
 ) {
+    fun caseStudyUrl(project: Project): String = "${siteUrl.trimEnd('/')}/${project.caseStudyPath}"
+
     /** The projects split into [ProjectGroup]s, in page order, each keeping the content's order. Empty groups are left out. */
     val projectGroups: List<Pair<ProjectGroup, List<Project>>>
         get() = ProjectGroup.entries
@@ -67,6 +69,7 @@ data class Profile(
     val photo: String? = null,
     /** The hero's few headline numbers, strongest first. The parser caps the count so they stay above the fold. */
     val proof: List<ProofPoint> = emptyList(),
+    val pageTitle: String? = null,
 ) {
     /** [photo]'s path relative to composeResources, or null when there is none. */
     val photoPath: String? get() = photo?.let { "$PHOTO_DIR/$it" }
@@ -153,7 +156,11 @@ data class Project(
     val screenshots: List<Screenshot> = emptyList(),
     /** How it is built: the card shows [Engineering.builtWith] and [Engineering.platforms], the detail screen the rest. */
     val engineering: Engineering? = null,
+    /** Optional descriptive heading for the standalone case study. */
+    val caseStudyTitle: String? = null,
 ) {
+    val caseStudyPath: String get() = "projects/$id/"
+
     /** Everything the viewer pages through, in its order. Index 0 is the cover when there is one. */
     val gallery: List<GalleryItem>
         get() = buildList {

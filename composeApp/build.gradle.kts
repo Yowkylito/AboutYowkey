@@ -53,20 +53,28 @@ abstract class BuildId : ValueSource<String, ValueSourceParameters.None> {
  */
 val generateStaticSite = tasks.register<JavaExec>("generateStaticSite") {
     group = "build"
-    description = "Generates index.html, sitemap.xml and robots.txt from portfolio.json."
+    description = "Generates the homepage, case studies and crawler files from portfolio.json."
     val content = layout.projectDirectory.file("src/commonMain/composeResources/files/portfolio.json")
     val template = layout.projectDirectory.file("web/index.template.html")
+    val projectTemplate = layout.projectDirectory.file("web/project.template.html")
     val output = layout.buildDirectory.dir("generated/site")
     val build = providers.of(BuildId::class.java) {}
     inputs.file(content)
     inputs.file(template)
+    inputs.file(projectTemplate)
     inputs.property("build", build)
     outputs.dir(output)
     val jvmMain = kotlin.jvm().compilations.getByName("main")
     classpath = files(jvmMain.output.allOutputs, jvmMain.runtimeDependencyFiles)
     mainClass.set("dev.yowkey.portfolio.site.StaticSiteKt")
     argumentProviders.add(CommandLineArgumentProvider {
-        listOf(content.asFile.absolutePath, template.asFile.absolutePath, output.get().asFile.absolutePath, build.get())
+        listOf(
+            content.asFile.absolutePath,
+            template.asFile.absolutePath,
+            projectTemplate.asFile.absolutePath,
+            output.get().asFile.absolutePath,
+            build.get(),
+        )
     })
 }
 

@@ -3,8 +3,9 @@
   "api": "https://aboutyowkey-api.aboutyowkey-api.workers.dev",
   "profile": {
     "name": "Rodelito Tangonan",
+    "pageTitle": "Rodelito Tangonan — Android & Kotlin Multiplatform Developer in the Philippines",
     "headline": "Android Developer at DigiPlus since 2024 · Kotlin, Jetpack Compose, Kotlin Multiplatform",
-    "summary": "At DigiPlus I led ArenaPlus's move from a hybrid web app to fully native Android and built its payment flows: deposits, withdrawals and bank-linking. On my own time I build Android and multiplatform apps end to end; three are public on GitHub, this site included.",
+    "summary": "I'm a mobile developer based in Quezon City, Philippines. At DigiPlus I led ArenaPlus's migration from WebView to native Android with Kotlin and Jetpack Compose. I also built its deposit, withdrawal and bank-linking flows. On my own time I build apps end to end with Kotlin Multiplatform. Three of my projects are public on GitHub, including this portfolio.",
     "location": "Quezon City, Philippines",
     "email": "yukstangonan@gmail.com",
     "availability": "Open to relocation",
@@ -23,8 +24,9 @@
       "role": "Android Developer",
       "period": "Sep 2024 – Present",
       "title": "ArenaPlus",
+      "caseStudyTitle": "ArenaPlus — Native Android Migration and Payments",
       "tagline": "Sports entertainment app: led its move to native Android and built its payment flows",
-      "summary": "ArenaPlus is DigiPlus's sports entertainment app. I led its Android app's move from a hybrid WebView shell to native-only, without pausing releases. I co-built the native app from its first commit as its largest contributor (53% of the code) and designed and built its deposit, withdrawal and bank-linking flows end to end.",
+      "summary": "I led the migration of DigiPlus's ArenaPlus sports entertainment app from a hybrid WebView shell to native Android with Kotlin and Jetpack Compose, without pausing releases. I co-built the native app from its first commit, wrote 53% of its code and delivered its deposit, withdrawal and bank-linking flows end to end.",
       "figures": [
         { "value": "53%", "label": "of the native app's code, written by me" },
         { "value": "0", "label": "release pauses during the WebView-to-native migration" }
@@ -75,8 +77,9 @@
       "role": "Android Developer, solo",
       "period": "Jun – Jul 2026",
       "title": "Arena Social",
+      "caseStudyTitle": "Arena Social — Android App Built and Launched in 30 Days",
       "tagline": "Fan community app, built alone: native Android from first commit to launch in 30 days",
-      "summary": "Arena Social is a fan community app in the ArenaPlus family, where fans make picks and predictions and watch video, and it lived only on the web. I built its Android app alone, from the first commit to launch in 30 days. Fans now get native navigation, loading and a pinned video player around the web content.",
+      "summary": "I built DigiPlus's Arena Social Android app on my own with Kotlin and Jetpack Compose, from first commit to launch in 30 days. The app gave a web-only fan community native navigation, loading states and a pinned video player while keeping its existing picks, predictions and video content.",
       "figures": [
         { "value": "30 days", "label": "from first commit to launch, built alone" },
         { "value": "~100%", "label": "of the code, written by me" }
@@ -617,8 +620,9 @@
         "height": 1600
       },
       "title": "Seventh J",
+      "caseStudyTitle": "Seventh J — iOS, Android and Web with Compose Multiplatform",
       "tagline": "Art-gallery inventory and sales app for Android, iOS and web from one Kotlin codebase",
-      "summary": "An inventory and dealer-floor app for a Makati art gallery, built once in Compose Multiplatform for Android, iOS and the web. Instead of a 3D engine per platform for one turntable, I wrote a small software renderer in common Kotlin, and every screen shares one codebase with no Android imports. It runs on sample data while the data layer is built.",
+      "summary": "I built Seventh J as an unofficial art gallery inventory and sales prototype for iOS, Android and the web. I used Compose Multiplatform to share every screen, wrote a software 3D renderer in common Kotlin and used a SwiftUI entry point to host the shared interface on iOS. The prototype runs on sample data while I build the data layer.",
       "disclaimer": "An unofficial concept, not made for or endorsed by the gallery: I used a real Makati gallery to show what I can build. Its name and brand belong to it.",
       "period": "Aug 2026",
       "highlights": [
