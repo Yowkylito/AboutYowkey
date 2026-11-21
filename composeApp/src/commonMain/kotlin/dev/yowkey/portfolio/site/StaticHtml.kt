@@ -793,7 +793,9 @@ object StaticHtml {
             project.disclaimer?.let { "<span class=\"badge\">${escape(Project.UNOFFICIAL_BADGE)}</span>" },
         )
         if (meta.isNotEmpty()) appendLine("<p class=\"muted\">${meta.joinToString(" ")}</p>")
-        project.tagline?.let { appendLine("<p class=\"tagline\">${escape(it)}</p>") }
+        if (!standalone || project.caseStudyTitle == null) {
+            project.tagline?.let { appendLine("<p class=\"tagline\">${escape(it)}</p>") }
+        }
         appendLine("<p>${escape(project.summary)}</p>")
         // The proof a reader can check (the code, an APK) right under what the project is, not after everything.
         links(project.links)

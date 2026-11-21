@@ -55,7 +55,9 @@
     .figures strong { display: block; font-size: 1.625rem; line-height: 1.2; }
     .facts { display: grid; grid-template-columns: max-content 1fr; gap: .25em 1em; }
     .facts dd { margin: 0; }
-    .badge { border: 1px solid var(--line); border-radius: 6px; padding-inline: 6px; }
+    .badge {
+      display: inline-block; border: 1px solid var(--line); border-radius: 6px; padding-inline: 6px; white-space: nowrap;
+    }
     .cover, .shots img { display: block; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 10px; }
     .cover { margin: 24px auto 20px; }
     .cover.portrait { width: auto; max-height: 320px; }
