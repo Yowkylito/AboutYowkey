@@ -29,7 +29,10 @@ import dev.yowkey.portfolio.ui.sections.IntroStep
 import dev.yowkey.portfolio.ui.theme.LocalReducedMotion
 import dev.yowkey.portfolio.ui.theme.PortfolioTheme
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.test.TestCoroutineScheduler
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -40,6 +43,7 @@ import kotlin.test.assertTrue
  * It plays once: the words never wait long for the portrait, never hide again once shown, and under reduced motion
  * never hide at all.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class HeroEntranceTest {
 
     private val end = HeroMotion.END_MS.toFloat()
@@ -121,8 +125,7 @@ class HeroEntranceTest {
             val clock = Clock(scene)
             repeat(3) { clock.frame() }
             assertEquals(0f, hero.entrance.shown(IntroStep.NAME), "waiting for the portrait")
-            // The wait is a coroutine timeout, which the scene's virtual frames do not hurry along.
-            Thread.sleep(HeroEntrance.PORTRAIT_WAIT_MS + 300)
+            hero.advancePortraitTimeout()
             repeat(60) { clock.frame() }
             assertFalse(hero.entrance.portraitOnClock, "the words went ahead; the portrait fades in on its own")
             assertEquals(1f, hero.entrance.shown(IntroStep.SUMMARY))
@@ -139,7 +142,12 @@ class HeroEntranceTest {
         private val image: suspend (String) -> ImageBitmap = { ImageBitmap(64, 76) },
         val fontScale: Float = 1f,
     ) {
-        val entrance = HeroEntrance(if (reducedMotion) HeroMotion.END_MS.toFloat() else 0f)
+        // Scene rendering can take more than the portrait timeout on a cold runner. Keep coroutine time virtual too.
+        private val scheduler = TestCoroutineScheduler()
+        val entrance = HeroEntrance(
+            if (reducedMotion) HeroMotion.END_MS.toFloat() else 0f,
+            portraitTimeoutContext = UnconfinedTestDispatcher(scheduler),
+        )
         val probe = mutableStateOf(0)
         val present = mutableStateOf(true)
         val recomposersBefore = Recomposer.runningRecomposers.value
@@ -157,6 +165,10 @@ class HeroEntranceTest {
             viewer = LruLoader(1L, Dispatchers.Unconfined) { error("unused") },
             covers = LruLoader(1L, Dispatchers.Unconfined) { error("unused") },
         )
+
+        fun advancePortraitTimeout() {
+            scheduler.advanceTimeBy(HeroEntrance.PORTRAIT_WAIT_MS + 1)
+        }
 
         fun scene() = ImageComposeScene(412, 915, Density(1f, fontScale)) {
             PortfolioTheme {

@@ -17,7 +17,10 @@ import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.unit.dp
 import dev.yowkey.portfolio.ui.theme.LocalReducedMotion
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.math.roundToInt
 
 /**
@@ -37,7 +40,11 @@ import kotlin.math.roundToInt
  * web the static page plays the same entrance before the app arrives, and this starts where that one has got to.
  */
 @Stable
-class HeroEntrance internal constructor(startMillis: Float, private var joinsStatic: Boolean = false) {
+class HeroEntrance internal constructor(
+    startMillis: Float,
+    private var joinsStatic: Boolean = false,
+    private val portraitTimeoutContext: CoroutineContext = EmptyCoroutineContext,
+) {
 
     /** Where the entrance is on [HeroMotion]'s timeline: 0 before it starts, [HeroMotion.END_MS] once it is over. */
     internal val clock = Animatable(startMillis)
@@ -96,7 +103,9 @@ class HeroEntrance internal constructor(startMillis: Float, private var joinsSta
         }
         if (clock.value >= end) return
         if (clock.value == 0f) {
-            val inTime = hasPhoto && withTimeoutOrNull(PORTRAIT_WAIT_MS) { portraitReady.await() } != null
+            val inTime = hasPhoto && withContext(portraitTimeoutContext) {
+                withTimeoutOrNull(PORTRAIT_WAIT_MS) { portraitReady.await() } != null
+            }
             if (!inTime) {
                 portraitOnClock = false
                 clock.snapTo(HeroMotion.TEXT_AT_MS.toFloat())
